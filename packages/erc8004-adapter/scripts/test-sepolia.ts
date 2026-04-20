@@ -4,6 +4,7 @@ import {
   generateAgentCard,
   serializeAgentCard,
   parseAgentCard,
+  uploadAgentCard,
   config,
 } from '../src';
 
@@ -75,12 +76,25 @@ async function main() {
   console.assert(reparsed.name === card.name, 'Agent card round-trip failed');
   log('Agent Card round-trip', 'OK');
 
-  // ── 2. Register Identity ───────────────────────────────────────────────────
-  log('Step 2: Register on-chain (Identity Registry)');
-  console.log('  Sending transaction...');
+  // ── 2. Upload Agent Card to Swarm ─────────────────────────────────────────
+  log('Step 2: Upload Agent Card to Swarm');
 
-  // In production the agentURI would be `bzz://<hash>` after uploading the card to Swarm.
-  const agentURI = `bzz://placeholder-${Date.now()}`;
+  let agentURI: string;
+  if (config.bee.feedPrivateKey) {
+    console.log('  Uploading to Swarm feed...');
+    const uploaded = await uploadAgentCard(card);
+    log('Swarm reference', uploaded.reference);
+    log('Feed URL', uploaded.feedUrl);
+    agentURI = uploaded.feedUrl;
+  } else {
+    agentURI = `bzz://placeholder-${Date.now()}`;
+    console.log('  Skipped — BEE_FEED_PK not set. Using placeholder URI.');
+    console.log('  Set BEE_FEED_PK (and optionally BEE_POSTAGE_STAMP, BEE_API_URL) to upload.');
+  }
+
+  // ── 3. Register Identity ───────────────────────────────────────────────────
+  log('Step 3: Register on-chain (Identity Registry)');
+  console.log('  Sending transaction...');
   const { agentId, txHash } = await erc8004.identity.register(agentURI);
 
   log('Registered agentId', agentId.toString());
@@ -98,8 +112,8 @@ async function main() {
     'Owner mismatch after registration',
   );
 
-  // ── 3. FeedbackAuth sign / verify ─────────────────────────────────────────
-  log('Step 3: Sign FeedbackAuth (provider → consumer)');
+  // ── 4. FeedbackAuth sign / verify ─────────────────────────────────────────
+  log('Step 4: Sign FeedbackAuth (provider → consumer)');
 
   const feedbackAuth = await erc8004.reputation.signFeedbackAuth(agentId, consumerAddress);
 
@@ -110,8 +124,8 @@ async function main() {
   console.assert(recovered.toLowerCase() === address.toLowerCase(), 'FeedbackAuth signer mismatch');
   log('FeedbackAuth verify', 'OK');
 
-  // ── 4. Post Feedback ───────────────────────────────────────────────────────
-  log('Step 4: Post feedback (Reputation Registry)');
+  // ── 5. Post Feedback ───────────────────────────────────────────────────────
+  log('Step 5: Post feedback (Reputation Registry)');
 
   const consumerBalance = await provider.getBalance(consumerAddress);
   if (!config.chain.consumerPrivateKey || consumerBalance === 0n) {
@@ -139,8 +153,8 @@ async function main() {
 
     log('Feedback tx', feedbackTxHash);
 
-    // ── 5. Calculate Reputation ──────────────────────────────────────────────
-    log('Step 5: Calculate reputation');
+    // ── 6. Calculate Reputation ──────────────────────────────────────────────
+    log('Step 6: Calculate reputation');
 
     const reputation = await erc8004.aggregate.calculateReputation(agentId);
     log('Reputation', {

@@ -12,3 +12,5 @@ export const DEFAULT_CHAIN = 'base-sepolia';
  * Non-hex strings are SHA-256 hashed to 32 bytes internally.
  */
 export const AGENT_CARD_TOPIC = 'agent-card';
+
+export const DEFAULT_GATEWAY_URL = 'https://api.gateway.ethswarm.org';

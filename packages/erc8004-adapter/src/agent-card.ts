@@ -1,7 +1,7 @@
 import { Bee } from '@ethersphere/bee-js';
 import { ethers } from 'ethers';
 import type { AgentCard, AgentCardParams, SwarmUploadResult } from './types';
-import { AGENT_CARD_TOPIC } from './constants';
+import { AGENT_CARD_TOPIC, DEFAULT_GATEWAY_URL } from './constants';
 import config from './config';
 import { getUploadPostageBatchId, hexToBytes, normaliseTopic } from './utils';
 
@@ -64,7 +64,7 @@ export async function uploadAgentCard(
     throw new Error('feedPrivateKey required.');
   }
 
-  if (postageBatchId) {
+  if (!postageBatchId) {
     throw new Error('No available postage batch.');
   }
 
@@ -85,6 +85,6 @@ export async function uploadAgentCard(
   return {
     reference,
     url: `bzz://${reference}`,
-    feedUrl: `${config.bee.endpoint}/feeds/${owner}/${topicHex}`,
+    feedUrl: `${DEFAULT_GATEWAY_URL}/feeds/${owner}/${topicHex}`,
   };
 }
