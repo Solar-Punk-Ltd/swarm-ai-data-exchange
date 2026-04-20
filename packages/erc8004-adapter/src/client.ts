@@ -17,12 +17,12 @@ const CHAIN_DEFAULTS: Record<string, ChainDefaults> = {
     reputationRegistry: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
     chainId: 84532n,
   },
-  'base': {
+  base: {
     identityRegistry: '',
     reputationRegistry: '',
     chainId: 8453n,
   },
-  'mainnet': {
+  mainnet: {
     identityRegistry: '',
     reputationRegistry: '',
     chainId: 1n,
@@ -37,16 +37,23 @@ export interface ERC8004Client {
 
 export function createERC8004Client(config: ERC8004Config): ERC8004Client {
   const defaults = CHAIN_DEFAULTS[config.chain];
-  if (!defaults) throw new Error(`Unsupported chain: ${config.chain}. Pass contracts addresses via config.contracts.`);
+  if (!defaults)
+    throw new Error(
+      `Unsupported chain: ${config.chain}. Pass contracts addresses via config.contracts.`,
+    );
 
   const identityAddress = config.contracts?.identityRegistry ?? defaults.identityRegistry;
   const reputationAddress = config.contracts?.reputationRegistry ?? defaults.reputationRegistry;
 
   if (!identityAddress) {
-    throw new Error(`Identity registry address not configured for chain "${config.chain}". Pass it via config.contracts.identityRegistry.`);
+    throw new Error(
+      `Identity registry address not configured for chain "${config.chain}". Pass it via config.contracts.identityRegistry.`,
+    );
   }
   if (!reputationAddress) {
-    throw new Error(`Reputation registry address not configured for chain "${config.chain}". Pass it via config.contracts.reputationRegistry.`);
+    throw new Error(
+      `Reputation registry address not configured for chain "${config.chain}". Pass it via config.contracts.reputationRegistry.`,
+    );
   }
 
   const runner: Signer | Provider = config.signer ?? config.provider;

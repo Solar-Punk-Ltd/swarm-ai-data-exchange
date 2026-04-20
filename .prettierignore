@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+coverage
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+.next
+.turbo
+.claude
