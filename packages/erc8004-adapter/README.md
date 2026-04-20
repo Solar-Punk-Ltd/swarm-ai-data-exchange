@@ -44,7 +44,7 @@ The client is read-only when initialized with a `Provider`. Pass a `Signer` to e
 ## Installation
 
 ```bash
-npm install @solarpunk/erc8004-adapter ethers
+pnpm add @solarpunk/erc8004-adapter ethers
 ```
 
 ---
@@ -141,7 +141,7 @@ Future consumers can call `calculateReputation(agentId)` before purchasing to ev
 
 **What's next?**
 - Integrate this client into your MCP server or x402 provider to automate the full data exchange loop.
-- Run `npm run test:sepolia` to walk through a complete agent lifecycle on-chain.
+- Run `pnpm test:sepolia` to walk through a complete agent lifecycle on-chain.
 
 ---
 
@@ -313,14 +313,14 @@ Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base
 ### 2. Build the package
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 ### 3. Run the test
 
 ```bash
-npm run test:sepolia
+pnpm test:sepolia
 ```
 
 Expected output:
@@ -364,7 +364,7 @@ Expected output:
 ### 4. Run unit tests
 
 ```bash
-npm test
+pnpm test
 ```
 
 Unit tests use Jest. No wallet or network connection is needed.
@@ -406,11 +406,11 @@ const erc8004 = createERC8004Client({
 ## Development
 
 ```bash
-npm install       # install dependencies
-npm run build     # compile TypeScript → dist/
-npm run dev       # watch mode
-npm test          # run unit tests
-npm run test:sepolia  # end-to-end integration test on Base Sepolia
+pnpm install          # install dependencies
+pnpm build            # compile TypeScript → dist/
+pnpm dev              # watch mode
+pnpm test             # run unit tests
+pnpm test:sepolia     # end-to-end integration test on Base Sepolia
 ```
 
 ---
