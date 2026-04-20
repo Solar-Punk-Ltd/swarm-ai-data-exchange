@@ -11,9 +11,9 @@ export interface ERC8004Config {
 }
 
 export interface AgentEndpoints {
-  mcp?: string;   // Swarm MCP endpoint, e.g. bzz://<hash>
-  x402?: string;  // x402 payment server URL
-  a2a?: string;   // Agent-to-Agent protocol endpoint
+  mcp?: string; // Swarm MCP endpoint, e.g. bzz://<hash>
+  x402?: string; // x402 payment server URL
+  a2a?: string; // Agent-to-Agent protocol endpoint
 }
 
 export interface AgentCard {
@@ -43,9 +43,9 @@ export interface RegisterResult {
 
 export interface PostFeedbackParams {
   agentId: bigint;
-  score: number;           // 0–100
+  score: number; // 0–100
   tags?: [string?, string?];
-  evidenceURI?: string;    // bzz://<hash> or https://...
+  evidenceURI?: string; // bzz://<hash> or https://...
   feedbackAuth?: FeedbackAuth;
   endpoint?: string;
 }
@@ -53,15 +53,15 @@ export interface PostFeedbackParams {
 // Off-chain authorization: provider signs this so only authorised consumers can post feedback.
 export interface FeedbackAuth {
   agentId: bigint;
-  consumer: string;   // consumer wallet address
-  deadline: number;   // unix timestamp
-  signature: string;  // EIP-712 sig from the provider wallet
+  consumer: string; // consumer wallet address
+  deadline: number; // unix timestamp
+  signature: string; // EIP-712 sig from the provider wallet
 }
 
 export interface FeedbackResult {
   value: bigint;
   valueDecimals: number;
-  score: number;   // normalized 0–100
+  score: number; // normalized 0–100
   tag1: string;
   tag2: string;
   isRevoked: boolean;
@@ -69,14 +69,14 @@ export interface FeedbackResult {
 
 export interface ReputationSummary {
   count: bigint;
-  averageScore: number;  // normalized 0–100
+  averageScore: number; // normalized 0–100
   rawValue: bigint;
   rawDecimals: number;
 }
 
 export interface ReputationScore {
   agentId: bigint;
-  score: number;          // 0–100 aggregated
+  score: number; // 0–100 aggregated
   feedbackCount: bigint;
-  reliable: boolean;      // score >= 70 and count >= 3
+  reliable: boolean; // score >= 70 and count >= 3
 }

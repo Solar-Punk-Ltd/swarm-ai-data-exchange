@@ -34,7 +34,7 @@ export class ReputationModule {
     const tx = await this.contract.giveFeedback(
       params.agentId,
       value,
-      0,                       // valueDecimals — score is already 0-100 integer
+      0, // valueDecimals — score is already 0-100 integer
       params.tags?.[0] ?? '',
       params.tags?.[1] ?? '',
       params.endpoint ?? '',
@@ -56,11 +56,11 @@ export class ReputationModule {
     clientAddress: string,
     feedbackIndex: bigint,
   ): Promise<FeedbackResult> {
-    const [value, valueDecimals, tag1, tag2, isRevoked] = await this.contract.readFeedback(
+    const [value, valueDecimals, tag1, tag2, isRevoked] = (await this.contract.readFeedback(
       agentId,
       clientAddress,
       feedbackIndex,
-    ) as [bigint, number, string, string, boolean];
+    )) as [bigint, number, string, string, boolean];
 
     return {
       value,
@@ -81,14 +81,14 @@ export class ReputationModule {
     const addresses =
       clientAddresses.length > 0
         ? clientAddresses
-        : (await this.contract.getClients(agentId) as string[]);
+        : ((await this.contract.getClients(agentId)) as string[]);
 
-    const [count, summaryValue, summaryDecimals] = await this.contract.getSummary(
+    const [count, summaryValue, summaryDecimals] = (await this.contract.getSummary(
       agentId,
       addresses,
       tag1,
       tag2,
-    ) as [bigint, bigint, number];
+    )) as [bigint, bigint, number];
 
     return {
       count,
@@ -108,11 +108,11 @@ export class ReputationModule {
     if (!signer?.signTypedData) throw new Error('Signer required to sign FeedbackAuth');
 
     const deadline = Math.floor(Date.now() / 1000) + ttlSeconds;
-    const signature = await signer.signTypedData(
-      this.buildDomain(),
-      FEEDBACK_AUTH_TYPES,
-      { agentId, consumer: consumerAddress, deadline },
-    );
+    const signature = await signer.signTypedData(this.buildDomain(), FEEDBACK_AUTH_TYPES, {
+      agentId,
+      consumer: consumerAddress,
+      deadline,
+    });
 
     return { agentId, consumer: consumerAddress, deadline, signature };
   }

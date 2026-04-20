@@ -373,7 +373,7 @@ With `CONSUMER_PRIVATE_KEY` set, step 4 runs and step 5 (reputation calculation)
 [Step 5: Calculate reputation]
 [Reputation] { agentId: '42', score: 90, feedbackCount: '1', reliable: false }
 
-✓ Steps completed successfully
+✓ All steps completed successfully
   agentId: 42
   View on BaseScan: https://sepolia.basescan.org/tx/0x...
 ```
