@@ -1,0 +1,3 @@
+[submodule "packages/swarm-mcp"]
+	path = packages/swarm-mcp
+	url = git@github.com:Solar-Punk-Ltd/swarm-mcp.git
