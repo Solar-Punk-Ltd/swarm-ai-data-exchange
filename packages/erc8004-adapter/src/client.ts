@@ -58,7 +58,7 @@ export function createERC8004Client(config: ERC8004Config): ERC8004Client {
 
   const runner: Signer | Provider = config.signer ?? config.provider;
 
-  const identity = new IdentityModule(identityAddress, runner);
+  const identity = new IdentityModule(identityAddress, runner, defaults.chainId);
   const reputation = new ReputationModule(reputationAddress, runner, defaults.chainId);
   const aggregate = new AggregateModule(reputation);
 

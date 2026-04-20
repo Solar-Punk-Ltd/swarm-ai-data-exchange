@@ -112,8 +112,35 @@ async function main() {
     'Owner mismatch after registration',
   );
 
-  // ── 4. FeedbackAuth sign / verify ─────────────────────────────────────────
-  log('Step 4: Sign FeedbackAuth (provider → consumer)');
+  // ── 4. Set Agent Wallet ────────────────────────────────────────────────────
+  log('Step 4: Set agent wallet (Identity Registry)');
+
+  // The hot wallet is an ephemeral signer — it doesn't need ETH, only signs the auth.
+  // In production this would be a dedicated payment wallet separate from the NFT owner.
+  const hotWalletSigner = ethers.Wallet.createRandom();
+  const walletAuth = await erc8004.identity.signAgentWalletAuth(agentId, hotWalletSigner);
+
+  log('WalletAuth', { ...walletAuth, agentId: walletAuth.agentId.toString() });
+
+  console.log('  Sending transaction...');
+  const setWalletTxHash = await erc8004.identity.setAgentWallet(
+    agentId,
+    walletAuth.wallet,
+    walletAuth.deadline,
+    walletAuth.signature,
+  );
+
+  log('Set wallet tx', setWalletTxHash);
+
+  const linkedWallet = await erc8004.identity.getAgentWallet(agentId);
+  log('Linked agent wallet', linkedWallet);
+  console.assert(
+    linkedWallet.toLowerCase() === hotWalletSigner.address.toLowerCase(),
+    'Agent wallet mismatch after setAgentWallet',
+  );
+
+  // ── 5. FeedbackAuth sign / verify ─────────────────────────────────────────
+  log('Step 5: Sign FeedbackAuth (provider → consumer)');
 
   const feedbackAuth = await erc8004.reputation.signFeedbackAuth(agentId, consumerAddress);
 
@@ -124,8 +151,8 @@ async function main() {
   console.assert(recovered.toLowerCase() === address.toLowerCase(), 'FeedbackAuth signer mismatch');
   log('FeedbackAuth verify', 'OK');
 
-  // ── 5. Post Feedback ───────────────────────────────────────────────────────
-  log('Step 5: Post feedback (Reputation Registry)');
+  // ── 6. Post Feedback ───────────────────────────────────────────────────────
+  log('Step 6: Post feedback (Reputation Registry)');
 
   const consumerBalance = await provider.getBalance(consumerAddress);
   if (!config.chain.consumerPrivateKey || consumerBalance === 0n) {
@@ -153,8 +180,8 @@ async function main() {
 
     log('Feedback tx', feedbackTxHash);
 
-    // ── 6. Calculate Reputation ──────────────────────────────────────────────
-    log('Step 6: Calculate reputation');
+    // ── 7. Calculate Reputation ──────────────────────────────────────────────
+    log('Step 7: Calculate reputation');
 
     const reputation = await erc8004.aggregate.calculateReputation(agentId);
     log('Reputation', {

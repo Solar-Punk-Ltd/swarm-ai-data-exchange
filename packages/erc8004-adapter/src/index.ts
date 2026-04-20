@@ -29,6 +29,7 @@ export type {
   RegisterResult,
   PostFeedbackParams,
   FeedbackAuth,
+  WalletAuth,
   FeedbackResult,
   ReputationSummary,
   ReputationScore,

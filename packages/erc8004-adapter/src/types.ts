@@ -58,6 +58,14 @@ export interface FeedbackAuth {
   signature: string; // EIP-712 sig from the provider wallet
 }
 
+// Off-chain authorization: new wallet signs this to consent to being registered as the agent wallet.
+export interface WalletAuth {
+  agentId: bigint;
+  wallet: string; // new hot wallet address
+  deadline: number; // unix timestamp
+  signature: string; // EIP-712 sig from the new wallet
+}
+
 export interface FeedbackResult {
   value: bigint;
   valueDecimals: number;
