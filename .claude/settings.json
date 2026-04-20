@@ -5,5 +5,8 @@
       "Bash(npx tsx *)",
       "Bash(npx tsc *)"
     ]
+  },
+  "enabledPlugins": {
+    "andrej-karpathy-skills@karpathy-skills": true
   }
 }
