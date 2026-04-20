@@ -30,12 +30,26 @@ const routes: RoutesConfig = {
   },
 };
 
+app.use("/swarm/data", (req, res, next) => {
+  const publicKey = req.headers["swarm-public-key"];
+  if (!publicKey || typeof publicKey !== "string") {
+    res.status(400).json({ error: "Missing required header: swarm-public-key" });
+    return;
+  }
+  next();
+});
+
 app.use(paymentMiddleware(routes, resourceServer));
 
 app.get("/swarm/data/:swarmHash", async (req, res) => {
   const { swarmHash } = req.params;
+  const publicKey = req.headers["swarm-public-key"];
+  if (!publicKey || typeof publicKey !== "string") {
+    res.status(400).json({ error: "Missing required header: swarm-public-key" });
+    return;
+  }
   try {
-    const result = await grantActAccess(swarmHash);
+    const result = await grantActAccess(swarmHash, publicKey);
     res.json(result);
   } catch {
     res.status(500).json({ error: "ACT grant failed" });
