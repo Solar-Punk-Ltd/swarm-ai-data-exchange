@@ -4,23 +4,25 @@
   "description": "ERC-8004 identity and reputation adapter for Swarm Data Exchange",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest --passWithNoTests",
-    "test:sepolia": "tsx scripts/test-sepolia.ts"
+    "test:sepolia": "tsx scripts/test-sepolia.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
     "dotenv": "^16.0.0",
     "ethers": "^6.13.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.4.0",
-    "tsx": "^4.0.0",
-    "jest": "^29.0.0",
     "@types/jest": "^29.0.0",
-    "ts-jest": "^29.0.0"
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "tsx": "^4.0.0"
   }
 }

@@ -14,7 +14,13 @@ export class IdentityModule {
     const receipt = await tx.wait();
 
     const event = (receipt.logs as Log[])
-      .map((log) => { try { return this.contract.interface.parseLog(log); } catch { return null; } })
+      .map((log) => {
+        try {
+          return this.contract.interface.parseLog(log);
+        } catch {
+          return null;
+        }
+      })
       .find((e) => e?.name === 'Registered');
 
     if (!event) throw new Error('Registered event not found in transaction receipt');

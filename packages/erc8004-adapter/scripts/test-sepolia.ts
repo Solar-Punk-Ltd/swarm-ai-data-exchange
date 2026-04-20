@@ -1,11 +1,6 @@
 import 'dotenv/config';
 import { ethers } from 'ethers';
-import {
-  createERC8004Client,
-  generateAgentCard,
-  serializeAgentCard,
-  parseAgentCard,
-} from '../src';
+import { createERC8004Client, generateAgentCard, serializeAgentCard, parseAgentCard } from '../src';
 
 const RPC_URL = process.env.RPC_URL ?? 'https://sepolia.base.org';
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
@@ -30,7 +25,9 @@ async function main() {
   log('Balance', `${ethers.formatEther(balance)} ETH`);
 
   if (balance === 0n) {
-    console.error('\nWallet has no ETH. Get testnet funds from https://faucet.quicknode.com/base/sepolia');
+    console.error(
+      '\nWallet has no ETH. Get testnet funds from https://faucet.quicknode.com/base/sepolia',
+    );
     process.exit(1);
   }
 
@@ -75,7 +72,10 @@ async function main() {
   log('On-chain owner', owner);
 
   console.assert(onChainURI === agentURI, 'URI mismatch after registration');
-  console.assert(owner.toLowerCase() === address.toLowerCase(), 'Owner mismatch after registration');
+  console.assert(
+    owner.toLowerCase() === address.toLowerCase(),
+    'Owner mismatch after registration',
+  );
 
   // ── 3. FeedbackAuth sign / verify ─────────────────────────────────────────
   log('Step 3: Sign FeedbackAuth (provider → consumer)');
