@@ -254,19 +254,20 @@ import {
 } from '@solarpunk/erc8004-adapter';
 ```
 
-| Function                                           | Description                                                                                         |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `generateAgentCard(params)`                        | Creates an `AgentCard` object with defaults (`version: "1.0.0"`, `supportedTrust: ["reputation"]`). |
-| `serializeAgentCard(card)`                         | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.              |
-| `parseAgentCard(json)`                             | Parses and validates a JSON string. Throws if `name`, `description`, or `endpoints` are missing.    |
-| `uploadAgentCard(card, beeApiUrl, postageBatchId)` | Uploads the card to a Bee node and returns `{ reference, url }`.                                    |
+| Function                        | Description                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `generateAgentCard(params)`     | Creates an `AgentCard` object with defaults (`version: "1.0.0"`, `supportedTrust: ["reputation"]`).                                                                |
+| `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.                                                                             |
+| `parseAgentCard(json)`          | Parses and validates a JSON string. Throws if `name`, `description`, or `endpoints` are missing.                                                                   |
+| `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads Bee config from environment (`BEE_FEED_PK`, `BEE_API_URL`, `BEE_POSTAGE_STAMP`). |
 
 `uploadAgentCard` returns a `SwarmUploadResult`:
 
 ```typescript
 interface SwarmUploadResult {
-  reference: string; // 64-char hex Swarm hash
-  url: string; // bzz://<reference> — pass this to identity.register()
+  reference: string; // 64-char hex Swarm content hash
+  url: string; // bzz://<reference> — direct content address
+  feedUrl: string; // Bee API feed URL — always resolves to the latest version
 }
 ```
 
@@ -276,13 +277,11 @@ Example:
 import { generateAgentCard, uploadAgentCard } from '@solarpunk/erc8004-adapter';
 
 const card = generateAgentCard({ ... });
-const { reference, url } = await uploadAgentCard(
-  card,
-  'http://localhost:1633',
-  process.env.BEE_POSTAGE_STAMP!,
-);
+// BEE_FEED_PK, BEE_API_URL, BEE_POSTAGE_STAMP are read from environment
+const { feedUrl } = await uploadAgentCard(card);
 
-const { agentId } = await erc8004.identity.register(url); // url = "bzz://<reference>"
+// Use the feed URL as the on-chain agent URI so the card can be updated later
+const { agentId } = await erc8004.identity.register(feedUrl);
 ```
 
 **`AgentCard` structure:**
@@ -333,15 +332,16 @@ Edit `.env`:
 PRIVATE_KEY=0x<provider-private-key>
 CONSUMER_PRIVATE_KEY=0x<consumer-private-key>   # must be a different funded wallet
 RPC_URL=https://sepolia.base.org                 # optional, this is the default
+BEE_FEED_PK=0x<hex-private-key>                 # required to upload Agent Card to Swarm
 BEE_API_URL=http://localhost:1633                # optional, this is the default
-BEE_POSTAGE_STAMP=<64-char-hex-stamp-id>         # optional, skips Swarm upload if not set
+BEE_POSTAGE_STAMP=<64-char-hex-stamp-id>         # optional, auto-discovered from Bee node if not set
 ```
 
 Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) for both wallets.
 
 > **Why two wallets?** The ERC-8004 contract rejects feedback submitted by the agent owner — self-feedback is not allowed at the contract level. `CONSUMER_PRIVATE_KEY` is optional: if omitted, steps 1–4 still run and the FeedbackAuth signing is verified off-chain, but the on-chain feedback transaction (step 5) is skipped.
 
-> **Swarm upload:** `BEE_POSTAGE_STAMP` requires a running Bee node and a valid usable postage stamp. If not set, the script uses a placeholder `bzz://` URI and continues. To get a stamp, run `bee stamp buy --depth 20 --amount 100` on your Bee node.
+> **Swarm upload:** `BEE_FEED_PK` is required to upload the Agent Card to Swarm. If not set, step 2 is skipped and a placeholder `bzz://` URI is registered on-chain instead. `BEE_POSTAGE_STAMP` is optional — if omitted, the Bee node is queried automatically for a usable batch. To buy a stamp, run `bee stamp buy --depth 20 --amount 100` on your Bee node.
 
 ### 2. Build the package
 
@@ -364,19 +364,17 @@ Expected output:
 
   Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 4.
   Step 5 (post feedback on-chain) will be skipped.
-  Set CONSUMER_PRIVATE_KEY in .env to a different funded wallet to run the full flow.
+  Set CONSUMER_PRIVATE_KEY to a different funded wallet to run the full flow.
 
 [Consumer wallet] 0xEphemeralAddress
-
-  Note: BEE_POSTAGE_STAMP not set. Swarm uploads will be skipped.
 
 [Step 1: Generate Agent Card]
 [Agent Card] { name: 'Test Data Provider', ... }
 [Agent Card round-trip] OK
 
 [Step 2: Upload Agent Card to Swarm]
-  Skipped — using placeholder URI: bzz://placeholder-1776685178545
-  Set BEE_POSTAGE_STAMP in .env to upload the real Agent Card to Swarm.
+  Skipped — BEE_FEED_PK not set. Using placeholder URI.
+  Set BEE_FEED_PK (and optionally BEE_POSTAGE_STAMP, BEE_API_URL) to upload.
 
 [Step 3: Register on-chain (Identity Registry)]
   Sending transaction...
@@ -399,14 +397,13 @@ Expected output:
   View on BaseScan: https://sepolia.basescan.org/tx/0x...
 ```
 
-With both `BEE_POSTAGE_STAMP` and `CONSUMER_PRIVATE_KEY` set, the full flow runs:
+With both `BEE_FEED_PK` and `CONSUMER_PRIVATE_KEY` set, the full flow runs:
 
 ```
 [Step 2: Upload Agent Card to Swarm]
-  Uploading to Bee node at http://localhost:1633...
-[Agent Card hash] a1b2c3d4...
-[Agent Card URI] bzz://a1b2c3d4...
-[Verify on gateway] https://gateway.ethswarm.org/bytes/a1b2c3d4...
+  Uploading to Swarm feed...
+[Swarm reference] a1b2c3d4...
+[Feed URL] http://localhost:1633/feeds/0xOwnerAddress/topichex...
 
 [Step 3: Register on-chain (Identity Registry)]
   Sending transaction...
@@ -414,8 +411,6 @@ With both `BEE_POSTAGE_STAMP` and `CONSUMER_PRIVATE_KEY` set, the full flow runs
 ...
 
 [Step 5: Post feedback (Reputation Registry)]
-  Uploading evidence to Swarm...
-[Evidence hash] e5f6a7b8...
   Sending transaction...
 [Feedback tx] 0x...
 
