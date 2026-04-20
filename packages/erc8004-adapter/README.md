@@ -17,11 +17,11 @@ ERC-8004 defines on-chain registries for agent identity, reputation, and (option
 
 This adapter wraps both registries into three modules:
 
-| Module | Class | Purpose |
-|---|---|---|
-| `identity` | `IdentityModule` | Register agents, manage URIs, wallets, and metadata |
-| `reputation` | `ReputationModule` | Post and read feedback, sign/verify `FeedbackAuth` tokens |
-| `aggregate` | `AggregateModule` | Calculate a normalized reputation score from on-chain data |
+| Module       | Class              | Purpose                                                    |
+| ------------ | ------------------ | ---------------------------------------------------------- |
+| `identity`   | `IdentityModule`   | Register agents, manage URIs, wallets, and metadata        |
+| `reputation` | `ReputationModule` | Post and read feedback, sign/verify `FeedbackAuth` tokens  |
+| `aggregate`  | `AggregateModule`  | Calculate a normalized reputation score from on-chain data |
 
 A helper module (`agent-card`) handles generating, serializing, and parsing Agent Card JSON. These helpers are **pure TypeScript** — they do not interact with the blockchain.
 
@@ -62,7 +62,7 @@ const signer = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
 
 const erc8004 = createERC8004Client({
   provider,
-  signer,        // omit for read-only use
+  signer, // omit for read-only use
   chain: 'base-sepolia',
 });
 ```
@@ -79,7 +79,7 @@ const card = generateAgentCard({
   capabilities: ['image-data', 'raw-feed'],
   endpoints: {
     x402: 'https://provider.example.com/data',
-    mcp:  'bzz://<swarm-mcp-hash>',
+    mcp: 'bzz://<swarm-mcp-hash>',
   },
   owner: await signer.getAddress(),
 });
@@ -98,7 +98,7 @@ The agent is now discoverable by anyone querying the Identity Registry or watchi
 
 ```typescript
 // Read the agent's on-chain URI and fetch the Agent Card from Swarm
-const uri   = await erc8004.identity.getAgentURI(agentId);   // "bzz://<hash>"
+const uri = await erc8004.identity.getAgentURI(agentId); // "bzz://<hash>"
 const owner = await erc8004.identity.getOwner(agentId);
 
 // Check reputation before paying
@@ -117,7 +117,7 @@ The provider must first sign a `FeedbackAuth` token authorizing the specific con
 const feedbackAuth = await erc8004.reputation.signFeedbackAuth(
   agentId,
   consumerAddress,
-  3600,  // token valid for 1 hour (default)
+  3600, // token valid for 1 hour (default)
 );
 // Send feedbackAuth to the consumer (e.g. in the x402 response payload)
 ```
@@ -130,16 +130,17 @@ const evidenceHash = '<swarm-hash-of-review-json>';
 
 const txHash = await erc8004.reputation.postFeedback({
   agentId,
-  score:       92,                          // 0–100
-  tags:        ['image-data', 'reliable'],  // up to 2 tags
-  evidenceURI: `bzz://${evidenceHash}`,     // anchored on-chain as keccak256 hash
-  feedbackAuth,                             // EIP-712 token from the provider
+  score: 92, // 0–100
+  tags: ['image-data', 'reliable'], // up to 2 tags
+  evidenceURI: `bzz://${evidenceHash}`, // anchored on-chain as keccak256 hash
+  feedbackAuth, // EIP-712 token from the provider
 });
 ```
 
 Future consumers can call `calculateReputation(agentId)` before purchasing to evaluate the provider's track record.
 
 **What's next?**
+
 - Integrate this client into your MCP server or x402 provider to automate the full data exchange loop.
 - Run `pnpm test:sepolia` to walk through a complete agent lifecycle on-chain.
 
@@ -157,11 +158,11 @@ Factory function. Returns `{ identity, reputation, aggregate }`.
 
 ```typescript
 interface ERC8004Config {
-  provider:  Provider;
-  signer?:   Signer;   // required for write operations
-  chain:     'base-sepolia' | 'base' | 'mainnet' | string;
+  provider: Provider;
+  signer?: Signer; // required for write operations
+  chain: 'base-sepolia' | 'base' | 'mainnet' | string;
   contracts?: {
-    identityRegistry?:   string;  // override deployed address
+    identityRegistry?: string; // override deployed address
     reputationRegistry?: string;
   };
 }
@@ -173,40 +174,40 @@ Only `base-sepolia` has pre-configured contract addresses. For other chains, pas
 
 ### IdentityModule (`erc8004.identity`)
 
-| Method | Signature | Description |
-|---|---|---|
-| `register` | `(agentURI: string) → RegisterResult` | Mints a new agent NFT. Returns `{ agentId, txHash }`. |
-| `getAgentURI` | `(agentId: bigint) → string` | Reads the stored `bzz://` URI from the NFT. |
-| `setAgentURI` | `(agentId, newURI) → txHash` | Updates the URI. Owner/operator only. |
-| `getOwner` | `(agentId: bigint) → address` | Returns current NFT owner. |
-| `setAgentWallet` | `(agentId, wallet, deadline, sig) → txHash` | Attaches a hot wallet for payments, keeping the agent NFT owner separate. Requires EIP-712 proof. |
-| `getAgentWallet` | `(agentId: bigint) → address` | Returns the associated wallet, or zero address. |
-| `setMetadata` | `(agentId, key, value: Uint8Array) → txHash` | Stores arbitrary key/value bytes on-chain. |
-| `getMetadata` | `(agentId, key) → Uint8Array` | Reads stored metadata bytes. |
+| Method           | Signature                                    | Description                                                                                       |
+| ---------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `register`       | `(agentURI: string) → RegisterResult`        | Mints a new agent NFT. Returns `{ agentId, txHash }`.                                             |
+| `getAgentURI`    | `(agentId: bigint) → string`                 | Reads the stored `bzz://` URI from the NFT.                                                       |
+| `setAgentURI`    | `(agentId, newURI) → txHash`                 | Updates the URI. Owner/operator only.                                                             |
+| `getOwner`       | `(agentId: bigint) → address`                | Returns current NFT owner.                                                                        |
+| `setAgentWallet` | `(agentId, wallet, deadline, sig) → txHash`  | Attaches a hot wallet for payments, keeping the agent NFT owner separate. Requires EIP-712 proof. |
+| `getAgentWallet` | `(agentId: bigint) → address`                | Returns the associated wallet, or zero address.                                                   |
+| `setMetadata`    | `(agentId, key, value: Uint8Array) → txHash` | Stores arbitrary key/value bytes on-chain.                                                        |
+| `getMetadata`    | `(agentId, key) → Uint8Array`                | Reads stored metadata bytes.                                                                      |
 
 ---
 
 ### ReputationModule (`erc8004.reputation`)
 
-| Method | Signature | Description |
-|---|---|---|
-| `postFeedback` | `(params: PostFeedbackParams) → txHash` | Submits a feedback score to the Reputation Registry. |
-| `revokeFeedback` | `(agentId, feedbackIndex) → txHash` | Revokes a previously submitted feedback entry. |
-| `getFeedback` | `(agentId, clientAddress, feedbackIndex) → FeedbackResult` | Reads a single feedback entry. |
-| `getSummary` | `(agentId, clientAddresses?, tag1?, tag2?) → ReputationSummary` | Aggregates feedback on-chain. Auto-fetches client list if not provided. |
-| `signFeedbackAuth` | `(agentId, consumerAddress, ttlSeconds?) → FeedbackAuth` | Provider signs an EIP-712 token authorizing a consumer to post feedback. |
-| `verifyFeedbackAuth` | `(auth, expectedConsumer?) → recoveredSigner` | Verifies a `FeedbackAuth` token off-chain. Throws if expired or consumer mismatched. |
+| Method               | Signature                                                       | Description                                                                          |
+| -------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `postFeedback`       | `(params: PostFeedbackParams) → txHash`                         | Submits a feedback score to the Reputation Registry.                                 |
+| `revokeFeedback`     | `(agentId, feedbackIndex) → txHash`                             | Revokes a previously submitted feedback entry.                                       |
+| `getFeedback`        | `(agentId, clientAddress, feedbackIndex) → FeedbackResult`      | Reads a single feedback entry.                                                       |
+| `getSummary`         | `(agentId, clientAddresses?, tag1?, tag2?) → ReputationSummary` | Aggregates feedback on-chain. Auto-fetches client list if not provided.              |
+| `signFeedbackAuth`   | `(agentId, consumerAddress, ttlSeconds?) → FeedbackAuth`        | Provider signs an EIP-712 token authorizing a consumer to post feedback.             |
+| `verifyFeedbackAuth` | `(auth, expectedConsumer?) → recoveredSigner`                   | Verifies a `FeedbackAuth` token off-chain. Throws if expired or consumer mismatched. |
 
 **`PostFeedbackParams`:**
 
 ```typescript
 interface PostFeedbackParams {
-  agentId:      bigint;
-  score:        number;            // 0–100 (clamped automatically)
-  tags?:        [string?, string?]; // up to 2 classification tags
-  evidenceURI?: string;            // bzz:// or https:// — anchors fine-grained review data off-chain; its keccak256 hash is stored on-chain for integrity
-  feedbackAuth?: FeedbackAuth;     // EIP-712 token from provider (recommended)
-  endpoint?:    string;            // which provider endpoint was used
+  agentId: bigint;
+  score: number; // 0–100 (clamped automatically)
+  tags?: [string?, string?]; // up to 2 classification tags
+  evidenceURI?: string; // bzz:// or https:// — anchors fine-grained review data off-chain; its keccak256 hash is stored on-chain for integrity
+  feedbackAuth?: FeedbackAuth; // EIP-712 token from provider (recommended)
+  endpoint?: string; // which provider endpoint was used
 }
 ```
 
@@ -214,10 +215,10 @@ interface PostFeedbackParams {
 
 ```typescript
 interface FeedbackAuth {
-  agentId:   bigint;
-  consumer:  string;   // consumer wallet address
-  deadline:  number;   // unix timestamp — token expires after this
-  signature: string;   // EIP-712 signature from the provider wallet
+  agentId: bigint;
+  consumer: string; // consumer wallet address
+  deadline: number; // unix timestamp — token expires after this
+  signature: string; // EIP-712 signature from the provider wallet
 }
 ```
 
@@ -225,18 +226,18 @@ interface FeedbackAuth {
 
 ### AggregateModule (`erc8004.aggregate`)
 
-| Method | Signature | Description |
-|---|---|---|
+| Method                | Signature                             | Description                                           |
+| --------------------- | ------------------------------------- | ----------------------------------------------------- |
 | `calculateReputation` | `(agentId: bigint) → ReputationScore` | Fetches all feedback and returns an aggregated score. |
 
 **`ReputationScore`:**
 
 ```typescript
 interface ReputationScore {
-  agentId:       bigint;
-  score:         number;   // 0–100 average across all feedback
+  agentId: bigint;
+  score: number; // 0–100 average across all feedback
   feedbackCount: bigint;
-  reliable:      boolean;  // true when score >= 70 AND feedbackCount >= 3
+  reliable: boolean; // true when score >= 70 AND feedbackCount >= 3
 }
 ```
 
@@ -253,27 +254,52 @@ import {
 } from '@solarpunk/erc8004-adapter';
 ```
 
-| Function | Description |
-|---|---|
-| `generateAgentCard(params)` | Creates an `AgentCard` object with defaults (`version: "1.0.0"`, `supportedTrust: ["reputation"]`). |
-| `serializeAgentCard(card)` | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm. |
-| `parseAgentCard(json)` | Parses and validates a JSON string. Throws if `name`, `description`, or `endpoints` are missing. |
+| Function                                           | Description                                                                                         |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `generateAgentCard(params)`                        | Creates an `AgentCard` object with defaults (`version: "1.0.0"`, `supportedTrust: ["reputation"]`). |
+| `serializeAgentCard(card)`                         | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.              |
+| `parseAgentCard(json)`                             | Parses and validates a JSON string. Throws if `name`, `description`, or `endpoints` are missing.    |
+| `uploadAgentCard(card, beeApiUrl, postageBatchId)` | Uploads the card to a Bee node and returns `{ reference, url }`.                                    |
+
+`uploadAgentCard` returns a `SwarmUploadResult`:
+
+```typescript
+interface SwarmUploadResult {
+  reference: string; // 64-char hex Swarm hash
+  url: string; // bzz://<reference> — pass this to identity.register()
+}
+```
+
+Example:
+
+```typescript
+import { generateAgentCard, uploadAgentCard } from '@solarpunk/erc8004-adapter';
+
+const card = generateAgentCard({ ... });
+const { reference, url } = await uploadAgentCard(
+  card,
+  'http://localhost:1633',
+  process.env.BEE_POSTAGE_STAMP!,
+);
+
+const { agentId } = await erc8004.identity.register(url); // url = "bzz://<reference>"
+```
 
 **`AgentCard` structure:**
 
 ```typescript
 interface AgentCard {
-  name:           string;
-  description:    string;
-  version:        string;
-  capabilities:   string[];
+  name: string;
+  description: string;
+  version: string;
+  capabilities: string[];
   endpoints: {
-    mcp?:  string;   // Swarm MCP endpoint (bzz://<hash>)
-    x402?: string;   // x402 payment server URL
-    a2a?:  string;   // Agent-to-Agent protocol endpoint
+    mcp?: string; // Swarm MCP endpoint (bzz://<hash>)
+    x402?: string; // x402 payment server URL
+    a2a?: string; // Agent-to-Agent protocol endpoint
   };
-  supportedTrust: string[];  // e.g. ["reputation"]
-  owner?:         string;    // wallet address
+  supportedTrust: string[]; // e.g. ["reputation"]
+  owner?: string; // wallet address
 }
 ```
 
@@ -281,11 +307,11 @@ interface AgentCard {
 
 ## Deployed Contracts
 
-| Chain | Network | Identity Registry | Reputation Registry |
-|---|---|---|---|
-| Base Sepolia | Testnet | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
-| Base Mainnet | — | not configured | not configured |
-| Ethereum Mainnet | — | not configured | not configured |
+| Chain            | Network | Identity Registry                            | Reputation Registry                          |
+| ---------------- | ------- | -------------------------------------------- | -------------------------------------------- |
+| Base Sepolia     | Testnet | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| Base Mainnet     | —       | not configured                               | not configured                               |
+| Ethereum Mainnet | —       | not configured                               | not configured                               |
 
 Agents registered on Base Sepolia are browsable at [8004scan.io](https://8004scan.io).
 
@@ -307,11 +333,15 @@ Edit `.env`:
 PRIVATE_KEY=0x<provider-private-key>
 CONSUMER_PRIVATE_KEY=0x<consumer-private-key>   # must be a different funded wallet
 RPC_URL=https://sepolia.base.org                 # optional, this is the default
+BEE_API_URL=http://localhost:1633                # optional, this is the default
+BEE_POSTAGE_STAMP=<64-char-hex-stamp-id>         # optional, skips Swarm upload if not set
 ```
 
 Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) for both wallets.
 
-> **Why two wallets?** The ERC-8004 contract rejects feedback submitted by the agent owner — self-feedback is not allowed at the contract level. `CONSUMER_PRIVATE_KEY` is optional: if omitted, steps 1–3 still run and the FeedbackAuth signing is verified off-chain, but the on-chain feedback transaction (step 4) is skipped.
+> **Why two wallets?** The ERC-8004 contract rejects feedback submitted by the agent owner — self-feedback is not allowed at the contract level. `CONSUMER_PRIVATE_KEY` is optional: if omitted, steps 1–4 still run and the FeedbackAuth signing is verified off-chain, but the on-chain feedback transaction (step 5) is skipped.
+
+> **Swarm upload:** `BEE_POSTAGE_STAMP` requires a running Bee node and a valid usable postage stamp. If not set, the script uses a placeholder `bzz://` URI and continues. To get a stamp, run `bee stamp buy --depth 20 --amount 100` on your Bee node.
 
 ### 2. Build the package
 
@@ -332,29 +362,35 @@ Expected output:
 [Provider wallet] 0xProviderAddress
 [Balance] 0.05 ETH
 
-  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 3.
-  Step 4 (post feedback on-chain) will be skipped.
+  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 4.
+  Step 5 (post feedback on-chain) will be skipped.
   Set CONSUMER_PRIVATE_KEY in .env to a different funded wallet to run the full flow.
 
 [Consumer wallet] 0xEphemeralAddress
+
+  Note: BEE_POSTAGE_STAMP not set. Swarm uploads will be skipped.
 
 [Step 1: Generate Agent Card]
 [Agent Card] { name: 'Test Data Provider', ... }
 [Agent Card round-trip] OK
 
-[Step 2: Register on-chain (Identity Registry)]
+[Step 2: Upload Agent Card to Swarm]
+  Skipped — using placeholder URI: bzz://placeholder-1776685178545
+  Set BEE_POSTAGE_STAMP in .env to upload the real Agent Card to Swarm.
+
+[Step 3: Register on-chain (Identity Registry)]
   Sending transaction...
 [Registered agentId] 42
 [Transaction] 0x...
 [On-chain URI] bzz://placeholder-...
 [On-chain owner] 0xProviderAddress
 
-[Step 3: Sign FeedbackAuth (provider → consumer)]
+[Step 4: Sign FeedbackAuth (provider → consumer)]
 [FeedbackAuth] { agentId: '42', consumer: '0x...', deadline: 1234567890, signature: '0x...' }
 [Recovered signer] 0xProviderAddress
 [FeedbackAuth verify] OK
 
-[Step 4: Post feedback (Reputation Registry)]
+[Step 5: Post feedback (Reputation Registry)]
   Skipped — set CONSUMER_PRIVATE_KEY to a different funded wallet to run this step.
   The contract does not allow the agent owner to submit feedback on their own agent.
 
@@ -363,17 +399,30 @@ Expected output:
   View on BaseScan: https://sepolia.basescan.org/tx/0x...
 ```
 
-With `CONSUMER_PRIVATE_KEY` set, step 4 runs and step 5 (reputation calculation) follows:
+With both `BEE_POSTAGE_STAMP` and `CONSUMER_PRIVATE_KEY` set, the full flow runs:
 
 ```
-[Step 4: Post feedback (Reputation Registry)]
+[Step 2: Upload Agent Card to Swarm]
+  Uploading to Bee node at http://localhost:1633...
+[Agent Card hash] a1b2c3d4...
+[Agent Card URI] bzz://a1b2c3d4...
+[Verify on gateway] https://gateway.ethswarm.org/bytes/a1b2c3d4...
+
+[Step 3: Register on-chain (Identity Registry)]
+  Sending transaction...
+[Registered agentId] 42
+...
+
+[Step 5: Post feedback (Reputation Registry)]
+  Uploading evidence to Swarm...
+[Evidence hash] e5f6a7b8...
   Sending transaction...
 [Feedback tx] 0x...
 
-[Step 5: Calculate reputation]
+[Step 6: Calculate reputation]
 [Reputation] { agentId: '42', score: 90, feedbackCount: '1', reliable: false }
 
-✓ All steps completed successfully
+✓ Steps completed successfully
   agentId: 42
   View on BaseScan: https://sepolia.basescan.org/tx/0x...
 ```
@@ -400,9 +449,9 @@ To use a custom RPC or a locally deployed contract:
 const erc8004 = createERC8004Client({
   provider,
   signer,
-  chain: 'base-sepolia',        // used for EIP-712 domain chainId
+  chain: 'base-sepolia', // used for EIP-712 domain chainId
   contracts: {
-    identityRegistry:   '0xCustomIdentityAddress',
+    identityRegistry: '0xCustomIdentityAddress',
     reputationRegistry: '0xCustomReputationAddress',
   },
 });
@@ -416,7 +465,7 @@ const erc8004 = createERC8004Client({
   signer,
   chain: 'hardhat',
   contracts: {
-    identityRegistry:   '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+    identityRegistry: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
     reputationRegistry: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
   },
 });

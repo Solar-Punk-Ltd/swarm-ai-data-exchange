@@ -80,3 +80,12 @@ export interface ReputationScore {
   feedbackCount: bigint;
   reliable: boolean; // score >= 70 and count >= 3
 }
+
+export interface SwarmUploadResult {
+  /** 64-char hex content hash of the uploaded payload */
+  reference: string;
+  /** bzz://<reference> — direct immutable link to this version of the card */
+  url: string;
+  /** Bee API feed URL — resolves to the latest card version via owner + topic */
+  feedUrl: string;
+}
