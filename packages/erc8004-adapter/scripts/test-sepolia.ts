@@ -9,6 +9,7 @@ import {
 
 const RPC_URL = process.env.RPC_URL ?? 'https://sepolia.base.org';
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const CONSUMER_PRIVATE_KEY = process.env.CONSUMER_PRIVATE_KEY;
 
 if (!PRIVATE_KEY) {
   console.error('PRIVATE_KEY is not set in .env');
@@ -26,13 +27,29 @@ async function main() {
   const address = await signer.getAddress();
   const balance = await provider.getBalance(address);
 
-  log('Wallet', address);
+  log('Provider wallet', address);
   log('Balance', `${ethers.formatEther(balance)} ETH`);
 
   if (balance === 0n) {
     console.error('\nWallet has no ETH. Get testnet funds from https://faucet.quicknode.com/base/sepolia');
     process.exit(1);
   }
+
+  // Consumer wallet — must be a different address from the provider.
+  // The ERC-8004 Reputation Registry rejects self-feedback at the contract level.
+  let consumerSigner: ethers.Wallet;
+  if (CONSUMER_PRIVATE_KEY && CONSUMER_PRIVATE_KEY !== PRIVATE_KEY) {
+    consumerSigner = new ethers.Wallet(CONSUMER_PRIVATE_KEY, provider);
+  } else {
+    // Ephemeral wallet — used only for FeedbackAuth signing verification (step 3).
+    // Step 4 (on-chain postFeedback) will be skipped without a funded consumer wallet.
+    consumerSigner = ethers.Wallet.createRandom().connect(provider);
+    console.log('\n  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 3.');
+    console.log('  Step 4 (post feedback on-chain) will be skipped.');
+    console.log('  Set CONSUMER_PRIVATE_KEY in .env to a different funded wallet to run the full flow.');
+  }
+  const consumerAddress = await consumerSigner.getAddress();
+  log('Consumer wallet', consumerAddress);
 
   const erc8004 = createERC8004Client({ provider, signer, chain: 'base-sepolia' });
 
@@ -80,8 +97,6 @@ async function main() {
   // ── 3. FeedbackAuth sign / verify ─────────────────────────────────────────
   log('Step 3: Sign FeedbackAuth (provider → consumer)');
 
-  // Using the same wallet as consumer for testing purposes
-  const consumerAddress = address;
   const feedbackAuth = await erc8004.reputation.signFeedbackAuth(agentId, consumerAddress);
 
   log('FeedbackAuth', { ...feedbackAuth, agentId: feedbackAuth.agentId.toString() });
@@ -93,31 +108,39 @@ async function main() {
 
   // ── 4. Post Feedback ───────────────────────────────────────────────────────
   log('Step 4: Post feedback (Reputation Registry)');
-  console.log('  Sending transaction...');
 
-  const feedbackTxHash = await erc8004.reputation.postFeedback({
-    agentId,
-    score: 90,
-    tags: ['test', 'image-data'],
-    evidenceURI: `bzz://evidence-placeholder-${Date.now()}`,
-    feedbackAuth,
-  });
+  const consumerBalance = await provider.getBalance(consumerAddress);
+  if (!CONSUMER_PRIVATE_KEY || consumerBalance === 0n) {
+    console.log('  Skipped — set CONSUMER_PRIVATE_KEY to a different funded wallet to run this step.');
+    console.log('  The contract does not allow the agent owner to submit feedback on their own agent.');
+  } else {
+    console.log('  Sending transaction...');
 
-  log('Feedback tx', feedbackTxHash);
+    const consumerErc8004 = createERC8004Client({ provider, signer: consumerSigner, chain: 'base-sepolia' });
+    const feedbackTxHash = await consumerErc8004.reputation.postFeedback({
+      agentId,
+      score: 90,
+      tags: ['test', 'image-data'],
+      evidenceURI: `bzz://evidence-placeholder-${Date.now()}`,
+      feedbackAuth,
+    });
 
-  // ── 5. Calculate Reputation ────────────────────────────────────────────────
-  log('Step 5: Calculate reputation');
+    log('Feedback tx', feedbackTxHash);
 
-  const reputation = await erc8004.aggregate.calculateReputation(agentId);
-  log('Reputation', {
-    agentId: reputation.agentId.toString(),
-    score: reputation.score,
-    feedbackCount: reputation.feedbackCount.toString(),
-    reliable: reputation.reliable,
-  });
+    // ── 5. Calculate Reputation ──────────────────────────────────────────────
+    log('Step 5: Calculate reputation');
+
+    const reputation = await erc8004.aggregate.calculateReputation(agentId);
+    log('Reputation', {
+      agentId: reputation.agentId.toString(),
+      score: reputation.score,
+      feedbackCount: reputation.feedbackCount.toString(),
+      reliable: reputation.reliable,
+    });
+  }
 
   // ── Done ───────────────────────────────────────────────────────────────────
-  console.log('\n✓ All steps completed successfully');
+  console.log('\n✓ Steps completed successfully');
   console.log(`  agentId: ${agentId}`);
   console.log(`  View on BaseScan: https://sepolia.basescan.org/tx/${txHash}`);
 }

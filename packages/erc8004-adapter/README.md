@@ -304,11 +304,14 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-PRIVATE_KEY=0x<your-private-key>
-RPC_URL=https://sepolia.base.org   # optional, this is the default
+PRIVATE_KEY=0x<provider-private-key>
+CONSUMER_PRIVATE_KEY=0x<consumer-private-key>   # must be a different funded wallet
+RPC_URL=https://sepolia.base.org                 # optional, this is the default
 ```
 
-Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) if your wallet balance is zero.
+Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) for both wallets.
+
+> **Why two wallets?** The ERC-8004 contract rejects feedback submitted by the agent owner — self-feedback is not allowed at the contract level. `CONSUMER_PRIVATE_KEY` is optional: if omitted, steps 1–3 still run and the FeedbackAuth signing is verified off-chain, but the on-chain feedback transaction (step 4) is skipped.
 
 ### 2. Build the package
 
@@ -326,8 +329,14 @@ pnpm test:sepolia
 Expected output:
 
 ```
-[Wallet] 0xYourAddress
+[Provider wallet] 0xProviderAddress
 [Balance] 0.05 ETH
+
+  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 3.
+  Step 4 (post feedback on-chain) will be skipped.
+  Set CONSUMER_PRIVATE_KEY in .env to a different funded wallet to run the full flow.
+
+[Consumer wallet] 0xEphemeralAddress
 
 [Step 1: Generate Agent Card]
 [Agent Card] { name: 'Test Data Provider', ... }
@@ -338,13 +347,25 @@ Expected output:
 [Registered agentId] 42
 [Transaction] 0x...
 [On-chain URI] bzz://placeholder-...
-[On-chain owner] 0xYourAddress
+[On-chain owner] 0xProviderAddress
 
 [Step 3: Sign FeedbackAuth (provider → consumer)]
 [FeedbackAuth] { agentId: '42', consumer: '0x...', deadline: 1234567890, signature: '0x...' }
-[Recovered signer] 0xYourAddress
+[Recovered signer] 0xProviderAddress
 [FeedbackAuth verify] OK
 
+[Step 4: Post feedback (Reputation Registry)]
+  Skipped — set CONSUMER_PRIVATE_KEY to a different funded wallet to run this step.
+  The contract does not allow the agent owner to submit feedback on their own agent.
+
+✓ Steps completed successfully
+  agentId: 42
+  View on BaseScan: https://sepolia.basescan.org/tx/0x...
+```
+
+With `CONSUMER_PRIVATE_KEY` set, step 4 runs and step 5 (reputation calculation) follows:
+
+```
 [Step 4: Post feedback (Reputation Registry)]
   Sending transaction...
 [Feedback tx] 0x...
@@ -352,7 +373,7 @@ Expected output:
 [Step 5: Calculate reputation]
 [Reputation] { agentId: '42', score: 90, feedbackCount: '1', reliable: false }
 
-✓ All steps completed successfully
+✓ Steps completed successfully
   agentId: 42
   View on BaseScan: https://sepolia.basescan.org/tx/0x...
 ```
