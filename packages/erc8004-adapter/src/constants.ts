@@ -14,3 +14,8 @@ export const DEFAULT_CHAIN = 'base-sepolia';
 export const AGENT_CARD_TOPIC = 'agent-card';
 
 export const DEFAULT_GATEWAY_URL = 'https://api.gateway.ethswarm.org';
+
+export const AGENT_CARD_TYPE = 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
+
+export const DEFAULT_AGENT_IMAGE =
+  'https://api.gateway.ethswarm.org/bzz/1edce57714b542d7198b0fb271086f0f5eb6ece309bf0b5f8011a7b228c42bdd/img/avatar.jpg';

@@ -61,12 +61,17 @@ async function main() {
   const card = generateAgentCard({
     name: 'Test Data Provider',
     description: 'Demo agent for Swarm Data Exchange POC testing',
-    capabilities: ['image-data', 'test'],
-    endpoints: {
-      x402: 'https://provider.example.com/data',
-      a2a: 'http://data_discovery_layer',
-    },
-    owner: address,
+    services: [
+      {
+        name: 'x402',
+        endpoint: 'https://provider.example.com/data',
+      },
+      {
+        name: 'a2a',
+        endpoint: 'http://data_discovery_layer',
+      },
+    ],
+    x402Support: true,
   });
 
   log('Agent Card', JSON.parse(serializeAgentCard(card)));

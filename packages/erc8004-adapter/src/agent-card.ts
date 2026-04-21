@@ -1,19 +1,26 @@
 import { Bee } from '@ethersphere/bee-js';
 import { ethers } from 'ethers';
 import type { AgentCard, AgentCardParams, SwarmUploadResult } from './types';
-import { AGENT_CARD_TOPIC, DEFAULT_GATEWAY_URL } from './constants';
+import {
+  AGENT_CARD_TOPIC,
+  AGENT_CARD_TYPE,
+  DEFAULT_AGENT_IMAGE,
+  DEFAULT_GATEWAY_URL,
+} from './constants';
 import config from './config';
 import { getUploadPostageBatchId, hexToBytes, normaliseTopic } from './utils';
 
 export function generateAgentCard(params: AgentCardParams): AgentCard {
   return {
+    type: params.type ?? AGENT_CARD_TYPE,
     name: params.name,
     description: params.description,
-    version: params.version ?? '1.0.0',
-    capabilities: params.capabilities,
-    endpoints: params.endpoints,
-    supportedTrust: params.supportedTrust ?? ['reputation'],
-    ...(params.owner !== undefined && { owner: params.owner }),
+    image: params.image ?? DEFAULT_AGENT_IMAGE,
+    services: params.services,
+    x402Support: params.x402Support ?? false,
+    active: params.active ?? true,
+    registrations: params.registrations ?? [],
+    ...(params.supportedTrust !== undefined && { supportedTrust: params.supportedTrust }),
   };
 }
 
@@ -21,15 +28,50 @@ export function generateAgentCard(params: AgentCardParams): AgentCard {
 export const generateRegistrationFile = generateAgentCard;
 
 export function serializeAgentCard(card: AgentCard): string {
-  return JSON.stringify(card, null, 2);
+  return JSON.stringify(
+    card,
+    (key, value) => {
+      if (typeof value === 'bigint') {
+        // Return number if safe, otherwise string to prevent JS precision issues with raw huge JSON numbers
+        return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value.toString();
+      }
+      return value;
+    },
+    2,
+  );
 }
 
 export function parseAgentCard(json: string): AgentCard {
   const data = JSON.parse(json) as Record<string, unknown>;
-  if (!data.name || !data.description || !data.endpoints) {
-    throw new Error('Invalid agent card: missing required fields (name, description, endpoints)');
+
+  if (data.type !== AGENT_CARD_TYPE) {
+    throw new Error(`Invalid agent card: type MUST be ${AGENT_CARD_TYPE}`);
   }
-  return data as unknown as AgentCard;
+
+  if (!data.name || !data.description || !data.services) {
+    throw new Error('Invalid agent card: missing required fields (name, description, services)');
+  }
+
+  if (
+    typeof data.x402Support !== 'boolean' ||
+    typeof data.active !== 'boolean' ||
+    !Array.isArray(data.registrations)
+  ) {
+    throw new Error(
+      'Invalid agent card: missing or invalid required fields (x402Support, active, registrations)',
+    );
+  }
+
+  const card = data as unknown as AgentCard;
+
+  // Transform agentId to BigInt at runtime
+  for (const reg of card.registrations) {
+    if (reg.agentId !== undefined && reg.agentId !== null) {
+      reg.agentId = BigInt(reg.agentId);
+    }
+  }
+
+  return card;
 }
 
 /**
