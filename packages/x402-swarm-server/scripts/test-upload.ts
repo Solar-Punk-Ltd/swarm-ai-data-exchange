@@ -25,9 +25,8 @@ async function main() {
     process.exit(1);
   }
 
-  // Derive feed owner from the signing key — must match what catalogue.ts uses
-  const feedOwner = new PrivateKey(feedPk).publicKey().address();
-  console.log(`Feed owner (derived from BEE_FEED_PK): ${feedOwner}`);
+  const feedOwner = process.env.METADATA_FEED_OWNER ?? new PrivateKey(feedPk).publicKey().address();
+  console.log(`Feed owner: ${feedOwner}`);
 
   const bee = new Bee(beeApiUrl);
 
@@ -36,22 +35,42 @@ async function main() {
   console.log(`  grantee: ${publisherPublicKey}`);
   const granteeResult = await bee.createGrantees(postageBatchId, [publisherPublicKey]);
   const granteeRef = granteeResult.ref.toString();
-  const actHistoryRef = granteeResult.historyref.toString();
-  console.log(`  granteeRef:    ${granteeRef}`);
-  console.log(`  actHistoryRef: ${actHistoryRef}`);
+  const granteeHistoryRef = granteeResult.historyref.toString();
+  console.log(`  granteeRef:      ${granteeRef}`);
+  console.log(`  granteeHistory:  ${granteeHistoryRef}`);
 
-  // Step 2: Upload test file with ACT, linked to the grantee history
-  const testData = new TextEncoder().encode(
-    `Test ACT-encrypted data uploaded at ${new Date().toISOString()}`,
-  );
-  console.log('\nUploading test file with ACT...');
-  const uploadResult = await bee.uploadFile(postageBatchId, testData, 'test-data.txt', {
+  // Step 2: Upload file with ACT, passing the grantee history as context
+  // Use a file path from the command line if provided, otherwise fall back to inline test data
+  const filePath = process.argv[2];
+  let fileData: Uint8Array;
+  let fileName: string;
+  if (filePath) {
+    const fs = await import('fs');
+    fileData = new Uint8Array(fs.readFileSync(filePath));
+    fileName = filePath.split('/').pop() ?? filePath;
+    console.log(`\nUploading file with ACT: ${filePath}`);
+  } else {
+    fileData = new TextEncoder().encode(
+      `Test ACT-encrypted data uploaded at ${new Date().toISOString()}`,
+    );
+    fileName = 'test-data.txt';
+    console.log('\nUploading test file with ACT (no file path provided)...');
+  }
+  const uploadResult = await bee.uploadFile(postageBatchId, fileData, fileName, {
     act: true,
-    actHistoryAddress: actHistoryRef,
+    actHistoryAddress: granteeHistoryRef,
     contentType: 'text/plain',
   });
   const swarmHash = uploadResult.reference.toString();
-  console.log(`  swarmHash: ${swarmHash}`);
+  // The upload produces its own history entry chained off the grantee history.
+  // This is the ref that patchGrantees must use — not granteeHistoryRef.
+  if (!uploadResult.historyAddress.value) {
+    console.error('Upload did not return an ACT history address — was act:true accepted?');
+    process.exit(1);
+  }
+  const actHistoryRef = uploadResult.historyAddress.getOrThrow().toString();
+  console.log(`  swarmHash:     ${swarmHash}`);
+  console.log(`  actHistoryRef: ${actHistoryRef}`);
 
   // Step 3: Fetch existing catalogue from feed, or start fresh
   console.log('\nFetching existing catalogue from feed...');

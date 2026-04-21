@@ -21,8 +21,11 @@ async function main() {
     privateKey = `0x${privateKey}`;
   }
 
-  const swarmHash =
-    process.env.SWARM_HASH || '8564bb7df58c17e3396f7ceb3874168ed7b2461a56f0954ed3ebc8c7986397b5';
+  const swarmHash = process.env.SWARM_HASH;
+  if (!swarmHash) {
+    console.error('SWARM_HASH environment variable is required');
+    process.exit(1);
+  }
   const baseUrl = process.env.SERVER_URL || 'http://localhost:3000';
   const targetUrl = `${baseUrl}/swarm/data/${swarmHash}`;
 
@@ -31,12 +34,17 @@ async function main() {
   const signer = privateKeyToAccount(privateKey as `0x${string}`);
   console.log(`Wallet: ${signer.address}`);
 
-  // Derive compressed secp256k1 public key from private key bytes
-  const privKeyBytes = Buffer.from(privateKey.slice(2), 'hex');
-  const compressedPublicKey = Buffer.from(secp256k1.getPublicKey(privKeyBytes, true)).toString(
-    'hex',
-  );
-  console.log(`Public key (swarm-public-key): ${compressedPublicKey}`);
+  // Use SWARM_PUBLIC_KEY if provided, otherwise derive from the private key
+  let compressedPublicKey = process.env.SWARM_PUBLIC_KEY ?? '';
+  if (compressedPublicKey) {
+    console.log(`Public key (swarm-public-key): ${compressedPublicKey} (from SWARM_PUBLIC_KEY)`);
+  } else {
+    const privKeyBytes = Buffer.from(privateKey.slice(2), 'hex');
+    compressedPublicKey = Buffer.from(secp256k1.getPublicKey(privKeyBytes, true)).toString('hex');
+    console.log(
+      `Public key (swarm-public-key): ${compressedPublicKey} (derived from EVM_PRIVATE_KEY)`,
+    );
+  }
 
   const client = new x402Client();
 

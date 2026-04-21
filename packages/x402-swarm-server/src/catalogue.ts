@@ -5,8 +5,8 @@ import { CatalogueEntryNotFound, type DataItem, type SwarmMetadataCatalogue } fr
 const METADATA_FEED_TOPIC = process.env.METADATA_FEED_TOPIC ?? '';
 const BEE_FEED_PK = process.env.BEE_FEED_PK ?? '';
 
-// Derive the feed owner address from the signing key so reader and writer are always consistent
-const feedOwner = new PrivateKey(BEE_FEED_PK).publicKey().address();
+const feedOwner =
+  process.env.METADATA_FEED_OWNER ?? new PrivateKey(BEE_FEED_PK).publicKey().address();
 
 export async function fetchCatalogue(): Promise<SwarmMetadataCatalogue> {
   const update = await bee.fetchLatestFeedUpdate(METADATA_FEED_TOPIC, feedOwner);
