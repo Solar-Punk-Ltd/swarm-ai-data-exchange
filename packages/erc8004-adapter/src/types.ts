@@ -10,6 +10,11 @@ export interface ERC8004Config {
   };
 }
 
+export interface MetadataEntry {
+  metadataKey: string;
+  metadataValue: Uint8Array;
+}
+
 export interface AgentService {
   name: string; // e.g. "MCP", "A2A", "web", "email"
   endpoint: string; // The service endpoint URL or identifier

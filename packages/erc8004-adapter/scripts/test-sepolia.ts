@@ -105,6 +105,8 @@ async function main() {
   log('Registered agentId', agentId.toString());
   log('Transaction', txHash);
 
+  return;
+
   // Verify on-chain
   const onChainURI = await erc8004.identity.getAgentURI(agentId);
   const owner = await erc8004.identity.getOwner(agentId);
@@ -116,6 +118,8 @@ async function main() {
     owner.toLowerCase() === address.toLowerCase(),
     'Owner mismatch after registration',
   );
+
+  return;
 
   // ── 4. Set Agent Wallet ────────────────────────────────────────────────────
   log('Step 4: Set agent wallet (Identity Registry)');

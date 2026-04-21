@@ -1,6 +1,6 @@
-import { Contract, type Signer, type Provider, type Log } from 'ethers';
+import { Contract, type Signer, type Provider, type Log, type EventLog } from 'ethers';
 import { IDENTITY_REGISTRY_ABI } from '../abis/IdentityRegistry';
-import type { RegisterResult, WalletAuth } from '../types';
+import type { RegisterResult, WalletAuth, MetadataEntry } from '../types';
 
 const WALLET_AUTH_TYPES = {
   WalletAuth: [
@@ -19,14 +19,58 @@ export class IdentityModule {
     this.chainId = chainId;
   }
 
-  async register(agentURI: string): Promise<RegisterResult> {
-    const tx = await this.contract['register(string)'](agentURI);
+  async register(agentURI?: string, metadata?: MetadataEntry[]): Promise<RegisterResult> {
+    let tx;
+    try {
+      if (agentURI !== undefined) {
+        if (metadata && metadata.length > 0) {
+          tx = await this.contract.getFunction('register(string,tuple(string,bytes)[])')(
+            agentURI,
+            metadata,
+          );
+        } else {
+          tx = await this.contract.getFunction('register(string)')(agentURI);
+        }
+      } else {
+        tx = await this.contract.getFunction('register()')();
+      }
+    } catch {
+      // estimateGas failed — simulate via eth_call to surface the real revert reason.
+      // Some RPC endpoints (e.g. Base Sepolia public node) return a misleading
+      // "intrinsic gas too high" error instead of the actual contract revert.
+      if (agentURI !== undefined) {
+        if (metadata && metadata.length > 0) {
+          await this.contract
+            .getFunction('register(string,tuple(string,bytes)[])')
+            .staticCall(agentURI, metadata);
+        } else {
+          await this.contract.getFunction('register(string)').staticCall(agentURI);
+        }
+      } else {
+        await this.contract.getFunction('register()').staticCall();
+      }
+      // staticCall succeeded → only estimateGas is broken; retry with explicit gasLimit.
+      const overrides = { gasLimit: 500_000 };
+      if (agentURI !== undefined) {
+        if (metadata && metadata.length > 0) {
+          tx = await this.contract.getFunction('register(string,tuple(string,bytes)[])')(
+            agentURI,
+            metadata,
+            overrides,
+          );
+        } else {
+          tx = await this.contract.getFunction('register(string)')(agentURI, overrides);
+        }
+      } else {
+        tx = await this.contract.getFunction('register()')(overrides);
+      }
+    }
     const receipt = await tx.wait();
 
     const event = (receipt.logs as Log[])
       .map((log) => {
         try {
-          return this.contract.interface.parseLog(log);
+          return this.contract.interface.parseLog({ topics: [...log.topics], data: log.data });
         } catch {
           return null;
         }
@@ -65,6 +109,32 @@ export class IdentityModule {
 
   async getAgentWallet(agentId: bigint): Promise<string> {
     return this.contract.getAgentWallet(agentId) as Promise<string>;
+  }
+
+  async unsetAgentWallet(agentId: bigint): Promise<string> {
+    const tx = await this.contract.unsetAgentWallet(agentId);
+    const receipt = await tx.wait();
+    return receipt.hash as string;
+  }
+
+  async getRegisteredAgents(
+    fromBlock: number | 'latest' | 'earliest' = 'earliest',
+    toBlock: number | 'latest' = 'latest',
+  ): Promise<{ agentId: bigint; agentURI: string; owner: string }[]> {
+    const filter = this.contract.filters.Registered();
+    const logs = await this.contract.queryFilter(filter, fromBlock, toBlock);
+
+    return logs.map((log) => {
+      const parsedLog = this.contract.interface.parseLog({
+        topics: [...(log as EventLog | Log).topics],
+        data: (log as EventLog | Log).data,
+      });
+      return {
+        agentId: parsedLog?.args.agentId as bigint,
+        agentURI: parsedLog?.args.agentURI as string,
+        owner: parsedLog?.args.owner as string,
+      };
+    });
   }
 
   async setMetadata(agentId: bigint, key: string, value: Uint8Array): Promise<string> {
