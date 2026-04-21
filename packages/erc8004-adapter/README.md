@@ -81,6 +81,9 @@ const card = generateAgentCard({
     { name: 'A2A', endpoint: 'https://a2aURL' },
   ],
   x402Support: true,
+  active: true,
+  supportedTrust: ['reputation'],
+  capabilities: ['trading', 'image_generation'],
 });
 
 // Upload the Agent Card to a Swarm feed — reads BEE_FEED_PK, BEE_API_URL, BEE_POSTAGE_STAMP from env.
@@ -273,7 +276,7 @@ import {
 
 | Function                        | Description                                                                                                                                                                                                     |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generateAgentCard(params)`     | Creates an `AgentCard` object. `type`, `active`, `x402Support`, and `registrations` are set to their defaults when omitted.                                                                                     |
+| `generateAgentCard(params)`     | Creates an `AgentCard` object. `type`, `active`, `x402Support`, and `registrations` are set to their defaults when omitted. `capabilities` and `supportedTrust` are optional string arrays.                     |
 | `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.                                                                                                                          |
 | `parseAgentCard(json)`          | Parses and validates a JSON string. Throws if `type` is not the ERC-8004 registration type string, or if `name`, `description`, `services`, `x402Support`, `active`, or `registrations` are missing or invalid. |
 | `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads `BEE_FEED_PK`, `BEE_API_URL`, and `BEE_POSTAGE_STAMP` from the environment. `feedUrl` always uses the public Swarm gateway.   |
@@ -314,6 +317,7 @@ interface AgentCard {
   active: boolean; // false to soft-deactivate without un-registering
   registrations: AgentRegistration[];
   supportedTrust?: string[]; // e.g. ["reputation", "crypto-economic"]
+  capabilities?: string[]; // OPTIONAL — e.g. ["trading", "image_generation"]
 }
 
 interface AgentService {

@@ -20,6 +20,7 @@ export function generateAgentCard(params: AgentCardParams): AgentCard {
     x402Support: params.x402Support ?? false,
     active: params.active ?? true,
     registrations: params.registrations ?? [],
+    capabilities: params.capabilities ?? [],
     ...(params.supportedTrust !== undefined && { supportedTrust: params.supportedTrust }),
   };
 }

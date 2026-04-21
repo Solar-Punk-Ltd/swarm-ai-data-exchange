@@ -1,4 +1,4 @@
-import { Contract, type Signer, type Provider, type Log, type EventLog } from 'ethers';
+import { Contract, type Signer, type Provider, type Log, type EventLog, ethers } from 'ethers';
 import { IDENTITY_REGISTRY_ABI } from '../abis/IdentityRegistry';
 import type { RegisterResult, WalletAuth, MetadataEntry } from '../types';
 
@@ -133,6 +133,27 @@ export class IdentityModule {
         agentId: parsedLog?.args.agentId as bigint,
         agentURI: parsedLog?.args.agentURI as string,
         owner: parsedLog?.args.owner as string,
+      };
+    });
+  }
+
+  async getAgentsByMetadata(
+    metadataKey: string,
+    fromBlock: number | 'latest' | 'earliest' = 'earliest',
+    toBlock: number | 'latest' = 'latest',
+  ): Promise<{ agentId: bigint; rawValue: Uint8Array }[]> {
+    // String indexed parameters are hashed into topics via keccak256 exactly as ethers.id outputs
+    const filter = this.contract.filters.MetadataSet(null, ethers.id(metadataKey));
+    const logs = await this.contract.queryFilter(filter, fromBlock, toBlock);
+
+    return logs.map((log) => {
+      const parsedLog = this.contract.interface.parseLog({
+        topics: [...(log as EventLog | Log).topics],
+        data: (log as EventLog | Log).data,
+      });
+      return {
+        agentId: parsedLog?.args.agentId as bigint,
+        rawValue: parsedLog?.args.metadataValue as Uint8Array,
       };
     });
   }

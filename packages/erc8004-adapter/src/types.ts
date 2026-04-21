@@ -38,6 +38,7 @@ export interface AgentCard {
   active: boolean;
   registrations: AgentRegistration[];
   supportedTrust?: string[]; // OPTIONAL - e.g. ["reputation", "crypto-economic"]
+  capabilities?: string[];
 }
 
 export interface AgentCardParams {
@@ -50,6 +51,7 @@ export interface AgentCardParams {
   active?: boolean; // Defaults to true
   registrations?: AgentRegistration[];
   supportedTrust?: string[];
+  capabilities?: string[];
 }
 
 export interface RegisterResult {

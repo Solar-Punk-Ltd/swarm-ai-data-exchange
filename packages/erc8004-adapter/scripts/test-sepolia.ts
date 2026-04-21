@@ -73,6 +73,9 @@ async function main() {
       },
     ],
     x402Support: true,
+    active: true,
+    supportedTrust: ['reputation'],
+    capabilities: ['trading', 'image_generation'],
   });
 
   log('Agent Card', serializeAgentCard(card));
