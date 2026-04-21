@@ -87,12 +87,29 @@ const card = generateAgentCard({
 // Using a feed means the card can be updated later without changing the on-chain URI.
 const { feedUrl } = await uploadAgentCard(card);
 
-// Mint the ERC-8004 NFT, storing the feed URL on-chain so the card is always up to date
-const { agentId, txHash } = await erc8004.identity.register(feedUrl);
+// Mint the ERC-8004 NFT with optional metadata attached at registration time
+const { agentId, txHash } = await erc8004.identity.register(feedUrl, [
+  { metadataKey: 'SwarmAICapable', metadataValue: new Uint8Array([1]) },
+]);
 console.log('Registered agentId:', agentId.toString());
 ```
 
 The agent is now discoverable by anyone querying the Identity Registry or watching for `Registered` events on-chain.
+
+### 2b. Set or update metadata after registration
+
+Metadata can also be written (or overwritten) any time after the NFT exists, and read back as raw bytes:
+
+```typescript
+// Write arbitrary key/value bytes on-chain (owner only)
+await erc8004.identity.setMetadata(agentId, 'SwarmAICapable', new Uint8Array([1]));
+
+// Read it back
+const value = await erc8004.identity.getMetadata(agentId, 'SwarmAICapable');
+// value is a Uint8Array — e.g. Uint8Array(1) [ 1 ]
+```
+
+The `metadataValue` is stored as raw `bytes` on-chain. Use `new Uint8Array([1])` / `new Uint8Array([0])` for boolean flags, or `ethers.toUtf8Bytes(str)` for string values.
 
 ### 3. Discover and evaluate a provider (consumer flow)
 
@@ -174,16 +191,16 @@ Only `base-sepolia` has pre-configured contract addresses. For other chains, pas
 
 ### IdentityModule (`erc8004.identity`)
 
-| Method           | Signature                                    | Description                                                                                       |
-| ---------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `register`       | `(agentURI: string) → RegisterResult`        | Mints a new agent NFT. Returns `{ agentId, txHash }`.                                             |
-| `getAgentURI`    | `(agentId: bigint) → string`                 | Reads the stored `bzz://` URI from the NFT.                                                       |
-| `setAgentURI`    | `(agentId, newURI) → txHash`                 | Updates the URI. Owner/operator only.                                                             |
-| `getOwner`       | `(agentId: bigint) → address`                | Returns current NFT owner.                                                                        |
-| `setAgentWallet` | `(agentId, wallet, deadline, sig) → txHash`  | Attaches a hot wallet for payments, keeping the agent NFT owner separate. Requires EIP-712 proof. |
-| `getAgentWallet` | `(agentId: bigint) → address`                | Returns the associated wallet, or zero address.                                                   |
-| `setMetadata`    | `(agentId, key, value: Uint8Array) → txHash` | Stores arbitrary key/value bytes on-chain.                                                        |
-| `getMetadata`    | `(agentId, key) → Uint8Array`                | Reads stored metadata bytes.                                                                      |
+| Method           | Signature                                                         | Description                                                                                       |
+| ---------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `register`       | `(agentURI: string, metadata?: MetadataEntry[]) → RegisterResult` | Mints a new agent NFT with optional on-chain metadata. Returns `{ agentId, txHash }`.             |
+| `getAgentURI`    | `(agentId: bigint) → string`                                      | Reads the stored `bzz://` URI from the NFT.                                                       |
+| `setAgentURI`    | `(agentId, newURI) → txHash`                                      | Updates the URI. Owner/operator only.                                                             |
+| `getOwner`       | `(agentId: bigint) → address`                                     | Returns current NFT owner.                                                                        |
+| `setAgentWallet` | `(agentId, wallet, deadline, sig) → txHash`                       | Attaches a hot wallet for payments, keeping the agent NFT owner separate. Requires EIP-712 proof. |
+| `getAgentWallet` | `(agentId: bigint) → address`                                     | Returns the associated wallet, or zero address.                                                   |
+| `setMetadata`    | `(agentId, key, value: Uint8Array) → txHash`                      | Stores arbitrary key/value bytes on-chain.                                                        |
+| `getMetadata`    | `(agentId, key) → Uint8Array`                                     | Reads stored metadata bytes.                                                                      |
 
 ---
 

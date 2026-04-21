@@ -19,3 +19,5 @@ export const AGENT_CARD_TYPE = 'https://eips.ethereum.org/EIPS/eip-8004#registra
 
 export const DEFAULT_AGENT_IMAGE =
   'https://api.gateway.ethswarm.org/bzz/1edce57714b542d7198b0fb271086f0f5eb6ece309bf0b5f8011a7b228c42bdd/img/avatar.jpg';
+
+export const SWARM_AI_CAPABLE = 'SwarmAICapable';

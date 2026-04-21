@@ -7,6 +7,7 @@ import {
   uploadAgentCard,
   config,
 } from '../src';
+import { SWARM_AI_CAPABLE } from '../src/constants';
 
 if (!config.chain.privateKey) {
   console.error('PRIVATE_KEY is not set');
@@ -100,12 +101,14 @@ async function main() {
   // ── 3. Register Identity ───────────────────────────────────────────────────
   log('Step 3: Register on-chain (Identity Registry)');
   console.log('  Sending transaction...');
-  const { agentId, txHash } = await erc8004.identity.register(agentURI);
+  const { agentId, txHash } = await erc8004.identity.register(agentURI, [
+    { metadataKey: SWARM_AI_CAPABLE, metadataValue: new Uint8Array([1]) },
+  ]);
 
   log('Registered agentId', agentId.toString());
   log('Transaction', txHash);
 
-  return;
+  await new Promise((resolve) => setTimeout(resolve, 5000));
 
   // Verify on-chain
   const onChainURI = await erc8004.identity.getAgentURI(agentId);
@@ -118,6 +121,13 @@ async function main() {
     owner.toLowerCase() === address.toLowerCase(),
     'Owner mismatch after registration',
   );
+
+  await erc8004.identity.setMetadata(agentId, 'TEST_METADATA', new Uint8Array([1]));
+
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
+  const testMetadataValue = await erc8004.identity.getMetadata(agentId, 'TEST_METADATA');
+  log('Test metadata value: ', testMetadataValue);
 
   return;
 
