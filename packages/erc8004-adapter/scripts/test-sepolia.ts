@@ -56,9 +56,6 @@ async function main() {
 
   const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
 
-  // const onChainURI1 = await erc8004.identity.getAgentURI(5060 as unknown as bigint);
-  // log('onChainURI1', onChainURI1);
-
   // ── 1. Generate Agent Card ─────────────────────────────────────────────────
   log('Step 1: Generate Agent Card');
 
