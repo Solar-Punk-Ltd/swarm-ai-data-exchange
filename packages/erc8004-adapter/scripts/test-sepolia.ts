@@ -238,6 +238,14 @@ async function main() {
     });
   }
 
+  // ── 8. Query by Metadata ───────────────────────────────────────────────────
+  log('Step 8: Query Agents by Metadata (SwarmAICapable)');
+  const aiAgents = await erc8004.identity.getAgentsByMetadata(SWARM_AI_CAPABLE);
+  log(`Found ${aiAgents.length} agents with SWARM_AI_CAPABLE metadata`);
+  aiAgents.forEach((a) =>
+    console.log(`   Agent ID: ${a.agentId.toString()} | Value encoded: ${a.rawValue.length} bytes`),
+  );
+
   // ── Done ───────────────────────────────────────────────────────────────────
   console.log('\n✓ Steps completed successfully');
   console.log(`  agentId: ${agentId}`);

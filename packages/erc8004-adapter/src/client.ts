@@ -8,6 +8,7 @@ interface ChainDefaults {
   identityRegistry: string;
   reputationRegistry: string;
   chainId: bigint;
+  deployBlock: number;
 }
 
 // Contract addresses are set once deployed. Override via config.contracts if needed.
@@ -16,16 +17,19 @@ const CHAIN_DEFAULTS: Record<string, ChainDefaults> = {
     identityRegistry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
     reputationRegistry: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
     chainId: 84532n,
+    deployBlock: 40000000, // block to start scanning from
   },
   base: {
     identityRegistry: '',
     reputationRegistry: '',
     chainId: 8453n,
+    deployBlock: 0,
   },
   mainnet: {
     identityRegistry: '',
     reputationRegistry: '',
     chainId: 1n,
+    deployBlock: 0,
   },
 };
 
@@ -58,7 +62,12 @@ export function createERC8004Client(config: ERC8004Config): ERC8004Client {
 
   const runner: Signer | Provider = config.signer ?? config.provider;
 
-  const identity = new IdentityModule(identityAddress, runner, defaults.chainId);
+  const identity = new IdentityModule(
+    identityAddress,
+    runner,
+    defaults.chainId,
+    defaults.deployBlock,
+  );
   const reputation = new ReputationModule(reputationAddress, runner, defaults.chainId);
   const aggregate = new AggregateModule(reputation);
 

@@ -1,4 +1,4 @@
-import { Contract, type Signer, type Provider, type Log, type EventLog, ethers } from 'ethers';
+import { Contract, getBytes, type Signer, type Provider, type Log, type EventLog } from 'ethers';
 import { IDENTITY_REGISTRY_ABI } from '../abis/IdentityRegistry';
 import type { RegisterResult, WalletAuth, MetadataEntry } from '../types';
 
@@ -14,14 +14,21 @@ export class IdentityModule {
   private contract: Contract;
   private provider: Provider;
   private chainId: bigint;
+  private deployBlock: number;
 
-  constructor(address: string, signerOrProvider: Signer | Provider, chainId: bigint) {
+  constructor(
+    address: string,
+    signerOrProvider: Signer | Provider,
+    chainId: bigint,
+    deployBlock = 0,
+  ) {
     this.contract = new Contract(address, IDENTITY_REGISTRY_ABI, signerOrProvider);
     this.provider =
       'provider' in signerOrProvider && signerOrProvider.provider
         ? signerOrProvider.provider
         : (signerOrProvider as Provider);
     this.chainId = chainId;
+    this.deployBlock = deployBlock;
   }
 
   async register(agentURI?: string, metadata?: MetadataEntry[]): Promise<RegisterResult> {
@@ -129,6 +136,7 @@ export class IdentityModule {
     chunkSize = 9_999,
   ): Promise<(Log | EventLog)[]> {
     const results: (Log | EventLog)[] = [];
+
     for (let start = fromBlock; start <= toBlock; start += chunkSize) {
       const end = Math.min(start + chunkSize - 1, toBlock);
       const logs = await this.contract.queryFilter(filter, start, end);
@@ -142,7 +150,7 @@ export class IdentityModule {
     toBlock?: number,
   ): Promise<{ agentId: bigint; agentURI: string; owner: string }[]> {
     const latest = await this.provider.getBlockNumber();
-    const from = fromBlock === 'earliest' ? 0 : fromBlock;
+    const from = fromBlock === 'earliest' ? this.deployBlock : fromBlock;
     const to = toBlock ?? latest;
 
     const filter = this.contract.filters.Registered();
@@ -167,11 +175,11 @@ export class IdentityModule {
     toBlock?: number,
   ): Promise<{ agentId: bigint; rawValue: Uint8Array }[]> {
     const latest = await this.provider.getBlockNumber();
-    const from = fromBlock === 'earliest' ? 0 : fromBlock;
+    const from = fromBlock === 'earliest' ? this.deployBlock : fromBlock;
     const to = toBlock ?? latest;
 
-    // String indexed parameters are hashed into topics via keccak256 exactly as ethers.id outputs
-    const filter = this.contract.filters.MetadataSet(null, ethers.id(metadataKey));
+    const filter = this.contract.filters.MetadataSet(null, metadataKey);
+
     const logs = await this.queryFilterChunked(filter, from, to);
 
     return logs.map((log) => {
@@ -181,7 +189,7 @@ export class IdentityModule {
       });
       return {
         agentId: parsedLog?.args.agentId as bigint,
-        rawValue: parsedLog?.args.metadataValue as Uint8Array,
+        rawValue: getBytes(parsedLog?.args.metadataValue as string),
       };
     });
   }
