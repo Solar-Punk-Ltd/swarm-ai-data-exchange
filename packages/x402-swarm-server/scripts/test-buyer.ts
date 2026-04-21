@@ -22,7 +22,7 @@ async function main() {
   }
 
   const swarmHash =
-    process.env.SWARM_HASH || '1cd1e4fa753e6d9f23d343724a394feb855d05ad777aa1782531a7b3a98acc0b';
+    process.env.SWARM_HASH || '8564bb7df58c17e3396f7ceb3874168ed7b2461a56f0954ed3ebc8c7986397b5';
   const baseUrl = process.env.SERVER_URL || 'http://localhost:3000';
   const targetUrl = `${baseUrl}/swarm/data/${swarmHash}`;
 

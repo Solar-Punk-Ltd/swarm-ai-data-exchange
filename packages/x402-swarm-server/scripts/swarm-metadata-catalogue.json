@@ -2,10 +2,11 @@
   "schemeVersion": "v1",
   "dataItems": [
     {
-      "swarmHash": "54d03b8ff8809708606fbc7108b5981be23d65b0d78a6daae7365aa07f5f91d4",
-      "actHistoryRef": "7888ca949cafcd00186ad28727299d642b27f60376306d5dbc09da40aaef2b72",
-      "displayName": "banana",
-      "metadata": ["fruit", "yellow"],
+      "swarmHash": "8564bb7df58c17e3396f7ceb3874168ed7b2461a56f0954ed3ebc8c7986397b5",
+      "actHistoryRef": "303a6adedf0e4fa78c672ccd042d92be827257cb232fdfea70050e564fd41197",
+      "granteeRef": "c679e33182dfe1ce94ff18f51be33a5ba80417c49f758a0082e6405e7b45f3afb29b658409310e2495dc0aa17fc26fc6fce519e7c7e99937a332744c1f8bbd4b",
+      "displayName": "ACT Test",
+      "metadata": [],
       "tags": []
     }
   ]

@@ -12,7 +12,7 @@ export async function grantActAccess(
   const catalogue = await fetchCatalogue();
   const item = findDataItem(catalogue, swarmHash);
 
-  const result = await bee.patchGrantees(POSTAGE_BATCH_ID, swarmHash, item.actHistoryRef, {
+  const result = await bee.patchGrantees(POSTAGE_BATCH_ID, item.granteeRef, item.actHistoryRef, {
     add: [buyerPublicKey],
   });
 

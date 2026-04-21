@@ -7,6 +7,7 @@ export interface ActGrantResult {
 export interface DataItem {
   swarmHash: string;
   actHistoryRef: string;
+  granteeRef: string;
   displayName: string;
   metadata: unknown[];
   tags: unknown[];

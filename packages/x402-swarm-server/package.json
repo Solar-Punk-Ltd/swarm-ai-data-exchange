@@ -11,7 +11,8 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "test:buyer": "tsx scripts/test-buyer.ts"
+    "test:buyer": "tsx scripts/test-buyer.ts",
+    "test:upload": "tsx scripts/test-upload.ts"
   },
   "dependencies": {
     "@ethersphere/bee-js": "12.0.0",
