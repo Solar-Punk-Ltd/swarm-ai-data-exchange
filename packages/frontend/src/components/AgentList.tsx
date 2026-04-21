@@ -1,45 +1,7 @@
-import { useEffect, useState } from 'react';
-import { ethers } from 'ethers';
-import { createERC8004Client, SWARM_AI_CAPABLE } from '@solarpunk/erc8004-adapter';
-
-interface Agent {
-  agentId: string;
-  uri: string;
-}
-
-const RPC_URL = 'https://sepolia.base.org';
+import { useAgents } from '../hooks/useAgents';
 
 export default function AgentList() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchAgents() {
-      try {
-        const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const erc8004 = createERC8004Client({ provider, chain: 'base-sepolia' });
-
-        const all = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
-        const capable = all.filter((a) => ethers.toBigInt(a.rawValue) === 1n);
-
-        if (!cancelled) {
-          setAgents(capable.map((a) => ({ agentId: a.agentId.toString(), uri: a.uri })));
-        }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchAgents();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { agents, loading, error } = useAgents();
 
   if (loading) {
     return <p style={{ color: '#94a3b8' }}>Loading agents from Base Sepolia…</p>;

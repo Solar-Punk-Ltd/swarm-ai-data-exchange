@@ -17,7 +17,7 @@ const CHAIN_DEFAULTS: Record<string, ChainDefaults> = {
     identityRegistry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
     reputationRegistry: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
     chainId: 84532n,
-    deployBlock: 40000000, // block to start scanning from
+    deployBlock: 40400000, // block to start scanning from
   },
   base: {
     identityRegistry: '',
