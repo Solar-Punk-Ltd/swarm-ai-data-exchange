@@ -7,6 +7,7 @@ export {
   serializeAgentCard,
   parseAgentCard,
   uploadAgentCard,
+  downloadAgentCard,
 } from './agent-card';
 
 export { IdentityModule } from './modules/identity';

@@ -71,6 +71,27 @@ export function parseAgentCard(json: string): AgentCard {
 }
 
 /**
+ * Downloads and parses an AgentCard from a Swarm feed URL (the agentURI
+ * stored on-chain). Always resolves to the latest version of the card.
+ *
+ * @param agentURI  The Swarm feed URL returned by uploadAgentCard, e.g.
+ *                  "https://api.gateway.ethswarm.org/feeds/<owner>/<topic>".
+ * @returns         The parsed AgentCard.
+ */
+export async function downloadAgentCard(agentURI: string): Promise<AgentCard> {
+  const response = await fetch(agentURI);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch AgentCard from ${agentURI}: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const json = await response.text();
+  return parseAgentCard(json);
+}
+
+/**
  * Uploads a serialised AgentCard to a Swarm feed and returns the content
  * reference and feed URL.
  *
