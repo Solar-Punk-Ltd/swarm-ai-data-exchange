@@ -55,6 +55,7 @@ app.get('/swarm/data/:swarmHash', async (req, res) => {
     const result = await grantActAccess(swarmHash, publicKey);
     res.json(result);
   } catch (err) {
+    console.error('Error granting ACT access:', err);
     if (err instanceof CatalogueEntryNotFound) {
       res.status(404).json({ error: err.message });
       return;
