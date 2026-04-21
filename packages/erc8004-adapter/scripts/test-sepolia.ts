@@ -137,7 +137,7 @@ async function main() {
   log('Query: agents with SwarmAICapable metadata');
 
   const allSwarmAIAgents = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
-  const capableAgents = allSwarmAIAgents.filter((e) => e.rawValue[0] === 1);
+  const capableAgents = allSwarmAIAgents.filter((e) => ethers.toBigInt(e.rawValue) === 1n);
 
   log('SwarmAICapable agents found', capableAgents.length);
   log(

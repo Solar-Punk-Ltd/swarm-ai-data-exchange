@@ -117,6 +117,32 @@ The `metadataValue` is stored as raw `bytes` on-chain. Use `new Uint8Array([1])`
 
 ### 3. Discover and evaluate a provider (consumer flow)
 
+To discover all agents that have advertised a specific capability, use `findAgentsWithMetadata`. It scans `MetadataSet` events, deduplicates per agent, and returns each agent's on-chain URI alongside the raw metadata value.
+
+```typescript
+import { ethers } from 'ethers';
+import { SWARM_AI_CAPABLE } from '@solarpunk/erc8004-adapter/constants';
+
+// Find all agents that have set the SwarmAICapable metadata key
+const agents = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
+
+// Filter to those where the value is 1 (capability is active)
+const capableAgents = agents.filter((a) => ethers.toBigInt(a.rawValue) === 1n);
+
+console.log(`Found ${capableAgents.length} SwarmAI-capable agents`);
+for (const agent of capableAgents) {
+  console.log(`agentId: ${agent.agentId} — uri: ${agent.uri}`);
+}
+```
+
+You can optionally scope the scan to a block range to reduce RPC calls:
+
+```typescript
+const agents = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE, 36304145);
+```
+
+Once you have a URI, read the agent's on-chain data directly:
+
 ```typescript
 // Read the agent's on-chain URI and fetch the Agent Card from Swarm
 const uri = await erc8004.identity.getAgentURI(agentId); // "bzz://<hash>"
@@ -195,18 +221,19 @@ Only `base-sepolia` has pre-configured contract addresses. For other chains, pas
 
 ### IdentityModule (`erc8004.identity`)
 
-| Method                | Signature                                                                   | Description                                                                                                                                                                                                                             |
-| --------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `register`            | `(agentURI: string, metadata?: MetadataEntry[]) → RegisterResult`           | Mints a new agent NFT with optional on-chain metadata. Returns `{ agentId, txHash }`.                                                                                                                                                   |
-| `getAgentURI`         | `(agentId: bigint) → string`                                                | Reads the stored `bzz://` URI from the NFT.                                                                                                                                                                                             |
-| `setAgentURI`         | `(agentId, newURI) → txHash`                                                | Updates the URI. Owner/operator only.                                                                                                                                                                                                   |
-| `getOwner`            | `(agentId: bigint) → address`                                               | Returns current NFT owner.                                                                                                                                                                                                              |
-| `setAgentWallet`      | `(agentId, wallet, deadline, sig) → txHash`                                 | Attaches a hot wallet for payments, keeping the agent NFT owner separate. Requires EIP-712 proof.                                                                                                                                       |
-| `getAgentWallet`      | `(agentId: bigint) → address`                                               | Returns the associated wallet, or zero address.                                                                                                                                                                                         |
-| `setMetadata`         | `(agentId, key, value: Uint8Array) → txHash`                                | Stores arbitrary key/value bytes on-chain.                                                                                                                                                                                              |
-| `getMetadata`         | `(agentId, key) → Uint8Array`                                               | Reads stored metadata bytes.                                                                                                                                                                                                            |
-| `getRegisteredAgents` | `(fromBlock?, toBlock?) → { agentId, agentURI, owner }[]`                   | Returns all agents registered in the given block range by scanning `Registered` events.                                                                                                                                                 |
-| `getAgentsByMetadata` | `(metadataKey, fromBlock?, toBlock?) → { agentId, rawValue: Uint8Array }[]` | Returns all agents that had a given metadata key set, by scanning `MetadataSet` events. May include duplicates if a key was overwritten — filter to the latest entry per `agentId` or confirm with `getMetadata` for the current value. |
+| Method                   | Signature                                                                        | Description                                                                                                                                                                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register`               | `(agentURI: string, metadata?: MetadataEntry[]) → RegisterResult`                | Mints a new agent NFT with optional on-chain metadata. Returns `{ agentId, txHash }`.                                                                                                                                                   |
+| `getAgentURI`            | `(agentId: bigint) → string`                                                     | Reads the stored `bzz://` URI from the NFT.                                                                                                                                                                                             |
+| `setAgentURI`            | `(agentId, newURI) → txHash`                                                     | Updates the URI. Owner/operator only.                                                                                                                                                                                                   |
+| `getOwner`               | `(agentId: bigint) → address`                                                    | Returns current NFT owner.                                                                                                                                                                                                              |
+| `setAgentWallet`         | `(agentId, wallet, deadline, sig) → txHash`                                      | Attaches a hot wallet for payments, keeping the agent NFT owner separate. Requires EIP-712 proof.                                                                                                                                       |
+| `getAgentWallet`         | `(agentId: bigint) → address`                                                    | Returns the associated wallet, or zero address.                                                                                                                                                                                         |
+| `setMetadata`            | `(agentId, key, value: Uint8Array) → txHash`                                     | Stores arbitrary key/value bytes on-chain.                                                                                                                                                                                              |
+| `getMetadata`            | `(agentId, key) → Uint8Array`                                                    | Reads stored metadata bytes.                                                                                                                                                                                                            |
+| `getRegisteredAgents`    | `(fromBlock?, toBlock?) → { agentId, agentURI, owner }[]`                        | Returns all agents registered in the given block range by scanning `Registered` events.                                                                                                                                                 |
+| `getAgentsByMetadata`    | `(metadataKey, fromBlock?, toBlock?) → { agentId, rawValue: Uint8Array }[]`      | Returns all agents that had a given metadata key set, by scanning `MetadataSet` events. May include duplicates if a key was overwritten — filter to the latest entry per `agentId` or confirm with `getMetadata` for the current value. |
+| `findAgentsWithMetadata` | `(metadataKey, fromBlock?, toBlock?) → { agentId, uri, rawValue: Uint8Array }[]` | Higher-level helper: scans `MetadataSet` events, deduplicates by `agentId` (latest event wins), and fetches the on-chain URI for each matching agent. Use `ethers.toBigInt(rawValue) === 1n` to filter for boolean-flag metadata keys.  |
 
 ---
 
