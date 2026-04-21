@@ -14,12 +14,13 @@ export function generateAgentCard(params: AgentCardParams): AgentCard {
   return {
     type: params.type ?? AGENT_CARD_TYPE,
     name: params.name,
+    version: params.version,
     description: params.description,
     image: params.image ?? DEFAULT_AGENT_IMAGE,
     services: params.services,
     x402Support: params.x402Support ?? false,
     active: params.active ?? true,
-    registrations: params.registrations ?? [],
+    registrations: params.registrations ?? undefined,
     capabilities: params.capabilities ?? [],
     ...(params.supportedTrust !== undefined && { supportedTrust: params.supportedTrust }),
   };
@@ -46,7 +47,7 @@ export function parseAgentCard(json: string): AgentCard {
   if (
     typeof data.x402Support !== 'boolean' ||
     typeof data.active !== 'boolean' ||
-    !Array.isArray(data.registrations)
+    (Boolean(data.registrations) && !Array.isArray(data.registrations))
   ) {
     throw new Error(
       'Invalid agent card: missing or invalid required fields (x402Support, active, registrations)',
@@ -54,6 +55,10 @@ export function parseAgentCard(json: string): AgentCard {
   }
 
   const card = data as unknown as AgentCard;
+
+  if (!card.registrations) {
+    return card;
+  }
 
   // Transform agentId to BigInt at runtime
   for (const reg of card.registrations) {

@@ -62,6 +62,7 @@ async function main() {
   const card = generateAgentCard({
     name: 'Test Data Provider',
     description: 'Demo agent for Swarm Data Exchange POC testing',
+    version: '1.0.0',
     services: [
       {
         name: 'x402',

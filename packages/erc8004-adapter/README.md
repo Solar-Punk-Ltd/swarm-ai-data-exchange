@@ -76,6 +76,7 @@ import { generateAgentCard, uploadAgentCard } from '@solarpunk/erc8004-adapter';
 const card = generateAgentCard({
   name: 'My Data Provider',
   description: 'Sells encrypted image datasets via Swarm',
+  version: '1.0.0',
   services: [
     { name: 'x402', endpoint: 'https://provider.example.com/data' },
     { name: 'A2A', endpoint: 'https://a2aURL' },
@@ -274,12 +275,12 @@ import {
 } from '@solarpunk/erc8004-adapter';
 ```
 
-| Function                        | Description                                                                                                                                                                                                     |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generateAgentCard(params)`     | Creates an `AgentCard` object. `type`, `active`, `x402Support`, and `registrations` are set to their defaults when omitted. `capabilities` and `supportedTrust` are optional string arrays.                     |
-| `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.                                                                                                                          |
-| `parseAgentCard(json)`          | Parses and validates a JSON string. Throws if `type` is not the ERC-8004 registration type string, or if `name`, `description`, `services`, `x402Support`, `active`, or `registrations` are missing or invalid. |
-| `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads `BEE_FEED_PK`, `BEE_API_URL`, and `BEE_POSTAGE_STAMP` from the environment. `feedUrl` always uses the public Swarm gateway.   |
+| Function                        | Description                                                                                                                                                                                                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generateAgentCard(params)`     | Creates an `AgentCard` object. `name`, `description`, `version`, and `services` are required. `type`, `active`, `x402Support`, and `registrations` default when omitted. `capabilities` and `supportedTrust` are optional string arrays.                   |
+| `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.                                                                                                                                                                     |
+| `parseAgentCard(json)`          | Parses and validates a JSON string. Throws if `type` is not the ERC-8004 registration type string, or if `name`, `description`, `services`, `x402Support`, or `active` are missing or invalid. `registrations` is optional and may be absent or undefined. |
+| `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads `BEE_FEED_PK`, `BEE_API_URL`, and `BEE_POSTAGE_STAMP` from the environment. `feedUrl` always uses the public Swarm gateway.                                              |
 
 `uploadAgentCard` returns a `SwarmUploadResult`:
 
@@ -311,11 +312,12 @@ interface AgentCard {
   type: string; // MUST be "https://eips.ethereum.org/EIPS/eip-8004#registration-v1"
   name: string;
   description: string;
+  version: string; // e.g. "1.0.0" — semver or date string identifying the card revision
   image?: string; // OPTIONAL — defaults to a Swarm-hosted placeholder avatar
   services: AgentService[];
   x402Support: boolean; // true if the agent accepts x402 micropayments
   active: boolean; // false to soft-deactivate without un-registering
-  registrations: AgentRegistration[];
+  registrations?: AgentRegistration[]; // OPTIONAL — populated after on-chain registration
   supportedTrust?: string[]; // e.g. ["reputation", "crypto-economic"]
   capabilities?: string[]; // OPTIONAL — e.g. ["trading", "image_generation"]
 }

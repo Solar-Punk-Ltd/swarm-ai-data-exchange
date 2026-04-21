@@ -32,11 +32,12 @@ export interface AgentCard {
   type: string; // MUST be "https://eips.ethereum.org/EIPS/eip-8004#registration-v1"
   name: string;
   description: string;
+  version: string;
   image?: string; // OPTIONAL - e.g. "https://example.com/agentimage.png"
   services: AgentService[];
   x402Support: boolean;
   active: boolean;
-  registrations: AgentRegistration[];
+  registrations?: AgentRegistration[];
   supportedTrust?: string[]; // OPTIONAL - e.g. ["reputation", "crypto-economic"]
   capabilities?: string[];
 }
@@ -44,6 +45,7 @@ export interface AgentCard {
 export interface AgentCardParams {
   name: string;
   description: string;
+  version: string;
   services: AgentService[];
   type?: string; // Defaults to "https://eips.ethereum.org/EIPS/eip-8004#registration-v1"
   image?: string;
