@@ -19,6 +19,7 @@ export async function grantActAccess(
   return {
     swarmHash,
     actHistoryAddress: result.historyref.toString(),
+    granteeRef: result.ref.toString(),
     publisherPublickey: PUBLISHER_PUBLIC_KEY,
   };
 }
