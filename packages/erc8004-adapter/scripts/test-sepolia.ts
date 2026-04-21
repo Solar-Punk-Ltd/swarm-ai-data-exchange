@@ -133,6 +133,29 @@ async function main() {
   const testMetadataValue = await erc8004.identity.getMetadata(agentId, 'TEST_METADATA');
   log('Test metadata value: ', testMetadataValue);
 
+  // ── Query agents with SwarmAICapable = 1 ──────────────────────────────────
+  log('Query: agents with SwarmAICapable metadata');
+
+  const swarmAIAgents = await erc8004.identity.getAgentsByMetadata(SWARM_AI_CAPABLE);
+
+  // Deduplicate: keep only the latest entry per agentId, then filter for value 0x01
+  const latestByAgent = new Map<bigint, { agentId: bigint; rawValue: Uint8Array }>();
+  for (const entry of swarmAIAgents) {
+    latestByAgent.set(entry.agentId, entry);
+  }
+  const capableAgents = [...latestByAgent.values()].filter((e) => e.rawValue[0] === 1);
+
+  log('SwarmAICapable agents found', capableAgents.length);
+
+  const agentCards = await Promise.all(
+    capableAgents.map(async ({ agentId: id }) => {
+      const uri = await erc8004.identity.getAgentURI(id);
+      return { agentId: id.toString(), uri };
+    }),
+  );
+
+  log('Agent cards', agentCards);
+
   return;
 
   // ── 4. Set Agent Wallet ────────────────────────────────────────────────────

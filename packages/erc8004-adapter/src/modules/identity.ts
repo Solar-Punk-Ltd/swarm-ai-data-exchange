@@ -12,10 +12,15 @@ const WALLET_AUTH_TYPES = {
 
 export class IdentityModule {
   private contract: Contract;
+  private provider: Provider;
   private chainId: bigint;
 
   constructor(address: string, signerOrProvider: Signer | Provider, chainId: bigint) {
     this.contract = new Contract(address, IDENTITY_REGISTRY_ABI, signerOrProvider);
+    this.provider =
+      'provider' in signerOrProvider && signerOrProvider.provider
+        ? signerOrProvider.provider
+        : (signerOrProvider as Provider);
     this.chainId = chainId;
   }
 
@@ -117,12 +122,31 @@ export class IdentityModule {
     return receipt.hash as string;
   }
 
+  private async queryFilterChunked(
+    filter: ReturnType<Contract['filters'][string]>,
+    fromBlock: number,
+    toBlock: number,
+    chunkSize = 9_999,
+  ): Promise<(Log | EventLog)[]> {
+    const results: (Log | EventLog)[] = [];
+    for (let start = fromBlock; start <= toBlock; start += chunkSize) {
+      const end = Math.min(start + chunkSize - 1, toBlock);
+      const logs = await this.contract.queryFilter(filter, start, end);
+      results.push(...logs);
+    }
+    return results;
+  }
+
   async getRegisteredAgents(
-    fromBlock: number | 'latest' | 'earliest' = 'earliest',
-    toBlock: number | 'latest' = 'latest',
+    fromBlock: number | 'earliest' = 'earliest',
+    toBlock?: number,
   ): Promise<{ agentId: bigint; agentURI: string; owner: string }[]> {
+    const latest = await this.provider.getBlockNumber();
+    const from = fromBlock === 'earliest' ? 0 : fromBlock;
+    const to = toBlock ?? latest;
+
     const filter = this.contract.filters.Registered();
-    const logs = await this.contract.queryFilter(filter, fromBlock, toBlock);
+    const logs = await this.queryFilterChunked(filter, from, to);
 
     return logs.map((log) => {
       const parsedLog = this.contract.interface.parseLog({
@@ -139,12 +163,16 @@ export class IdentityModule {
 
   async getAgentsByMetadata(
     metadataKey: string,
-    fromBlock: number | 'latest' | 'earliest' = 'earliest',
-    toBlock: number | 'latest' = 'latest',
+    fromBlock: number | 'earliest' = 'earliest',
+    toBlock?: number,
   ): Promise<{ agentId: bigint; rawValue: Uint8Array }[]> {
+    const latest = await this.provider.getBlockNumber();
+    const from = fromBlock === 'earliest' ? 0 : fromBlock;
+    const to = toBlock ?? latest;
+
     // String indexed parameters are hashed into topics via keccak256 exactly as ethers.id outputs
     const filter = this.contract.filters.MetadataSet(null, ethers.id(metadataKey));
-    const logs = await this.contract.queryFilter(filter, fromBlock, toBlock);
+    const logs = await this.queryFilterChunked(filter, from, to);
 
     return logs.map((log) => {
       const parsedLog = this.contract.interface.parseLog({
