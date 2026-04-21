@@ -1,0 +1,12 @@
+{
+  "schemeVersion": "v1",
+  "dataItems": [
+    {
+      "swarmHash": "54d03b8ff8809708606fbc7108b5981be23d65b0d78a6daae7365aa07f5f91d4",
+      "actHistoryRef": "7888ca949cafcd00186ad28727299d642b27f60376306d5dbc09da40aaef2b72",
+      "displayName": "banana",
+      "metadata": ["fruit", "yellow"],
+      "tags": []
+    }
+  ]
+}

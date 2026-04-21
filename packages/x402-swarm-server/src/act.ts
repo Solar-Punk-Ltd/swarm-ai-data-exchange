@@ -1,15 +1,24 @@
-import { ActGrantResult } from "./types";
+import { bee } from './bee';
+import { fetchCatalogue, findDataItem } from './catalogue';
+import type { ActGrantResult } from './types';
 
-// TODO: call Bee node ACT API to add buyerPublicKey to the ACT grantee list
-// Reference: https://docs.ethswarm.org/docs/develop/act
+const POSTAGE_BATCH_ID = process.env.POSTAGE_BATCH_ID ?? '';
+const PUBLISHER_PUBLIC_KEY = process.env.PUBLISHER_PUBLIC_KEY ?? '';
+
 export async function grantActAccess(
   swarmHash: string,
-  buyerPublicKey: string
+  buyerPublicKey: string,
 ): Promise<ActGrantResult> {
-  void buyerPublicKey;
+  const catalogue = await fetchCatalogue();
+  const item = findDataItem(catalogue, swarmHash);
+
+  const result = await bee.patchGrantees(POSTAGE_BATCH_ID, swarmHash, item.actHistoryRef, {
+    add: [buyerPublicKey],
+  });
+
   return {
     swarmHash,
-    actHistoryAddress: "",
-    publisherPublickey: "",
+    actHistoryAddress: result.historyref.toString(),
+    publisherPublickey: PUBLISHER_PUBLIC_KEY,
   };
 }
