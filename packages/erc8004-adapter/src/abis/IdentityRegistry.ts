@@ -1,6 +1,7 @@
 export const IDENTITY_REGISTRY_ABI = [
   // Registration
   'function register(string calldata agentURI) external returns (uint256 agentId)',
+  'function register(string calldata agentURI, tuple(string metadataKey, bytes metadataValue)[] calldata metadata) external returns (uint256 agentId)',
   'function register() external returns (uint256 agentId)',
 
   // URI management
