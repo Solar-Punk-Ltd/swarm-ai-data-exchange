@@ -136,25 +136,14 @@ async function main() {
   // ── Query agents with SwarmAICapable = 1 ──────────────────────────────────
   log('Query: agents with SwarmAICapable metadata');
 
-  const swarmAIAgents = await erc8004.identity.getAgentsByMetadata(SWARM_AI_CAPABLE);
-
-  // Deduplicate: keep only the latest entry per agentId, then filter for value 0x01
-  const latestByAgent = new Map<bigint, { agentId: bigint; rawValue: Uint8Array }>();
-  for (const entry of swarmAIAgents) {
-    latestByAgent.set(entry.agentId, entry);
-  }
-  const capableAgents = [...latestByAgent.values()].filter((e) => e.rawValue[0] === 1);
+  const allSwarmAIAgents = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
+  const capableAgents = allSwarmAIAgents.filter((e) => e.rawValue[0] === 1);
 
   log('SwarmAICapable agents found', capableAgents.length);
-
-  const agentCards = await Promise.all(
-    capableAgents.map(async ({ agentId: id }) => {
-      const uri = await erc8004.identity.getAgentURI(id);
-      return { agentId: id.toString(), uri };
-    }),
+  log(
+    'Agent cards',
+    capableAgents.map((a) => ({ agentId: a.agentId.toString(), uri: a.uri })),
   );
-
-  log('Agent cards', agentCards);
 
   return;
 

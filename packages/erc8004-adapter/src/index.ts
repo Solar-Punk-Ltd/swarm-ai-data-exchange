@@ -23,6 +23,7 @@ export type { ERC8004AdapterConfig, ChainConfig, BeeConfig } from './config';
 
 export type {
   ERC8004Config,
+  MetadataEntry,
   AgentCard,
   AgentCardParams,
   AgentService,

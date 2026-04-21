@@ -194,6 +194,28 @@ export class IdentityModule {
     });
   }
 
+  async findAgentsWithMetadata(
+    metadataKey: string,
+    fromBlock?: number,
+    toBlock?: number,
+  ): Promise<{ agentId: bigint; uri: string; rawValue: Uint8Array }[]> {
+    const entries = await this.getAgentsByMetadata(metadataKey, fromBlock ?? 'earliest', toBlock);
+
+    // Deduplicate: if a key was set multiple times for the same agent, keep the latest event
+    const latestByAgent = new Map<bigint, { agentId: bigint; rawValue: Uint8Array }>();
+    for (const entry of entries) {
+      latestByAgent.set(entry.agentId, entry);
+    }
+
+    return Promise.all(
+      [...latestByAgent.values()].map(async ({ agentId, rawValue }) => ({
+        agentId,
+        uri: await this.getAgentURI(agentId),
+        rawValue,
+      })),
+    );
+  }
+
   async setMetadata(agentId: bigint, key: string, value: Uint8Array): Promise<string> {
     const tx = await this.contract.setMetadata(agentId, key, value);
     const receipt = await tx.wait();
