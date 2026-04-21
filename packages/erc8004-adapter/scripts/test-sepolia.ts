@@ -74,7 +74,7 @@ async function main() {
     x402Support: true,
   });
 
-  log('Agent Card', JSON.parse(serializeAgentCard(card)));
+  log('Agent Card', serializeAgentCard(card));
 
   // Round-trip parse check
   const reparsed = parseAgentCard(serializeAgentCard(card));

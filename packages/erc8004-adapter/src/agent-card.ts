@@ -28,17 +28,7 @@ export function generateAgentCard(params: AgentCardParams): AgentCard {
 export const generateRegistrationFile = generateAgentCard;
 
 export function serializeAgentCard(card: AgentCard): string {
-  return JSON.stringify(
-    card,
-    (key, value) => {
-      if (typeof value === 'bigint') {
-        // Return number if safe, otherwise string to prevent JS precision issues with raw huge JSON numbers
-        return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value.toString();
-      }
-      return value;
-    },
-    2,
-  );
+  return JSON.stringify(card, null, 2);
 }
 
 export function parseAgentCard(json: string): AgentCard {
