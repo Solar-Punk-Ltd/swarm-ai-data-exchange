@@ -1,11 +1,17 @@
 import { createContext, useEffect, useState, type ReactNode } from 'react';
 import { ethers } from 'ethers';
-import { createERC8004Client, SWARM_AI_CAPABLE } from '@solarpunk/erc8004-adapter';
+import {
+  createERC8004Client,
+  downloadAgentCard,
+  SWARM_AI_CAPABLE,
+  type AgentCard,
+} from '@solarpunk/erc8004-adapter';
 import { RPC_URL } from '../constants';
 
 export interface Agent {
   agentId: string;
   uri: string;
+  card: AgentCard | null;
 }
 
 export interface AgentsContextValue {
@@ -31,14 +37,32 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
 
         const all = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
         const capable = all.filter((a) => ethers.toBigInt(a.rawValue) === 1n);
+        const initial: Agent[] = capable.map((a) => ({
+          agentId: a.agentId.toString(),
+          uri: a.uri,
+          card: null,
+        }));
 
-        if (!cancelled) {
-          setAgents(capable.map((a) => ({ agentId: a.agentId.toString(), uri: a.uri })));
+        if (cancelled) return;
+        setAgents(initial);
+        setLoading(false);
+
+        for (const { agentId, uri } of initial) {
+          downloadAgentCard(uri)
+            .then((card) => {
+              if (!cancelled) {
+                setAgents((prev) => prev.map((a) => (a.agentId === agentId ? { ...a, card } : a)));
+              }
+            })
+            .catch(() => {
+              /* card stays null */
+            });
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setLoading(false);
+        }
       }
     }
 
