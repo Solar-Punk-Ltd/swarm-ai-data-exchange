@@ -176,7 +176,7 @@ export default function AgentList() {
   }
 
   return (
-    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
       {agents.map((agent) => (
         <AgentCardView key={agent.agentId} agent={agent} />
       ))}
