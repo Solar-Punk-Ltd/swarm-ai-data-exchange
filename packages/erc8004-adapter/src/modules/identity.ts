@@ -1,4 +1,4 @@
-import { Contract, type Signer, type Provider, type Log, type EventLog, ethers } from 'ethers';
+import { Contract, getBytes, type Signer, type Provider, type Log, type EventLog } from 'ethers';
 import { IDENTITY_REGISTRY_ABI } from '../abis/IdentityRegistry';
 import type { RegisterResult, WalletAuth, MetadataEntry } from '../types';
 
@@ -12,11 +12,23 @@ const WALLET_AUTH_TYPES = {
 
 export class IdentityModule {
   private contract: Contract;
+  private provider: Provider;
   private chainId: bigint;
+  private deployBlock: number;
 
-  constructor(address: string, signerOrProvider: Signer | Provider, chainId: bigint) {
+  constructor(
+    address: string,
+    signerOrProvider: Signer | Provider,
+    chainId: bigint,
+    deployBlock = 0,
+  ) {
     this.contract = new Contract(address, IDENTITY_REGISTRY_ABI, signerOrProvider);
+    this.provider =
+      'provider' in signerOrProvider && signerOrProvider.provider
+        ? signerOrProvider.provider
+        : (signerOrProvider as Provider);
     this.chainId = chainId;
+    this.deployBlock = deployBlock;
   }
 
   async register(agentURI?: string, metadata?: MetadataEntry[]): Promise<RegisterResult> {
@@ -117,12 +129,32 @@ export class IdentityModule {
     return receipt.hash as string;
   }
 
+  private async queryFilterChunked(
+    filter: ReturnType<Contract['filters'][string]>,
+    fromBlock: number,
+    toBlock: number,
+    chunkSize = 9_999,
+  ): Promise<(Log | EventLog)[]> {
+    const results: (Log | EventLog)[] = [];
+
+    for (let start = fromBlock; start <= toBlock; start += chunkSize) {
+      const end = Math.min(start + chunkSize - 1, toBlock);
+      const logs = await this.contract.queryFilter(filter, start, end);
+      results.push(...logs);
+    }
+    return results;
+  }
+
   async getRegisteredAgents(
-    fromBlock: number | 'latest' | 'earliest' = 'earliest',
-    toBlock: number | 'latest' = 'latest',
+    fromBlock: number | 'earliest' = 'earliest',
+    toBlock?: number,
   ): Promise<{ agentId: bigint; agentURI: string; owner: string }[]> {
+    const latest = await this.provider.getBlockNumber();
+    const from = fromBlock === 'earliest' ? this.deployBlock : fromBlock;
+    const to = toBlock ?? latest;
+
     const filter = this.contract.filters.Registered();
-    const logs = await this.contract.queryFilter(filter, fromBlock, toBlock);
+    const logs = await this.queryFilterChunked(filter, from, to);
 
     return logs.map((log) => {
       const parsedLog = this.contract.interface.parseLog({
@@ -139,12 +171,16 @@ export class IdentityModule {
 
   async getAgentsByMetadata(
     metadataKey: string,
-    fromBlock: number | 'latest' | 'earliest' = 'earliest',
-    toBlock: number | 'latest' = 'latest',
+    fromBlock: number | 'earliest' = 'earliest',
+    toBlock?: number,
   ): Promise<{ agentId: bigint; rawValue: Uint8Array }[]> {
-    // String indexed parameters are hashed into topics via keccak256 exactly as ethers.id outputs
-    const filter = this.contract.filters.MetadataSet(null, ethers.id(metadataKey));
-    const logs = await this.contract.queryFilter(filter, fromBlock, toBlock);
+    const latest = await this.provider.getBlockNumber();
+    const from = fromBlock === 'earliest' ? this.deployBlock : fromBlock;
+    const to = toBlock ?? latest;
+
+    const filter = this.contract.filters.MetadataSet(null, metadataKey);
+
+    const logs = await this.queryFilterChunked(filter, from, to);
 
     return logs.map((log) => {
       const parsedLog = this.contract.interface.parseLog({
@@ -153,9 +189,31 @@ export class IdentityModule {
       });
       return {
         agentId: parsedLog?.args.agentId as bigint,
-        rawValue: parsedLog?.args.metadataValue as Uint8Array,
+        rawValue: getBytes(parsedLog?.args.metadataValue as string),
       };
     });
+  }
+
+  async findAgentsWithMetadata(
+    metadataKey: string,
+    fromBlock?: number,
+    toBlock?: number,
+  ): Promise<{ agentId: bigint; uri: string; rawValue: Uint8Array }[]> {
+    const entries = await this.getAgentsByMetadata(metadataKey, fromBlock ?? 'earliest', toBlock);
+
+    // Deduplicate: if a key was set multiple times for the same agent, keep the latest event
+    const latestByAgent = new Map<bigint, { agentId: bigint; rawValue: Uint8Array }>();
+    for (const entry of entries) {
+      latestByAgent.set(entry.agentId, entry);
+    }
+
+    return Promise.all(
+      [...latestByAgent.values()].map(async ({ agentId, rawValue }) => ({
+        agentId,
+        uri: await this.getAgentURI(agentId),
+        rawValue,
+      })),
+    );
   }
 
   async setMetadata(agentId: bigint, key: string, value: Uint8Array): Promise<string> {

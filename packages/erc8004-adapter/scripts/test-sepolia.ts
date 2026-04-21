@@ -133,6 +133,18 @@ async function main() {
   const testMetadataValue = await erc8004.identity.getMetadata(agentId, 'TEST_METADATA');
   log('Test metadata value: ', testMetadataValue);
 
+  // ── Query agents with SwarmAICapable = 1 ──────────────────────────────────
+  log('Query: agents with SwarmAICapable metadata');
+
+  const allSwarmAIAgents = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
+  const capableAgents = allSwarmAIAgents.filter((e) => ethers.toBigInt(e.rawValue) === 1n);
+
+  log('SwarmAICapable agents found', capableAgents.length);
+  log(
+    'Agent cards',
+    capableAgents.map((a) => ({ agentId: a.agentId.toString(), uri: a.uri })),
+  );
+
   return;
 
   // ── 4. Set Agent Wallet ────────────────────────────────────────────────────
@@ -214,6 +226,14 @@ async function main() {
       reliable: reputation.reliable,
     });
   }
+
+  // ── 8. Query by Metadata ───────────────────────────────────────────────────
+  log('Step 8: Query Agents by Metadata (SwarmAICapable)');
+  const aiAgents = await erc8004.identity.getAgentsByMetadata(SWARM_AI_CAPABLE);
+  log(`Found ${aiAgents.length} agents with SWARM_AI_CAPABLE metadata`);
+  aiAgents.forEach((a) =>
+    console.log(`   Agent ID: ${a.agentId.toString()} | Value encoded: ${a.rawValue.length} bytes`),
+  );
 
   // ── Done ───────────────────────────────────────────────────────────────────
   console.log('\n✓ Steps completed successfully');
