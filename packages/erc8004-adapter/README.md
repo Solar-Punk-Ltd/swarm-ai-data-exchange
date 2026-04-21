@@ -70,25 +70,25 @@ const erc8004 = createERC8004Client({
 ### 2. Generate and register an agent (provider flow)
 
 ```typescript
-import { generateAgentCard, serializeAgentCard } from '@solarpunk/erc8004-adapter';
+import { generateAgentCard, uploadAgentCard } from '@solarpunk/erc8004-adapter';
 
 // Build the Agent Card JSON
 const card = generateAgentCard({
   name: 'My Data Provider',
   description: 'Sells encrypted image datasets via Swarm',
-  capabilities: ['image-data', 'raw-feed'],
-  endpoints: {
-    x402: 'https://provider.example.com/data',
-    mcp: 'bzz://<swarm-mcp-hash>',
-  },
-  owner: await signer.getAddress(),
+  services: [
+    { name: 'x402', endpoint: 'https://provider.example.com/data' },
+    { name: 'A2A', endpoint: 'https://a2aURL' },
+  ],
+  x402Support: true,
 });
 
-// Upload serializeAgentCard(card) to Swarm — then use the hash below
-const agentCardHash = '<hash-returned-by-swarm>';
+// Upload the Agent Card to a Swarm feed — reads BEE_FEED_PK, BEE_API_URL, BEE_POSTAGE_STAMP from env.
+// Using a feed means the card can be updated later without changing the on-chain URI.
+const { feedUrl } = await uploadAgentCard(card);
 
-// Mint the ERC-8004 NFT, storing only the bzz:// URI on-chain
-const { agentId, txHash } = await erc8004.identity.register(`bzz://${agentCardHash}`);
+// Mint the ERC-8004 NFT, storing the feed URL on-chain so the card is always up to date
+const { agentId, txHash } = await erc8004.identity.register(feedUrl);
 console.log('Registered agentId:', agentId.toString());
 ```
 
@@ -254,20 +254,20 @@ import {
 } from '@solarpunk/erc8004-adapter';
 ```
 
-| Function                        | Description                                                                                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `generateAgentCard(params)`     | Creates an `AgentCard` object with defaults (`version: "1.0.0"`, `supportedTrust: ["reputation"]`).                                                                |
-| `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.                                                                             |
-| `parseAgentCard(json)`          | Parses and validates a JSON string. Throws if `name`, `description`, or `endpoints` are missing.                                                                   |
-| `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads Bee config from environment (`BEE_FEED_PK`, `BEE_API_URL`, `BEE_POSTAGE_STAMP`). |
+| Function                        | Description                                                                                                                                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generateAgentCard(params)`     | Creates an `AgentCard` object. `type`, `active`, `x402Support`, and `registrations` are set to their defaults when omitted.                                                                                     |
+| `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.                                                                                                                          |
+| `parseAgentCard(json)`          | Parses and validates a JSON string. Throws if `type` is not the ERC-8004 registration type string, or if `name`, `description`, `services`, `x402Support`, `active`, or `registrations` are missing or invalid. |
+| `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads `BEE_FEED_PK`, `BEE_API_URL`, and `BEE_POSTAGE_STAMP` from the environment. `feedUrl` always uses the public Swarm gateway.   |
 
 `uploadAgentCard` returns a `SwarmUploadResult`:
 
 ```typescript
 interface SwarmUploadResult {
   reference: string; // 64-char hex Swarm content hash
-  url: string; // bzz://<reference> — direct content address
-  feedUrl: string; // Bee API feed URL — always resolves to the latest version
+  url: string; // bzz://<reference> — immutable direct link to this version
+  feedUrl: string; // https://api.gateway.ethswarm.org/feeds/<owner>/<topic> — always resolves to the latest version
 }
 ```
 
@@ -288,17 +288,28 @@ const { agentId } = await erc8004.identity.register(feedUrl);
 
 ```typescript
 interface AgentCard {
+  type: string; // MUST be "https://eips.ethereum.org/EIPS/eip-8004#registration-v1"
   name: string;
   description: string;
-  version: string;
-  capabilities: string[];
-  endpoints: {
-    mcp?: string; // Swarm MCP endpoint (bzz://<hash>)
-    x402?: string; // x402 payment server URL
-    a2a?: string; // Agent-to-Agent protocol endpoint
-  };
-  supportedTrust: string[]; // e.g. ["reputation"]
-  owner?: string; // wallet address
+  image?: string; // OPTIONAL — defaults to a Swarm-hosted placeholder avatar
+  services: AgentService[];
+  x402Support: boolean; // true if the agent accepts x402 micropayments
+  active: boolean; // false to soft-deactivate without un-registering
+  registrations: AgentRegistration[];
+  supportedTrust?: string[]; // e.g. ["reputation", "crypto-economic"]
+}
+
+interface AgentService {
+  name: string; // e.g. "MCP", "A2A", "x402", "web"
+  endpoint: string; // full URL or bzz:// URI
+  version?: string; // e.g. "0.3.0" or "2025-06-18"
+  skills?: string[];
+  domains?: string[];
+}
+
+interface AgentRegistration {
+  agentId: bigint;
+  agentRegistry: string; // CAIP-10 reference, e.g. "eip155:84532:0x8004A818..."
 }
 ```
 
@@ -332,8 +343,9 @@ Edit `.env`:
 PRIVATE_KEY=0x<provider-private-key>
 CONSUMER_PRIVATE_KEY=0x<consumer-private-key>   # must be a different funded wallet
 RPC_URL=https://sepolia.base.org                 # optional, this is the default
+CHAIN=base-sepolia                               # optional, this is the default
 BEE_FEED_PK=0x<hex-private-key>                 # required to upload Agent Card to Swarm
-BEE_API_URL=http://localhost:1633                # optional, this is the default
+BEE_API_URL=http://localhost:1633                # optional, this is the default (Bee node used for uploading)
 BEE_POSTAGE_STAMP=<64-char-hex-stamp-id>         # optional, auto-discovered from Bee node if not set
 ```
 
@@ -362,8 +374,8 @@ Expected output:
 [Provider wallet] 0xProviderAddress
 [Balance] 0.05 ETH
 
-  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 4.
-  Step 5 (post feedback on-chain) will be skipped.
+  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 3.
+  Step 4 (post feedback on-chain) will be skipped.
   Set CONSUMER_PRIVATE_KEY to a different funded wallet to run the full flow.
 
 [Consumer wallet] 0xEphemeralAddress
@@ -403,7 +415,7 @@ With both `BEE_FEED_PK` and `CONSUMER_PRIVATE_KEY` set, the full flow runs:
 [Step 2: Upload Agent Card to Swarm]
   Uploading to Swarm feed...
 [Swarm reference] a1b2c3d4...
-[Feed URL] http://localhost:1633/feeds/0xOwnerAddress/topichex...
+[Feed URL] https://api.gateway.ethswarm.org/feeds/0xowneraddress/topichex...
 
 [Step 3: Register on-chain (Identity Registry)]
   Sending transaction...
