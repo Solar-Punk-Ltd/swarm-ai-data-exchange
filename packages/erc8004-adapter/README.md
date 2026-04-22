@@ -193,6 +193,122 @@ Future consumers can call `calculateReputation(agentId)` before purchasing to ev
 
 ---
 
+## CLI — `create-agent`
+
+The `create-agent` script handles the full registration flow — generate card → upload to Swarm → register on-chain — in a single command, without writing any TypeScript.
+
+```sh
+pnpm create-agent [flags]
+```
+
+### Flags
+
+| Flag               | Required | Description                                                                                                                         |
+| ------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `--name`           | Yes      | Human-readable agent name                                                                                                           |
+| `--description`    | Yes      | Short description of what the agent does                                                                                            |
+| `--image`          | No       | URL of the agent avatar image                                                                                                       |
+| `--version`        | No       | Agent Card version string (default: `1.0.0`)                                                                                        |
+| `--x402`           | No       | x402 service endpoint URL                                                                                                           |
+| `--a2a`            | No       | A2A service endpoint URL                                                                                                            |
+| `--capabilities`   | No       | Comma-separated capability tags, e.g. `trading,price-feeds`                                                                         |
+| `--privateKey`     | No       | On-chain wallet private key — falls back to `PRIVATE_KEY` env var                                                                   |
+| `--feedPrivateKey` | No       | Swarm feed signing key — falls back to `BEE_FEED_PK` env var                                                                        |
+| `--postageBatchId` | No       | Postage stamp batch ID (64-char hex) — falls back to `BEE_POSTAGE_STAMP` env var; auto-selected from the Bee node if neither is set |
+| `--beeApiUrl`      | No       | Bee node base URL — falls back to `BEE_API_URL` env var (default: `http://localhost:1633`)                                          |
+
+`--privateKey` and `--feedPrivateKey` (or their env var equivalents) are the only values that are always required — everything else has a sensible default or is optional.
+
+### Example
+
+The following registers a trading data provider with both an x402 and an A2A endpoint:
+
+```sh
+pnpm create-agent \
+  --name "Solarpunk Trading Data Agent" \
+  --description "Provides real-time and historical trading data for DeFi protocols on Base." \
+  --image "https://cdn.solarpunk.buzz/agents/trading-avatar.png" \
+  --version "1.2.0" \
+  --x402 "https://data.solarpunk.buzz/trading/v1" \
+  --a2a "https://a2a.solarpunk.buzz/trading" \
+  --capabilities "trading,historical-data,price-feeds" \
+  --privateKey "0xac0974bec29a17e37ba4a6b4d238ff947bacb478cbed5efcae784d7bf4f2ff80" \
+  --feedPrivateKey "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" \
+  --beeApiUrl "http://localhost:1633"
+```
+
+> **Note:** The private keys above are the standard Hardhat/Anvil dev accounts and are safe to use as examples. Never use them with real funds.
+
+### Output
+
+The script logs each step and exits with a JSON result:
+
+```
+[1/3] Agent Card
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "Solarpunk Trading Data Agent",
+  "description": "Provides real-time and historical trading data for DeFi protocols on Base.",
+  "version": "1.2.0",
+  "image": "https://cdn.solarpunk.buzz/agents/trading-avatar.png",
+  "services": [
+    { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
+    { "name": "a2a",  "endpoint": "https://a2a.solarpunk.buzz/trading" }
+  ],
+  "x402Support": true,
+  "active": true,
+  "capabilities": ["trading", "historical-data", "price-feeds"]
+}
+
+[2/3] Uploading to Swarm…
+  Reference: 3a4b5c6d7e8f...
+  AgentURI:  https://api.gateway.ethswarm.org/feeds/f39fd6e51aad88f6f4ce6ab8827279cfffb92266/6167656e742d63617264...
+
+[3/3] Registering on-chain…
+
+✓ Agent registered successfully
+{
+  "agentId": "42",
+  "txHash": "0xabc123def456...",
+  "agentURI": "https://api.gateway.ethswarm.org/feeds/f39fd6e51aad88f6f4ce6ab8827279cfffb92266/6167656e742d63617264..."
+}
+```
+
+- **`agentId`** — the NFT token ID assigned by the Identity Registry. Use this for reputation queries and metadata lookups.
+- **`txHash`** — the Base Sepolia transaction hash. Verify at `https://sepolia.basescan.org/tx/<txHash>`.
+- **`agentURI`** — the Swarm feed URL stored on-chain. It always resolves to the latest version of the Agent Card, so the URI never needs to change even if the card is updated.
+
+### Running from the monorepo root
+
+You can run the command from anywhere in the repo using pnpm's `--filter` flag — no need to `cd` into the package first:
+
+```sh
+pnpm --filter @solarpunk/erc8004-adapter create-agent \
+  --name "Solarpunk Trading Data Agent" \
+  --description "Provides real-time and historical trading data for DeFi protocols on Base." \
+  --image "https://cdn.solarpunk.buzz/agents/trading-avatar.png" \
+  --version "1.2.0" \
+  --x402 "https://data.solarpunk.buzz/trading/v1" \
+  --a2a "https://a2a.solarpunk.buzz/trading" \
+  --capabilities "trading,historical-data,price-feeds" \
+  --privateKey "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" \
+  --feedPrivateKey "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+```
+
+### Using env vars instead of flags
+
+If `PRIVATE_KEY` and `BEE_FEED_PK` are already in your environment or `.env`, you can omit the key flags:
+
+```sh
+pnpm --filter @solarpunk/erc8004-adapter create-agent \
+  --name "Solarpunk Trading Data Agent" \
+  --description "Provides real-time and historical trading data for DeFi protocols on Base." \
+  --x402 "https://data.solarpunk.buzz/trading/v1" \
+  --capabilities "trading,price-feeds"
+```
+
+---
+
 ## API Reference
 
 > For an overview of how these modules layer on top of the on-chain contracts, see the [Architecture diagram](#architecture) above.

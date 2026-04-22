@@ -12,6 +12,7 @@
     "dev": "tsc --watch",
     "test": "jest --passWithNoTests",
     "test:sepolia": "tsx scripts/test-sepolia.ts",
+    "create-agent": "tsx scripts/create-agent.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
