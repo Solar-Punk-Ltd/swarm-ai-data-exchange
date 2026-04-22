@@ -175,7 +175,7 @@ function sortedDescending(agents: Agent[]): Agent[] {
 }
 
 export default function AgentList() {
-  const { agents, loading, error, addAgent } = useAgents();
+  const { agents, loading, refreshing, error, addAgent, refresh } = useAgents();
   const [showModal, setShowModal] = useState(false);
 
   function handleSave(card: AgentCard) {
@@ -185,7 +185,25 @@ export default function AgentList() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+      <div
+        style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '1rem' }}
+      >
+        <button
+          onClick={refresh}
+          disabled={refreshing}
+          style={{
+            background: 'none',
+            border: '1px solid #334155',
+            color: refreshing ? '#475569' : '#94a3b8',
+            borderRadius: 6,
+            padding: '0.5rem 1rem',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            cursor: refreshing ? 'default' : 'pointer',
+          }}
+        >
+          {refreshing ? 'Refreshing…' : '↻ Refresh'}
+        </button>
         <button
           onClick={() => setShowModal(true)}
           style={{

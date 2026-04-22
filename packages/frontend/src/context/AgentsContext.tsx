@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ethers } from 'ethers';
 import {
   createERC8004Client,
@@ -17,8 +17,10 @@ export interface Agent {
 export interface AgentsContextValue {
   agents: Agent[];
   loading: boolean;
+  refreshing: boolean;
   error: string | null;
   addAgent: (card: AgentCard) => void;
+  refresh: () => void;
 }
 
 export const AgentsContext = createContext<AgentsContextValue | null>(null);
@@ -26,10 +28,18 @@ export const AgentsContext = createContext<AgentsContextValue | null>(null);
 export function AgentsProvider({ children }: { children: ReactNode }) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const isRefresh = refreshKey > 0;
+
+    if (isRefresh) {
+      setRefreshing(true);
+      setError(null);
+    }
 
     async function fetchAgents() {
       try {
@@ -47,6 +57,7 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setAgents(initial);
         setLoading(false);
+        setRefreshing(false);
 
         for (const { agentId, uri } of initial) {
           downloadAgentCard(uri)
@@ -63,6 +74,7 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
           setLoading(false);
+          setRefreshing(false);
         }
       }
     }
@@ -71,15 +83,17 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
 
   function addAgent(card: AgentCard) {
     const tempId = `local-${Date.now()}`;
     setAgents((prev) => [{ agentId: tempId, uri: '', card }, ...prev]);
   }
 
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
   return (
-    <AgentsContext.Provider value={{ agents, loading, error, addAgent }}>
+    <AgentsContext.Provider value={{ agents, loading, refreshing, error, addAgent, refresh }}>
       {children}
     </AgentsContext.Provider>
   );
