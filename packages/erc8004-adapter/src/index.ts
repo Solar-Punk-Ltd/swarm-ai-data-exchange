@@ -6,6 +6,7 @@ export {
   generateRegistrationFile,
   serializeAgentCard,
   parseAgentCard,
+  uploadAgentCard,
 } from './agent-card';
 
 export { IdentityModule } from './modules/identity';
@@ -15,15 +16,24 @@ export { AggregateModule } from './modules/aggregate';
 export { IDENTITY_REGISTRY_ABI } from './abis/IdentityRegistry';
 export { REPUTATION_REGISTRY_ABI } from './abis/ReputationRegistry';
 
+export { DEFAULT_BEE_API_URL, DEFAULT_RPC_URL, DEFAULT_CHAIN, AGENT_CARD_TOPIC } from './constants';
+
+export { default as config } from './config';
+export type { ERC8004AdapterConfig, ChainConfig, BeeConfig } from './config';
+
 export type {
   ERC8004Config,
+  MetadataEntry,
   AgentCard,
   AgentCardParams,
-  AgentEndpoints,
+  AgentService,
+  AgentRegistration,
   RegisterResult,
   PostFeedbackParams,
   FeedbackAuth,
+  WalletAuth,
   FeedbackResult,
   ReputationSummary,
   ReputationScore,
+  SwarmUploadResult,
 } from './types';
