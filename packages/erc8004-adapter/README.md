@@ -413,6 +413,88 @@ pnpm --filter @solarpunk/erc8004-adapter discover-agents
 
 ---
 
+## CLI — `get-agent`
+
+The `get-agent` script fetches a single ERC-8004 agent by its NFT token ID. It reads the agent's URI directly from the Identity Registry and downloads the Agent Card from Swarm, returning a single JSON object. No Swarm upload or on-chain write is performed — the command is read-only.
+
+```sh
+pnpm get-agent --agentId <id> [--privateKey "0x..."]
+```
+
+### Flags
+
+| Flag           | Required | Description                                                                                                                                            |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--agentId`    | Yes      | The NFT token ID of the agent to look up (e.g. `5102`)                                                                                                 |
+| `--privateKey` | No       | On-chain wallet private key — falls back to `PRIVATE_KEY` env var. Required in practice (used to initialize the provider/signer for contract queries). |
+
+When `PRIVATE_KEY` is already set in your `.env`, only `--agentId` is needed.
+
+### What it does
+
+1. Calls `tokenURI(agentId)` on the Identity Registry to read the on-chain Swarm feed URL.
+2. Fetches the Agent Card JSON from that URL using `downloadAgentCard()` — always resolves to the latest version of the card.
+3. Prints a single JSON object with `agentId`, `agentURI`, and the full `agentCard`.
+
+If the Swarm fetch fails (e.g. the card is temporarily unreachable), a warning is printed to stderr and `agentCard` is `null` — the rest of the fields are still returned.
+
+### Example
+
+```sh
+pnpm get-agent --agentId 5102 --privateKey "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+```
+
+Or, with `PRIVATE_KEY` already in `.env`:
+
+```sh
+pnpm get-agent --agentId 5102
+```
+
+### Output
+
+```json
+{
+  "agentId": "5102",
+  "agentURI": "https://api.gateway.ethswarm.org/feeds/5468fb0537098ab63a8848dfc30f283894b37179/a1087ef3dd0e5c2fef60db3cdedac0d559d9b99b2cc922eb1b91bad419e45010",
+  "agentCard": {
+    "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+    "name": "Solarpunk Trading Data Agent",
+    "version": "1.0.0",
+    "description": "Provides real-time and historical trading data for DeFi protocols on Base.",
+    "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
+    "services": [
+      { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
+      { "name": "a2a", "endpoint": "https://a2a.solarpunk.buzz/trading" }
+    ],
+    "x402Support": true,
+    "active": true,
+    "capabilities": ["trading"]
+  }
+}
+```
+
+- **`agentId`** — the NFT token ID that was queried.
+- **`agentURI`** — the Swarm feed URL stored on-chain; always resolves to the latest version of the Agent Card.
+- **`agentCard`** — the parsed Agent Card fetched from Swarm, or `null` if the fetch failed.
+
+If the `agentId` does not exist, the script exits with an error from the contract call (`ERC721: invalid token ID` or equivalent).
+
+### Running from the monorepo root
+
+```sh
+pnpm --filter @solarpunk/erc8004-adapter get-agent --agentId 5102
+```
+
+### Using env vars instead of flags
+
+With `PRIVATE_KEY` in your `.env`:
+
+```sh
+pnpm --filter @solarpunk/erc8004-adapter get-agent --agentId 5102
+```
+
+---
+
 ## API Reference
 
 > For an overview of how these modules layer on top of the on-chain contracts, see the [Architecture diagram](#architecture) above.
