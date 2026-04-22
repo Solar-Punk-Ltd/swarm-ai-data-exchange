@@ -27,10 +27,14 @@
 
 import { parseArgs } from 'util';
 import { ethers } from 'ethers';
-import { Bee } from '@ethersphere/bee-js';
-import { createERC8004Client, generateAgentCard, serializeAgentCard, config } from '../src';
-import { AGENT_CARD_TOPIC, DEFAULT_GATEWAY_URL, SWARM_AI_CAPABLE } from '../src/constants';
-import { getUploadPostageBatchId, hexToBytes, normaliseTopic } from '../src/utils';
+import {
+  createERC8004Client,
+  generateAgentCard,
+  serializeAgentCard,
+  config,
+  uploadAgentCard,
+} from '../src';
+import { AGENT_CARD_TOPIC, SWARM_AI_CAPABLE } from '../src/constants';
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -110,33 +114,16 @@ async function main() {
   console.log(serializeAgentCard(card));
 
   // ── 2. Upload agent card to Swarm ─────────────────────────────────────────
-
   console.log('\n[2/3] Uploading to Swarm…');
 
-  const bee = new Bee(beeApiUrl);
-  const { postageBatchId: resolvedBatch, error: batchError } = await getUploadPostageBatchId(
+  const { feedUrl: agentURI } = await uploadAgentCard(
+    card,
+    AGENT_CARD_TOPIC,
+    beeApiUrl,
     batchId,
-    bee,
+    privateKey,
   );
 
-  if (batchError || !resolvedBatch) {
-    console.error('Error: ' + (batchError ?? 'No usable postage batch found'));
-    process.exit(1);
-  }
-
-  const topicHex = await normaliseTopic(AGENT_CARD_TOPIC);
-  const topicBytes = hexToBytes(topicHex);
-  const feedPkBytes = hexToBytes(feedPk);
-  const feedWriter = bee.makeFeedWriter(topicBytes, feedPkBytes);
-  const payload = new TextEncoder().encode(serializeAgentCard(card));
-  const uploadResult = await feedWriter.uploadPayload(resolvedBatch, payload);
-
-  const reference = uploadResult.reference.toString();
-  const normalizedFeedPk = feedPk.startsWith('0x') ? feedPk : `0x${feedPk}`;
-  const feedOwner = new ethers.Wallet(normalizedFeedPk).address.slice(2).toLowerCase();
-  const agentURI = `${DEFAULT_GATEWAY_URL}/feeds/${feedOwner}/${topicHex}`;
-
-  console.log('  Reference:', reference);
   console.log('  AgentURI: ', agentURI);
 
   // ── 3. Register on-chain ───────────────────────────────────────────────────
@@ -144,7 +131,7 @@ async function main() {
   console.log('\n[3/3] Registering on-chain…');
 
   const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const signer = new ethers.Wallet(privateKey, provider);
+  const signer = new ethers.Wallet(privateKey!, provider);
   const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
 
   const { agentId, txHash } = await erc8004.identity.register(agentURI, [

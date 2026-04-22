@@ -84,7 +84,7 @@ const card = generateAgentCard({
   x402Support: true,
   active: true,
   supportedTrust: ['reputation'],
-  capabilities: ['trading', 'image_generation'],
+  capabilities: ['Swarm', 'trading', 'image_generation'],
 });
 
 // Upload the Agent Card to a Swarm feed — reads BEE_FEED_PK, BEE_API_URL, BEE_POSTAGE_STAMP from env.
@@ -93,7 +93,7 @@ const { feedUrl } = await uploadAgentCard(card);
 
 // Mint the ERC-8004 NFT with optional metadata attached at registration time
 const { agentId, txHash } = await erc8004.identity.register(feedUrl, [
-  { metadataKey: 'SwarmAICapable', metadataValue: new Uint8Array([1]) },
+  { metadataKey: 'swarm_ai_capable', metadataValue: new Uint8Array([1]) },
 ]);
 console.log('Registered agentId:', agentId.toString());
 ```
@@ -106,10 +106,10 @@ Metadata can also be written (or overwritten) any time after the NFT exists, and
 
 ```typescript
 // Write arbitrary key/value bytes on-chain (owner only)
-await erc8004.identity.setMetadata(agentId, 'SwarmAICapable', new Uint8Array([1]));
+await erc8004.identity.setMetadata(agentId, 'swarm_ai_capable', new Uint8Array([1]));
 
 // Read it back
-const value = await erc8004.identity.getMetadata(agentId, 'SwarmAICapable');
+const value = await erc8004.identity.getMetadata(agentId, 'swarm_ai_capable');
 // value is a Uint8Array — e.g. Uint8Array(1) [ 1 ]
 ```
 
@@ -123,7 +123,7 @@ To discover all agents that have advertised a specific capability, use `findAgen
 import { ethers } from 'ethers';
 import { SWARM_AI_CAPABLE } from '@solarpunk/erc8004-adapter/constants';
 
-// Find all agents that have set the SwarmAICapable metadata key
+// Find all agents that have set the swarm_ai_capable metadata key
 const agents = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
 
 // Filter to those where the value is 1 (capability is active)
@@ -464,7 +464,7 @@ interface AgentCard {
   active: boolean; // false to soft-deactivate without un-registering
   registrations?: AgentRegistration[]; // OPTIONAL — populated after on-chain registration
   supportedTrust?: string[]; // e.g. ["reputation", "crypto-economic"]
-  capabilities?: string[]; // OPTIONAL — e.g. ["trading", "image_generation"]
+  capabilities?: string[]; // OPTIONAL — e.g. ["Swarm", "trading", "image_generation"]
 }
 
 interface AgentService {
