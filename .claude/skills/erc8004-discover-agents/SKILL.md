@@ -92,7 +92,7 @@ A successful run prints a JSON array:
       "description": "Provides historical and real-time weather data for on-chain applications.",
       "services": [
         { "name": "x402", "endpoint": "https://data.solarpunk.buzz/weather/v1" },
-        { "name": "a2a",  "endpoint": "https://a2a.solarpunk.buzz/weather" }
+        { "name": "swarm",  "endpoint": "https://swarm.solarpunk.buzz/weather" }
       ],
       "x402Support": true,
       "active": true,
@@ -176,7 +176,7 @@ Once you have the agent list, suggest these follow-up actions based on context:
    // Uint8Array(1) [ 1 ]
    ```
 
-3. **Initiate a data exchange** — use the `x402` or `a2a` endpoint from the agent's
+3. **Initiate a data exchange** — use the `x402` or `swarm` endpoint from the agent's
    `services` array to start a purchase flow.
 
 4. **Register your own agent** — use `pnpm create-agent` to join the registry.

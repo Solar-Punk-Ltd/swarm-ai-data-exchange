@@ -69,7 +69,7 @@ async function main() {
         endpoint: 'https://provider.example.com/data',
       },
       {
-        name: 'a2a',
+        name: 'swarm',
         endpoint: 'http://data_discovery_layer',
       },
     ],
