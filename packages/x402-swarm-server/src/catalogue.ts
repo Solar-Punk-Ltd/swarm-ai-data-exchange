@@ -16,6 +16,7 @@ export async function fetchCatalogue(): Promise<SwarmMetadataCatalogue> {
 export function findDataItem(catalogue: SwarmMetadataCatalogue, swarmHash: string): DataItem {
   const item = catalogue.dataItems.find((d) => d.swarmHash === swarmHash);
   if (!item) {
+    console.log(JSON.stringify(catalogue, null, 2));
     throw new CatalogueEntryNotFound(swarmHash);
   }
   return item;
