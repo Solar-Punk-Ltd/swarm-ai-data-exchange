@@ -14,6 +14,7 @@
     "test:sepolia": "tsx scripts/test-sepolia.ts",
     "create-agent": "tsx scripts/create-agent.ts",
     "discover-agents": "tsx scripts/discover-agents.ts",
+    "get-agent": "tsx scripts/get-agent.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
