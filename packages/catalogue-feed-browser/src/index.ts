@@ -47,7 +47,7 @@ app.post('/api/buy', async (req, res) => {
   }
 
   try {
-    const result = await executeBuy(swarmHash, serverUrl);
+    const result = await executeBuy(swarmHash, serverUrl, BEE_API_URL);
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
