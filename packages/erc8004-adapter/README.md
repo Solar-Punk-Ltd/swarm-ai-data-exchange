@@ -309,6 +309,110 @@ pnpm --filter @solarpunk/erc8004-adapter create-agent \
 
 ---
 
+## CLI — `discover-agents`
+
+The `discover-agents` script queries the Identity Registry for every agent that has the `swarm_ai_capable` metadata flag set to `1`, then fetches each matching agent's card from Swarm and prints the full list as JSON. No Swarm upload or on-chain write is performed — the command is read-only.
+
+```sh
+pnpm discover-agents [--privateKey "0x..."]
+```
+
+### Flags
+
+| Flag           | Required | Description                                                                                                                                            |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--privateKey` | No       | On-chain wallet private key — falls back to `PRIVATE_KEY` env var. Required in practice (used to initialize the provider/signer for contract queries). |
+
+When `PRIVATE_KEY` is already set in your `.env`, no flags are needed at all.
+
+### What it does
+
+1. Scans all `MetadataSet` events on the Identity Registry for the key `swarm_ai_capable`, deduplicating to the latest value per agent.
+2. Filters to agents whose value equals `1` (capability active).
+3. For each matching agent, fetches the Agent Card JSON from the Swarm feed URL stored on-chain.
+4. Prints a JSON array with one entry per agent: `agentId`, `agentURI`, and the full `agentCard` object.
+
+If a Swarm fetch fails for a specific agent (e.g. the card is temporarily unreachable), a warning is printed to stderr and `agentCard` is `null` for that entry — the rest of the results are still returned.
+
+### Example
+
+```sh
+pnpm discover-agents --privateKey "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+```
+
+Or, with `PRIVATE_KEY` already in `.env`:
+
+```sh
+pnpm discover-agents
+```
+
+### Output
+
+```
+Discovering swarm_ai_capable agents…
+Found 2 capable agent(s). Fetching agent cards…
+
+[
+  {
+    "agentId": "41",
+    "agentURI": "https://api.gateway.ethswarm.org/feeds/f39fd6e51aad88f6f4ce6ab8827279cfffb92266/6167656e742d63617264...",
+    "agentCard": {
+      "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+      "name": "Solarpunk Weather Data Agent",
+      "version": "1.0.0",
+      "description": "Provides historical and real-time weather data for on-chain applications.",
+      "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
+      "services": [
+        { "name": "x402", "endpoint": "https://data.solarpunk.buzz/weather/v1" },
+        { "name": "a2a",  "endpoint": "https://a2a.solarpunk.buzz/weather" }
+      ],
+      "x402Support": true,
+      "active": true,
+      "capabilities": ["weather", "historical-data"]
+    }
+  },
+  {
+    "agentId": "42",
+    "agentURI": "https://api.gateway.ethswarm.org/feeds/f39fd6e51aad88f6f4ce6ab8827279cfffb92266/6167656e742d63617264...",
+    "agentCard": {
+      "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+      "name": "Solarpunk Trading Data Agent",
+      "version": "1.0.0",
+      "description": "Provides real-time and historical trading data for DeFi protocols on Base.",
+      "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
+      "services": [
+        { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
+        { "name": "a2a",  "endpoint": "https://a2a.solarpunk.buzz/trading" }
+      ],
+      "x402Support": true,
+      "active": true,
+      "capabilities": ["trading"]
+    }
+  }
+]
+```
+
+- **`agentId`** — the NFT token ID in the Identity Registry.
+- **`agentURI`** — the Swarm feed URL stored on-chain; always resolves to the latest version of the Agent Card.
+- **`agentCard`** — the parsed Agent Card fetched from Swarm, or `null` if the fetch failed.
+
+### Running from the monorepo root
+
+```sh
+pnpm --filter @solarpunk/erc8004-adapter discover-agents \
+  --privateKey "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+```
+
+### Using env vars instead of flags
+
+With `PRIVATE_KEY` in your `.env`:
+
+```sh
+pnpm --filter @solarpunk/erc8004-adapter discover-agents
+```
+
+---
+
 ## API Reference
 
 > For an overview of how these modules layer on top of the on-chain contracts, see the [Architecture diagram](#architecture) above.
