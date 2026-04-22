@@ -71,6 +71,27 @@ export function parseAgentCard(json: string): AgentCard {
 }
 
 /**
+ * Downloads and parses an AgentCard from a Swarm feed URL (the agentURI
+ * stored on-chain). Always resolves to the latest version of the card.
+ *
+ * @param agentURI  The Swarm feed URL returned by uploadAgentCard, e.g.
+ *                  "https://api.gateway.ethswarm.org/feeds/<owner>/<topic>".
+ * @returns         The parsed AgentCard.
+ */
+export async function downloadAgentCard(agentURI: string): Promise<AgentCard> {
+  const response = await fetch(agentURI);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch AgentCard from ${agentURI}: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const json = await response.text();
+  return parseAgentCard(json);
+}
+
+/**
  * Uploads a serialised AgentCard to a Swarm feed and returns the content
  * reference and feed URL.
  *
@@ -88,15 +109,21 @@ export function parseAgentCard(json: string): AgentCard {
 export async function uploadAgentCard(
   card: AgentCard,
   topic = AGENT_CARD_TOPIC,
+  beeApiUrl?: string,
+  batchId?: string,
+  privateKey?: string,
 ): Promise<SwarmUploadResult> {
-  const bee = new Bee(config.bee.endpoint);
-  const { postageBatchId, error } = await getUploadPostageBatchId(config.bee.postageBatchId, bee);
+  const bee = new Bee(beeApiUrl || config.bee.endpoint);
+  const { postageBatchId, error } = await getUploadPostageBatchId(
+    batchId || config.bee.postageBatchId,
+    bee,
+  );
 
   if (error !== null) {
     throw error;
   }
 
-  const feedPrivateKey = config.bee.feedPrivateKey;
+  const feedPrivateKey = privateKey || config.bee.feedPrivateKey;
 
   if (!feedPrivateKey) {
     throw new Error('feedPrivateKey required.');
