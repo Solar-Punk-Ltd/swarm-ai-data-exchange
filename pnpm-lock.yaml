@@ -38,6 +38,9 @@ importers:
 
   packages/erc8004-adapter:
     dependencies:
+      '@ethersphere/bee-js':
+        specifier: ^11.2.0
+        version: 11.2.0
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -468,6 +471,10 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
+  '@ethersphere/bee-js@11.2.0':
+    resolution: {integrity: sha512-Cn1NCy6/g+LzTXBWxFftT7OWfCj4CXGK5lo3VHVp0v3erytFqoBQkKLZ1TiwE4En5/voN7GCe5kjy3El8l8lRA==}
+    engines: {bee: 2.4.0-390a402e, beeApiVersion: 7.2.0}
+
   '@ethersphere/bee-js@12.0.0':
     resolution: {integrity: sha512-q65S5+R+++NopFQRCn73CA71XF9pas88nEhTOZyE0rmk7dJC9fKDJRnlWQnKxJboht0ysj+ozbSd+PycsIkNSw==}
     engines: {bee: 2.4.0-390a402e, beeApiVersion: 7.2.0}
@@ -881,6 +888,9 @@ packages:
 
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
+
+  axios@0.30.3:
+    resolution: {integrity: sha512-5/tmEb6TmE/ax3mdXBc/Mi6YdPGxQsv+0p5YlciXWt3PHIn0VamqCXhRMtScnwY3lbgSXLneOuXAKUhgmSRpwg==}
 
   axios@1.15.1:
     resolution: {integrity: sha512-WOG+Jj8ZOvR0a3rAn+Tuf1UQJRxw5venr6DgdbJzngJE3qG7X0kL83CZGpdHMxEm+ZK3seAbvFsw4FfOfP9vxg==}
@@ -2031,6 +2041,9 @@ packages:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
     engines: {node: '>= 0.10'}
 
+  proxy-from-env@1.1.0:
+    resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
+
   proxy-from-env@2.1.0:
     resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
     engines: {node: '>=10'}
@@ -2777,6 +2790,19 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
+  '@ethersphere/bee-js@11.2.0':
+    dependencies:
+      axios: 0.30.3(debug@4.4.3)
+      cafe-utility: 33.9.0
+      debug: 4.4.3
+      isomorphic-ws: 4.0.1(ws@8.17.1)
+      semver: 7.7.4
+      ws: 8.17.1
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   '@ethersphere/bee-js@12.0.0':
     dependencies:
       axios: 1.15.1(debug@4.4.3)
@@ -3373,6 +3399,14 @@ snapshots:
   array-flatten@1.1.1: {}
 
   asynckit@0.4.0: {}
+
+  axios@0.30.3(debug@4.4.3):
+    dependencies:
+      follow-redirects: 1.16.0(debug@4.4.3)
+      form-data: 4.0.5
+      proxy-from-env: 1.1.0
+    transitivePeerDependencies:
+      - debug
 
   axios@1.15.1(debug@4.4.3):
     dependencies:
@@ -4084,6 +4118,10 @@ snapshots:
 
   isexe@2.0.0: {}
 
+  isomorphic-ws@4.0.1(ws@8.17.1):
+    dependencies:
+      ws: 8.17.1
+
   isomorphic-ws@4.0.1(ws@8.18.3):
     dependencies:
       ws: 8.18.3
@@ -4728,6 +4766,8 @@ snapshots:
     dependencies:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
+
+  proxy-from-env@1.1.0: {}
 
   proxy-from-env@2.1.0: {}
 
