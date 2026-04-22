@@ -4,7 +4,13 @@ import prettier from 'eslint-config-prettier';
 
 export default [
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/build/**'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/coverage/**',
+      '**/build/**',
+      'packages/swarm-mcp/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
