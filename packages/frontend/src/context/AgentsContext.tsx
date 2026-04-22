@@ -18,6 +18,7 @@ export interface AgentsContextValue {
   agents: Agent[];
   loading: boolean;
   error: string | null;
+  addAgent: (card: AgentCard) => void;
 }
 
 export const AgentsContext = createContext<AgentsContextValue | null>(null);
@@ -72,7 +73,14 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  function addAgent(card: AgentCard) {
+    const tempId = `local-${Date.now()}`;
+    setAgents((prev) => [{ agentId: tempId, uri: '', card }, ...prev]);
+  }
+
   return (
-    <AgentsContext.Provider value={{ agents, loading, error }}>{children}</AgentsContext.Provider>
+    <AgentsContext.Provider value={{ agents, loading, error, addAgent }}>
+      {children}
+    </AgentsContext.Provider>
   );
 }

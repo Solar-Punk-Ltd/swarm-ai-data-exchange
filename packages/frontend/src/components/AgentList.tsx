@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import type { AgentCard } from '@solarpunk/erc8004-adapter';
 import { useAgents } from '../hooks/useAgents';
 import type { Agent } from '../context/AgentsContext';
+import AddAgentModal from './AddAgentModal';
 
 function AgentCardView({ agent }: { agent: Agent }) {
   const { card, agentId, uri } = agent;
@@ -37,26 +39,31 @@ function Header({ agentId, uri, card }: { agentId: string; uri: string; card: Ag
           <span style={{ fontWeight: 700, fontSize: '1rem', color: '#f1f5f9' }}>
             {card?.name ?? `Agent #${agentId}`}
           </span>
+          <span style={{ fontSize: '1rem', fontFamily: 'monospace' }}>
+            {agentId.startsWith('local-') ? 'draft' : `#${agentId}`}
+          </span>
           {card && <StatusBadge active={card.active} />}
           {card?.x402Support && <span style={badgeStyle('#854d0e', '#fef08a')}>x402</span>}
         </div>
         {card?.version && (
           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>v{card.version}</span>
         )}
-        <a
-          href={uri}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            fontSize: '0.75rem',
-            color: '#60a5fa',
-            wordBreak: 'break-all',
-            display: 'block',
-            marginTop: '0.15rem',
-          }}
-        >
-          {uri}
-        </a>
+        {uri && (
+          <a
+            href={uri}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: '0.75rem',
+              color: '#60a5fa',
+              wordBreak: 'break-all',
+              display: 'block',
+              marginTop: '0.15rem',
+            }}
+          >
+            {uri}
+          </a>
+        )}
       </div>
     </div>
   );
@@ -156,30 +163,69 @@ function badgeStyle(bg: string, color: string): React.CSSProperties {
   };
 }
 
+function sortedDescending(agents: Agent[]): Agent[] {
+  return [...agents].sort((a, b) => {
+    const aLocal = a.agentId.startsWith('local-');
+    const bLocal = b.agentId.startsWith('local-');
+    if (aLocal && bLocal) return 0;
+    if (aLocal) return -1;
+    if (bLocal) return 1;
+    return Number(BigInt(b.agentId) - BigInt(a.agentId));
+  });
+}
+
 export default function AgentList() {
-  const { agents, loading, error } = useAgents();
+  const { agents, loading, error, addAgent } = useAgents();
+  const [showModal, setShowModal] = useState(false);
 
-  if (loading) {
-    return <p style={{ color: '#94a3b8' }}>Loading agents from Base Sepolia…</p>;
-  }
-
-  if (error) {
-    return (
-      <div style={{ color: '#f87171', background: '#1e293b', padding: '1rem', borderRadius: 8 }}>
-        <strong>Error:</strong> {error}
-      </div>
-    );
-  }
-
-  if (agents.length === 0) {
-    return <p style={{ color: '#94a3b8' }}>No SwarmAI-capable agents found.</p>;
+  function handleSave(card: AgentCard) {
+    addAgent(card);
+    setShowModal(false);
   }
 
   return (
-    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
-      {agents.map((agent) => (
-        <AgentCardView key={agent.agentId} agent={agent} />
-      ))}
-    </ul>
+    <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+        <button
+          onClick={() => setShowModal(true)}
+          style={{
+            background: '#2563eb',
+            border: 'none',
+            color: '#fff',
+            borderRadius: 6,
+            padding: '0.5rem 1.25rem',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          + Add Agent
+        </button>
+      </div>
+
+      {loading && <p style={{ color: '#94a3b8' }}>Loading agents from Base Sepolia…</p>}
+
+      {error && (
+        <div style={{ color: '#f87171', background: '#1e293b', padding: '1rem', borderRadius: 8 }}>
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      {!loading && !error && agents.length === 0 && (
+        <p style={{ color: '#94a3b8' }}>No SwarmAI-capable agents found.</p>
+      )}
+
+      {agents.length > 0 && (
+        <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+          {sortedDescending(agents)
+            .slice(0, 5)
+            .map((agent) => (
+              <AgentCardView key={agent.agentId} agent={agent} />
+            ))}
+        </ul>
+      )}
+
+      {showModal && <AddAgentModal onClose={() => setShowModal(false)} onSave={handleSave} />}
+    </>
   );
 }
