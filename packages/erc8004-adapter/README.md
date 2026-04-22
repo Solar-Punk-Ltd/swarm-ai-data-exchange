@@ -79,7 +79,7 @@ const card = generateAgentCard({
   version: '1.0.0',
   services: [
     { name: 'x402', endpoint: 'https://provider.example.com/data' },
-    { name: 'A2A', endpoint: 'https://a2aURL' },
+    { name: 'Swarm', endpoint: 'https://SwarmURL' },
   ],
   x402Support: true,
   active: true,
@@ -210,7 +210,7 @@ pnpm create-agent [flags]
 | `--image`          | No       | URL of the agent avatar image                                                                                                       |
 | `--version`        | No       | Agent Card version string (default: `1.0.0`)                                                                                        |
 | `--x402`           | No       | x402 service endpoint URL                                                                                                           |
-| `--a2a`            | No       | A2A service endpoint URL                                                                                                            |
+| `--Swarm`          | No       | Swarm service endpoint URL                                                                                                          |
 | `--capabilities`   | No       | Comma-separated capability tags, e.g. `trading,price-feeds`                                                                         |
 | `--privateKey`     | No       | On-chain wallet private key — falls back to `PRIVATE_KEY` env var                                                                   |
 | `--feedPrivateKey` | No       | Swarm feed signing key — falls back to `BEE_FEED_PK` env var                                                                        |
@@ -221,7 +221,7 @@ pnpm create-agent [flags]
 
 ### Example
 
-The following registers a trading data provider with both an x402 and an A2A endpoint:
+The following registers a trading data provider with both an x402 and an Swarm endpoint:
 
 ```sh
 pnpm create-agent \
@@ -230,7 +230,7 @@ pnpm create-agent \
   --image "https://cdn.solarpunk.buzz/agents/trading-avatar.png" \
   --version "1.2.0" \
   --x402 "https://data.solarpunk.buzz/trading/v1" \
-  --a2a "https://a2a.solarpunk.buzz/trading" \
+  --Swarm "https://Swarm.solarpunk.buzz/trading" \
   --capabilities "trading,historical-data,price-feeds" \
   --privateKey "0xac0974bec29a17e37ba4a6b4d238ff947bacb478cbed5efcae784d7bf4f2ff80" \
   --feedPrivateKey "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" \
@@ -253,7 +253,7 @@ The script logs each step and exits with a JSON result:
   "image": "https://cdn.solarpunk.buzz/agents/trading-avatar.png",
   "services": [
     { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
-    { "name": "a2a",  "endpoint": "https://a2a.solarpunk.buzz/trading" }
+    { "name": "Swarm",  "endpoint": "https://Swarm.solarpunk.buzz/trading" }
   ],
   "x402Support": true,
   "active": true,
@@ -289,7 +289,7 @@ pnpm --filter @solarpunk/erc8004-adapter create-agent \
   --image "https://cdn.solarpunk.buzz/agents/trading-avatar.png" \
   --version "1.2.0" \
   --x402 "https://data.solarpunk.buzz/trading/v1" \
-  --a2a "https://a2a.solarpunk.buzz/trading" \
+  --Swarm "https://Swarm.solarpunk.buzz/trading" \
   --capabilities "trading,historical-data,price-feeds" \
   --privateKey "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" \
   --feedPrivateKey "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
@@ -364,7 +364,7 @@ Found 2 capable agent(s). Fetching agent cards…
       "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
       "services": [
         { "name": "x402", "endpoint": "https://data.solarpunk.buzz/weather/v1" },
-        { "name": "a2a",  "endpoint": "https://a2a.solarpunk.buzz/weather" }
+        { "name": "Swarm",  "endpoint": "https://Swarm.solarpunk.buzz/weather" }
       ],
       "x402Support": true,
       "active": true,
@@ -382,7 +382,7 @@ Found 2 capable agent(s). Fetching agent cards…
       "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
       "services": [
         { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
-        { "name": "a2a",  "endpoint": "https://a2a.solarpunk.buzz/trading" }
+        { "name": "Swarm",  "endpoint": "https://Swarm.solarpunk.buzz/trading" }
       ],
       "x402Support": true,
       "active": true,
@@ -464,7 +464,7 @@ pnpm get-agent --agentId 5102
     "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
     "services": [
       { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
-      { "name": "a2a", "endpoint": "https://a2a.solarpunk.buzz/trading" }
+      { "name": "Swarm", "endpoint": "https://Swarm.solarpunk.buzz/trading" }
     ],
     "x402Support": true,
     "active": true,
@@ -654,7 +654,7 @@ interface AgentCard {
 }
 
 interface AgentService {
-  name: string; // e.g. "MCP", "A2A", "x402", "web"
+  name: string; // e.g. "MCP", "Swarm", "x402", "web"
   endpoint: string; // full URL or bzz:// URI
   version?: string; // e.g. "0.3.0" or "2025-06-18"
   skills?: string[];

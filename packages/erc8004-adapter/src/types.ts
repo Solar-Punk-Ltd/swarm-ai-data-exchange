@@ -16,7 +16,7 @@ export interface MetadataEntry {
 }
 
 export interface AgentService {
-  name: string; // e.g. "MCP", "A2A", "web", "email"
+  name: string; // e.g. "MCP", "Swarm", "web", "email", "swarm"
   endpoint: string; // The service endpoint URL or identifier
   version?: string; // SHOULD - e.g. "0.3.0", "2025-06-18"
   skills?: string[]; // OPTIONAL

@@ -99,7 +99,7 @@ A successful run prints a single JSON object:
     "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
     "services": [
       { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
-      { "name": "a2a",  "endpoint": "https://a2a.solarpunk.buzz/trading" }
+      { "name": "Swarm",  "endpoint": "https://Swarm.solarpunk.buzz/trading" }
     ],
     "x402Support": true,
     "active": true,
@@ -182,7 +182,7 @@ Once you have the agent's card and URI, suggest these follow-up actions based on
    // Uint8Array(1) [ 1 ]
    ```
 
-3. **Initiate a data exchange** — use the `x402` or `a2a` endpoint from the agent's
+3. **Initiate a data exchange** — use the `x402` or `Swarm` endpoint from the agent's
    `services` array to start a purchase flow.
 
 4. **Discover more agents** — use `pnpm discover-agents` to list all `swarm_ai_capable`

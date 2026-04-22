@@ -5,7 +5,7 @@ description: >
   using the @solarpunk/erc8004-adapter CLI. Triggers include: any mention of "create-agent",
   "register agent", "mint agent NFT", "ERC-8004 registration", "agent card", "Swarm agent
   registration", or requests to set up a new provider agent on Base Sepolia. Also trigger
-  when the user supplies agent metadata (name, description, x402 endpoint, A2A endpoint,
+  when the user supplies agent metadata (name, description, x402 endpoint, Swarm endpoint,
   capabilities) and wants to register it on-chain. Use this skill proactively — if someone
   describes an agent they want to deploy, assume they want to run the full registration flow.
 ---
@@ -45,7 +45,7 @@ pnpm create-agent \
   [--image "<avatar URL>"] \
   [--version "<semver, default 1.0.0>"] \
   [--x402 "<x402 service endpoint URL>"] \
-  [--a2a "<A2A service endpoint URL>"] \
+  [--Swarm "<Swarm service endpoint URL>"] \
   [--capabilities "<comma-separated tags>"] \
   [--privateKey "<0x… wallet private key>"] \
   [--feedPrivateKey "<0x… feed signing key>"] \
@@ -73,7 +73,7 @@ pnpm --filter @solarpunk/erc8004-adapter create-agent \
 | `--image` | No | Swarm placeholder avatar | URL of an avatar image |
 | `--version` | No | `1.0.0` | SemVer or date string for the Agent Card revision |
 | `--x402` | No | — | x402 service endpoint URL; sets `x402Support: true` on the card |
-| `--a2a` | No | — | A2A service endpoint URL |
+| `--Swarm` | No | — | Swarm service endpoint URL |
 | `--capabilities` | No | — | Comma-separated tags, e.g. `trading,price-feeds,image_generation` |
 | `--privateKey` | No* | `PRIVATE_KEY` env | On-chain wallet key for the NFT mint transaction |
 | `--feedPrivateKey` | No* | `BEE_FEED_PK` env | Swarm feed signing key for Agent Card upload |
@@ -160,7 +160,7 @@ pnpm create-agent \
 
 ## Full worked example
 
-Registering a trading data provider with both x402 and A2A endpoints:
+Registering a trading data provider with both x402 and Swarm endpoints:
 
 ```sh
 pnpm create-agent \
@@ -169,7 +169,7 @@ pnpm create-agent \
   --image "https://cdn.solarpunk.buzz/agents/trading-avatar.png" \
   --version "1.2.0" \
   --x402 "https://data.solarpunk.buzz/trading/v1" \
-  --a2a "https://a2a.solarpunk.buzz/trading" \
+  --Swarm "https://Swarm.solarpunk.buzz/trading" \
   --capabilities "trading,historical-data,price-feeds" \
   --privateKey "0xac0974bec29a17e37ba4a6b4d238ff947bacb478cbed5efcae784d7bf4f2ff80" \
   --feedPrivateKey "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" \

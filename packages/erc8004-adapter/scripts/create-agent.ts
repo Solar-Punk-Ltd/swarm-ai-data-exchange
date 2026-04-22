@@ -8,7 +8,7 @@
  *     [--image "https://example.com/avatar.png"] \
  *     [--version "1.0.0"] \
  *     [--x402 "https://provider.example.com/data"] \
- *     [--a2a "https://a2a.example.com"] \
+ *     [--Swarm "https://Swarm.example.com"] \
  *     [--capabilities "cap1,cap2,cap3"] \
  *     [--privateKey "0x..."] \
  *     [--feedPrivateKey "0x..."] \
@@ -45,7 +45,7 @@ const { values: args } = parseArgs({
     image: { type: 'string' },
     version: { type: 'string' },
     x402: { type: 'string' },
-    a2a: { type: 'string' },
+    Swarm: { type: 'string' },
     capabilities: { type: 'string' },
     privateKey: { type: 'string' },
     feedPrivateKey: { type: 'string' },
@@ -90,7 +90,7 @@ async function main() {
 
   const services = [];
   if (args.x402?.trim()) services.push({ name: 'x402', endpoint: args.x402.trim() });
-  if (args.a2a?.trim()) services.push({ name: 'a2a', endpoint: args.a2a.trim() });
+  if (args.Swarm?.trim()) services.push({ name: 'Swarm', endpoint: args.Swarm.trim() });
 
   const capabilities = args.capabilities
     ? args.capabilities
