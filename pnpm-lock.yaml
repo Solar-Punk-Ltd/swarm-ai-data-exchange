@@ -63,6 +63,9 @@ importers:
 
   packages/x402-swarm-server:
     dependencies:
+      '@ethersphere/bee-js':
+        specifier: 12.0.0
+        version: 12.0.0
       '@noble/curves':
         specifier: ^1.4.0
         version: 1.9.7
@@ -470,6 +473,10 @@ packages:
 
   '@ethersphere/bee-js@11.2.0':
     resolution: {integrity: sha512-Cn1NCy6/g+LzTXBWxFftT7OWfCj4CXGK5lo3VHVp0v3erytFqoBQkKLZ1TiwE4En5/voN7GCe5kjy3El8l8lRA==}
+    engines: {bee: 2.4.0-390a402e, beeApiVersion: 7.2.0}
+
+  '@ethersphere/bee-js@12.0.0':
+    resolution: {integrity: sha512-q65S5+R+++NopFQRCn73CA71XF9pas88nEhTOZyE0rmk7dJC9fKDJRnlWQnKxJboht0ysj+ozbSd+PycsIkNSw==}
     engines: {bee: 2.4.0-390a402e, beeApiVersion: 7.2.0}
 
   '@humanfs/core@0.19.2':
@@ -884,6 +891,9 @@ packages:
 
   axios@0.30.3:
     resolution: {integrity: sha512-5/tmEb6TmE/ax3mdXBc/Mi6YdPGxQsv+0p5YlciXWt3PHIn0VamqCXhRMtScnwY3lbgSXLneOuXAKUhgmSRpwg==}
+
+  axios@1.15.1:
+    resolution: {integrity: sha512-WOG+Jj8ZOvR0a3rAn+Tuf1UQJRxw5venr6DgdbJzngJE3qG7X0kL83CZGpdHMxEm+ZK3seAbvFsw4FfOfP9vxg==}
 
   babel-jest@29.7.0:
     resolution: {integrity: sha512-BrvGY3xZSwEcCzKvKsCi2GgHqDqsYkOP4/by5xCgIwGXQxIEh+8ew3gmrE1y7XRR6LHZIj6yLYnUi/mm2KXKBg==}
@@ -1406,7 +1416,7 @@ packages:
 
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
-    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+    deprecated: Glob versions prior to v9 are no longer supported
 
   globals@14.0.0:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
@@ -2033,6 +2043,10 @@ packages:
 
   proxy-from-env@1.1.0:
     resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
+
+  proxy-from-env@2.1.0:
+    resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
+    engines: {node: '>=10'}
 
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
@@ -2789,6 +2803,19 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  '@ethersphere/bee-js@12.0.0':
+    dependencies:
+      axios: 1.15.1(debug@4.4.3)
+      cafe-utility: 33.9.0
+      debug: 4.4.3
+      isomorphic-ws: 4.0.1(ws@8.18.3)
+      semver: 7.7.4
+      ws: 8.18.3
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -3378,6 +3405,14 @@ snapshots:
       follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.5
       proxy-from-env: 1.1.0
+    transitivePeerDependencies:
+      - debug
+
+  axios@1.15.1(debug@4.4.3):
+    dependencies:
+      follow-redirects: 1.16.0(debug@4.4.3)
+      form-data: 4.0.5
+      proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
 
@@ -4087,6 +4122,10 @@ snapshots:
     dependencies:
       ws: 8.17.1
 
+  isomorphic-ws@4.0.1(ws@8.18.3):
+    dependencies:
+      ws: 8.18.3
+
   isows@1.0.7(ws@8.18.3):
     dependencies:
       ws: 8.18.3
@@ -4729,6 +4768,8 @@ snapshots:
       ipaddr.js: 1.9.1
 
   proxy-from-env@1.1.0: {}
+
+  proxy-from-env@2.1.0: {}
 
   punycode@2.3.1: {}
 
