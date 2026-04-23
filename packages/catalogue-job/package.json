@@ -1,0 +1,26 @@
+{
+  "name": "@solarpunk/catalogue-job",
+  "version": "0.1.0",
+  "description": "Cron job that discovers ERC-8004 agents and publishes their catalogue to a Swarm feed",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@ethersphere/bee-js": "^11.2.0",
+    "@solarpunk/erc8004-adapter": "workspace:*",
+    "dotenv": "^16.0.0",
+    "ethers": "^6.16.0",
+    "node-cron": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/node-cron": "^3.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}
