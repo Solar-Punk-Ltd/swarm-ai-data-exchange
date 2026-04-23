@@ -1,4 +1,4 @@
-# @solarpunk/frontend
+# @solarpunk/erc8004-dashboard
 
 React + Vite app that discovers SwarmAI-capable agents registered on the ERC-8004 identity registry (Base Sepolia) and displays their full Agent Cards fetched from Swarm.
 
