@@ -5,13 +5,20 @@ export interface ActGrantResult {
   publisherPublickey: string;
 }
 
+export interface MetadataEntry {
+  key: string;
+  value: string;
+}
+
 export interface DataItem {
+  agentId: number;
   swarmHash: string;
   actHistoryRef: string;
   granteeRef: string;
+  publisherPublicKey: string;
   displayName: string;
-  metadata: unknown[];
-  tags: unknown[];
+  metadata: MetadataEntry[];
+  tags: string[];
 }
 
 export interface SwarmMetadataCatalogue {
