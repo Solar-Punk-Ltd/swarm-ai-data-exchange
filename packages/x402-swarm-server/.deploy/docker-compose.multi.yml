@@ -1,0 +1,15 @@
+name: x402-swarm-server-${INSTANCE_NUM}
+
+services:
+  x402-swarm-server:
+    build:
+      context: ..
+      dockerfile: .deploy/Dockerfile
+      args:
+        ENV_FILE: .env.dev${INSTANCE_NUM}
+    container_name: x402-swarm-server-${INSTANCE_NUM}
+    restart: unless-stopped
+    network_mode: host
+    labels:
+      app: x402-swarm-server
+      instance: '${INSTANCE_NUM}'
