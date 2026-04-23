@@ -11,7 +11,7 @@ export default function AddAgentModal({ onClose, onSave }: Props) {
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [x402Endpoint, setX402Endpoint] = useState('');
-  const [a2aEndpoint, setA2aEndpoint] = useState('');
+  const [swarmEndpoint, setSwarmEndpoint] = useState('');
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [capInput, setCapInput] = useState('');
   const [errors, setErrors] = useState<{ name?: string; description?: string }>({});
@@ -59,7 +59,7 @@ export default function AddAgentModal({ onClose, onSave }: Props) {
 
     const services = [];
     if (x402Endpoint.trim()) services.push({ name: 'x402', endpoint: x402Endpoint.trim() });
-    if (a2aEndpoint.trim()) services.push({ name: 'a2a', endpoint: a2aEndpoint.trim() });
+    if (swarmEndpoint.trim()) services.push({ name: 'swarm', endpoint: swarmEndpoint.trim() });
 
     const card = generateAgentCard({
       name: name.trim(),
@@ -164,11 +164,11 @@ export default function AddAgentModal({ onClose, onSave }: Props) {
             />
           </Field>
 
-          <Field label="A2A Endpoint">
+          <Field label="Swarm Endpoint">
             <input
-              value={a2aEndpoint}
-              onChange={(e) => setA2aEndpoint(e.target.value)}
-              placeholder="https://a2a.example.com"
+              value={swarmEndpoint}
+              onChange={(e) => setSwarmEndpoint(e.target.value)}
+              placeholder="https://swarm.feed"
               style={inputStyle(false)}
             />
           </Field>
