@@ -235,11 +235,9 @@ export default function AgentList() {
 
       {agents.length > 0 && (
         <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
-          {sortedDescending(agents)
-            .slice(0, 5)
-            .map((agent) => (
-              <AgentCardView key={agent.agentId} agent={agent} />
-            ))}
+          {sortedDescending(agents).map((agent) => (
+            <AgentCardView key={agent.agentId} agent={agent} />
+          ))}
         </ul>
       )}
 

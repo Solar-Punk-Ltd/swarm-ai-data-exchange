@@ -6,7 +6,7 @@ import {
   SWARM_AI_CAPABLE,
   type AgentCard,
 } from '@solarpunk/erc8004-adapter';
-import { RPC_URL } from '../constants';
+import { AGENT_DISPLAY_LIMIT, RPC_URL } from '../constants';
 
 export interface Agent {
   agentId: string;
@@ -47,7 +47,11 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
         const erc8004 = createERC8004Client({ provider, chain: 'base-sepolia' });
 
         const all = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
-        const capable = all.filter((a) => ethers.toBigInt(a.rawValue) === 1n);
+        const capable = all
+          .filter((a) => ethers.toBigInt(a.rawValue) === 1n)
+          .sort((a1, a2) => (a1.agentId > a2.agentId ? -1 : 1))
+          .slice(0, AGENT_DISPLAY_LIMIT);
+
         const initial: Agent[] = capable.map((a) => ({
           agentId: a.agentId.toString(),
           uri: a.uri,
