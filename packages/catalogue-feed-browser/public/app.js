@@ -1,3 +1,5 @@
+const GRANT_KEY = (swarmHash) => `cfb_grant_${swarmHash}`;
+
 async function loadConfig() {
   try {
     const res = await fetch('/api/config');
@@ -77,10 +79,51 @@ function renderDetailRows(item) {
     .join('');
 }
 
+// Renders the "Access Granted" block. grant = ActGrantResult + displayName.
+function renderGrantBlock(grant) {
+  const a = (v) => escHtml(v ?? '');
+  return `
+    <div class="buy-result success">
+      <div class="buy-result-title">✓ Access Granted</div>
+      ${[
+        ['Swarm Hash', grant.swarmHash],
+        ['ACT History Address', grant.actHistoryAddress],
+        ['Grantee Ref', grant.granteeRef],
+        ['Publisher Public Key', grant.publisherPublickey],
+      ]
+        .map(
+          ([label, value]) => `
+        <div class="detail-row">
+          <span class="detail-label">${label}</span>
+          <span class="detail-value">${a(value)}</span>
+        </div>
+      `,
+        )
+        .join('')}
+      <div class="view-download-row">
+        <button class="btn-view-download"
+          data-swarm-hash="${a(grant.swarmHash)}"
+          data-act-history-address="${a(grant.actHistoryAddress)}"
+          data-publisher-publickey="${a(grant.publisherPublickey)}"
+          data-display-name="${a(grant.displayName)}"
+          onclick="_viewDownload(this)">↓ View / Download</button>
+      </div>
+      <div class="content-preview"></div>
+    </div>
+  `;
+}
+
 function renderCard(item, serverUrl) {
   const id = `card-${item.swarmHash}`;
+
+  // Restore persisted grant from localStorage if present
+  const stored = localStorage.getItem(GRANT_KEY(item.swarmHash));
+  const grantHtml = stored
+    ? renderGrantBlock({ ...JSON.parse(stored), displayName: item.displayName })
+    : '';
+
   return `
-    <div class="card" id="${escHtml(id)}">
+    <div class="card" id="${escHtml(id)}" data-display-name="${escHtml(item.displayName || '')}">
       <div class="card-header">
         <div class="card-name">${escHtml(item.displayName || 'Untitled')}</div>
         <div class="card-hash">
@@ -98,6 +141,8 @@ function renderCard(item, serverUrl) {
       <div class="details-panel" id="details-${escHtml(item.swarmHash)}">
         ${renderDetailRows(item)}
       </div>
+
+      ${grantHtml}
     </div>
   `;
 }
@@ -117,6 +162,8 @@ async function _buyItem(swarmHash, serverUrl, btn) {
   const existing = card.querySelector('.buy-result');
   if (existing) existing.remove();
 
+  const displayName = card.dataset.displayName || swarmHash;
+
   try {
     const res = await fetch('/api/buy', {
       method: 'POST',
@@ -125,35 +172,18 @@ async function _buyItem(swarmHash, serverUrl, btn) {
     });
     const data = await res.json();
 
-    const resultEl = document.createElement('div');
-    resultEl.className = 'buy-result';
-
     if (res.ok) {
-      resultEl.classList.add('success');
-      resultEl.innerHTML = `
-        <div class="buy-result-title">✓ Access Granted</div>
-        ${[
-          ['Swarm Hash', data.swarmHash],
-          ['ACT History Address', data.actHistoryAddress],
-          ['Grantee Ref', data.granteeRef],
-          ['Publisher Public Key', data.publisherPublickey],
-        ]
-          .map(
-            ([label, value]) => `
-          <div class="detail-row">
-            <span class="detail-label">${label}</span>
-            <span class="detail-value">${escHtml(value ?? '')}</span>
-          </div>
-        `,
-          )
-          .join('')}
-      `;
+      const grant = { ...data, displayName };
+      localStorage.setItem(GRANT_KEY(swarmHash), JSON.stringify(grant));
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = renderGrantBlock(grant);
+      card.appendChild(wrapper.firstElementChild);
     } else {
-      resultEl.classList.add('error');
+      const resultEl = document.createElement('div');
+      resultEl.className = 'buy-result error';
       resultEl.textContent = data.error ?? 'Purchase failed';
+      card.appendChild(resultEl);
     }
-
-    card.appendChild(resultEl);
   } catch (err) {
     const resultEl = document.createElement('div');
     resultEl.className = 'buy-result error';
@@ -162,6 +192,61 @@ async function _buyItem(swarmHash, serverUrl, btn) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Buy';
+  }
+}
+
+async function _viewDownload(btn) {
+  const swarmHash = btn.dataset.swarmHash;
+  const actHistoryAddress = btn.dataset.actHistoryAddress;
+  const publisherPublickey = btn.dataset.publisherPublickey;
+  const displayName = btn.dataset.displayName || swarmHash;
+
+  btn.disabled = true;
+  btn.innerHTML =
+    '<span class="spinner" style="border-color:rgba(0,0,0,.3);border-top-color:#000"></span>Fetching…';
+
+  const preview = btn.closest('.buy-result').querySelector('.content-preview');
+  preview.innerHTML = '';
+
+  try {
+    const params = new URLSearchParams({ swarmHash, actHistoryAddress, publisherPublickey });
+    const res = await fetch(`/api/download?${params}`);
+
+    if (!res.ok) {
+      const err = await res.json();
+      preview.innerHTML = `<span class="preview-error">${escHtml(err.error ?? 'Download failed')}</span>`;
+      btn.disabled = false;
+      btn.textContent = '↓ View / Download';
+      return;
+    }
+
+    const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    if (contentType.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.src = objectUrl;
+      img.className = 'content-image';
+      img.alt = displayName;
+      img.onload = () => URL.revokeObjectURL(objectUrl);
+      preview.appendChild(img);
+      btn.remove();
+    } else {
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = displayName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+      btn.disabled = false;
+      btn.textContent = '↓ Downloaded';
+    }
+  } catch (err) {
+    preview.innerHTML = `<span class="preview-error">${escHtml(err.message ?? 'Error')}</span>`;
+    btn.disabled = false;
+    btn.textContent = '↓ View / Download';
   }
 }
 
