@@ -5,6 +5,7 @@ import { HTTPFacilitatorClient } from '@x402/core/server';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
 import { type RoutesConfig } from '@x402/core/server';
 import { grantActAccess } from './act';
+import { CatalogueEntryNotFound } from './types';
 
 const app = express();
 
@@ -53,7 +54,12 @@ app.get('/swarm/data/:swarmHash', async (req, res) => {
   try {
     const result = await grantActAccess(swarmHash, publicKey);
     res.json(result);
-  } catch {
+  } catch (err) {
+    console.error('Error granting ACT access:', err);
+    if (err instanceof CatalogueEntryNotFound) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
     res.status(500).json({ error: 'ACT grant failed' });
   }
 });

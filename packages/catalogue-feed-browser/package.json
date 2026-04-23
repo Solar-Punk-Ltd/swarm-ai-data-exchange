@@ -1,25 +1,18 @@
 {
-  "name": "@solarpunk/x402-swarm-server",
+  "name": "@solarpunk/catalogue-feed-browser",
   "version": "0.1.0",
-  "description": "x402-gated Express server for ACT-encrypted Swarm data access",
+  "description": "Browser UI for exploring and purchasing items from a Swarm catalogue feed via x402",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
-    "test:buyer": "tsx scripts/test-buyer.ts",
-    "test:upload": "tsx scripts/test-upload.ts"
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@ethersphere/bee-js": "12.0.0",
     "@noble/curves": "^1.4.0",
     "@x402/core": "latest",
     "@x402/evm": "latest",
-    "@x402/express": "latest",
     "@x402/fetch": "latest",
     "dotenv": "^16.0.0",
     "express": "^4.18.0",

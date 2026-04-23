@@ -109,15 +109,21 @@ export async function downloadAgentCard(agentURI: string): Promise<AgentCard> {
 export async function uploadAgentCard(
   card: AgentCard,
   topic = AGENT_CARD_TOPIC,
+  beeApiUrl?: string,
+  batchId?: string,
+  privateKey?: string,
 ): Promise<SwarmUploadResult> {
-  const bee = new Bee(config.bee.endpoint);
-  const { postageBatchId, error } = await getUploadPostageBatchId(config.bee.postageBatchId, bee);
+  const bee = new Bee(beeApiUrl || config.bee.endpoint);
+  const { postageBatchId, error } = await getUploadPostageBatchId(
+    batchId || config.bee.postageBatchId,
+    bee,
+  );
 
   if (error !== null) {
     throw error;
   }
 
-  const feedPrivateKey = config.bee.feedPrivateKey;
+  const feedPrivateKey = privateKey || config.bee.feedPrivateKey;
 
   if (!feedPrivateKey) {
     throw new Error('feedPrivateKey required.');

@@ -69,7 +69,7 @@ async function main() {
         endpoint: 'https://provider.example.com/data',
       },
       {
-        name: 'a2a',
+        name: 'swarm',
         endpoint: 'http://data_discovery_layer',
       },
     ],
@@ -133,13 +133,13 @@ async function main() {
   const testMetadataValue = await erc8004.identity.getMetadata(agentId, 'TEST_METADATA');
   log('Test metadata value: ', testMetadataValue);
 
-  // ── Query agents with SwarmAICapable = 1 ──────────────────────────────────
-  log('Query: agents with SwarmAICapable metadata');
+  // ── Query agents with swarm_ai_capable = 1 ──────────────────────────────────
+  log('Query: agents with swarm_ai_capable metadata');
 
   const allSwarmAIAgents = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
   const capableAgents = allSwarmAIAgents.filter((e) => ethers.toBigInt(e.rawValue) === 1n);
 
-  log('SwarmAICapable agents found', capableAgents.length);
+  log('swarm_ai_capable agents found', capableAgents.length);
   log(
     'Agent cards',
     capableAgents.map((a) => ({ agentId: a.agentId.toString(), uri: a.uri })),
@@ -228,7 +228,7 @@ async function main() {
   }
 
   // ── 8. Query by Metadata ───────────────────────────────────────────────────
-  log('Step 8: Query Agents by Metadata (SwarmAICapable)');
+  log('Step 8: Query Agents by Metadata (swarm_ai_capable)');
   const aiAgents = await erc8004.identity.getAgentsByMetadata(SWARM_AI_CAPABLE);
   log(`Found ${aiAgents.length} agents with SWARM_AI_CAPABLE metadata`);
   aiAgents.forEach((a) =>

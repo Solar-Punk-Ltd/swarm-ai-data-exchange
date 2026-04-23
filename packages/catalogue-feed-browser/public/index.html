@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catalogue Feed Browser</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Catalogue Feed Browser</h1>
+    <span>Browse and purchase items from a Swarm catalogue feed</span>
+    <span id="count-badge" class="count-badge" hidden></span>
+  </header>
+
+  <div class="config-bar">
+    <div class="field">
+      <label for="feed-owner">Feed Owner</label>
+      <input id="feed-owner" type="text" placeholder="Swarm address (hex)" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label for="feed-topic">Feed Topic</label>
+      <input id="feed-topic" type="text" placeholder="Topic hash (hex)" spellcheck="false" />
+    </div>
+    <div class="field" style="max-width: 240px;">
+      <label for="server-url">x402 Server URL</label>
+      <input id="server-url" type="text" placeholder="http://localhost:3000" />
+    </div>
+    <button id="load-btn" class="btn-primary">Load Catalogue</button>
+  </div>
+
+  <main>
+    <div id="status" class="status">Enter feed details above and click Load Catalogue.</div>
+    <div id="grid" class="grid" hidden></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

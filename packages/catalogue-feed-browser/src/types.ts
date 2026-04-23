@@ -18,10 +18,3 @@ export interface SwarmMetadataCatalogue {
   schemeVersion: string;
   dataItems: DataItem[];
 }
-
-export class CatalogueEntryNotFound extends Error {
-  constructor(swarmHash: string) {
-    super(`No catalogue entry for swarmHash ${swarmHash}`);
-    this.name = 'CatalogueEntryNotFound';
-  }
-}

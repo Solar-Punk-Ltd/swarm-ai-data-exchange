@@ -1,0 +1,12 @@
+name: x402-swarm-server
+
+services:
+  x402-swarm-server:
+    build:
+      context: ..
+      dockerfile: .deploy/Dockerfile
+    container_name: x402-swarm-server
+    restart: unless-stopped
+    network_mode: host
+    labels:
+      app: x402-swarm-server
