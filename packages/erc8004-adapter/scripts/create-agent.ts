@@ -121,7 +121,7 @@ async function main() {
     AGENT_CARD_TOPIC,
     beeApiUrl,
     batchId,
-    privateKey,
+    feedPk,
   );
 
   console.log('  AgentURI: ', agentURI);
