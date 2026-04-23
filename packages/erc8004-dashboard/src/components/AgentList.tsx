@@ -3,9 +3,29 @@ import type { AgentCard } from '@solarpunk/erc8004-adapter';
 import { useAgents } from '../hooks/useAgents';
 import type { Agent } from '../context/AgentsContext';
 import AddAgentModal from './AddAgentModal';
+import { CATALOGUE_FEED_BROWSER_URL } from '../constants';
+
+function extractOwner(swarmEndpoint: string): string {
+  try {
+    const { pathname } = new URL(swarmEndpoint);
+    const parts = pathname.split('/').filter(Boolean);
+    const idx = parts.indexOf('feeds');
+    return idx !== -1 ? (parts[idx + 1] ?? '') : '';
+  } catch {
+    return '';
+  }
+}
 
 function AgentCardView({ agent }: { agent: Agent }) {
   const { card, agentId, uri } = agent;
+
+  const x402Endpoint = card?.services.find((s) => s.name === 'x402')?.endpoint ?? '';
+  const swarmEndpoint = card?.services.find((s) => s.name === 'swarm')?.endpoint ?? '';
+  const ownerVar = extractOwner(swarmEndpoint);
+  const browseUrl =
+    x402Endpoint && ownerVar
+      ? `${CATALOGUE_FEED_BROWSER_URL}?owner=${ownerVar}&x402=${encodeURIComponent(x402Endpoint)}`
+      : null;
 
   return (
     <li
@@ -20,6 +40,26 @@ function AgentCardView({ agent }: { agent: Agent }) {
     >
       <Header agentId={agentId} uri={uri} card={card} />
       {card ? <Body card={card} /> : <CardSkeleton />}
+      {browseUrl && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <a
+            href={browseUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              background: '#0f766e',
+              color: '#fff',
+              borderRadius: 6,
+              padding: '0.4rem 1rem',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            BROWSE
+          </a>
+        </div>
+      )}
     </li>
   );
 }

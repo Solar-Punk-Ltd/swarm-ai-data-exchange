@@ -220,4 +220,19 @@ document.getElementById('feed-topic').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loadCatalogue();
 });
 
-loadConfig();
+(async () => {
+  const params = new URLSearchParams(window.location.search);
+  const owner = params.get('owner');
+  const x402 = params.get('x402');
+
+  if (owner && x402) {
+    await loadConfig();
+    document.getElementById('feed-owner').value = owner;
+    document.getElementById('server-url').value = x402;
+    document.getElementById('feed-topic').value =
+      'dfd76b3ecbefe4606d9cbfa7e7c41884b22d214a0c13560bb7eb10e65c11851f';
+    document.getElementById('load-btn').click();
+  } else {
+    loadConfig();
+  }
+})();
