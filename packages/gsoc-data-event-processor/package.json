@@ -2,7 +2,7 @@
   "name": "@solarpunk/gsoc-data-event-processor",
   "version": "0.0.1",
   "private": true,
-  "description": "Skeleton GSOC subscriber + event pipeline. Connects to a Bee node, subscribes to a GSOC channel, forwards every received message to a pluggable processor.",
+  "description": "Skeleton GSOC subscriber. Connects to a Bee node, subscribes to a GSOC channel, hands each message to a placeholder handler.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
