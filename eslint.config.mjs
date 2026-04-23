@@ -36,6 +36,8 @@ export default [
         fetch: 'readonly',
         setTimeout: 'readonly',
         URLSearchParams: 'readonly',
+        URL: 'readonly',
+        localStorage: 'readonly',
       },
       sourceType: 'script',
     },

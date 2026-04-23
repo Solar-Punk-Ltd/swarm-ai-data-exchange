@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
+import { Readable } from 'stream';
 import { fetchCatalogue } from './catalogue.js';
 import { executeBuy } from './buyer.js';
 
@@ -52,6 +53,49 @@ app.post('/api/buy', async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/download', async (req, res) => {
+  const swarmHash = String(req.query.swarmHash ?? '');
+  const actHistoryAddress = String(req.query.actHistoryAddress ?? '');
+  const publisherPublickey = String(req.query.publisherPublickey ?? '');
+
+  if (!swarmHash || !actHistoryAddress || !publisherPublickey) {
+    res
+      .status(400)
+      .json({ error: 'swarmHash, actHistoryAddress, and publisherPublickey are required' });
+    return;
+  }
+
+  try {
+    const beeRes = await fetch(`${BEE_API_URL}/bzz/${swarmHash}/`, {
+      headers: {
+        'swarm-act': 'true',
+        'swarm-act-publisher': publisherPublickey,
+        'swarm-act-history-address': actHistoryAddress,
+      },
+    });
+
+    if (!beeRes.ok) {
+      const text = await beeRes.text();
+      res.status(beeRes.status).json({ error: `Bee error ${beeRes.status}: ${text}` });
+      return;
+    }
+
+    res.setHeader('Content-Type', beeRes.headers.get('content-type') ?? 'application/octet-stream');
+    const disposition = beeRes.headers.get('content-disposition');
+    if (disposition) res.setHeader('Content-Disposition', disposition);
+
+    if (beeRes.body) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      Readable.fromWeb(beeRes.body as any).pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!res.headersSent) res.status(500).json({ error: message });
   }
 });
 
