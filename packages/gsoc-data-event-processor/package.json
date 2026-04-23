@@ -1,0 +1,29 @@
+{
+  "name": "@solarpunk/gsoc-data-event-processor",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Skeleton GSOC subscriber. Connects to a Bee node, subscribes to a GSOC channel, hands each message to a placeholder handler.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "gsoc-data-event-processor": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    ".env.example"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@ethersphere/bee-js": "^11.2.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}
