@@ -23,7 +23,7 @@ function stripHexPrefix(value: string): string {
 
 async function handleMessage(message: Bytes): Promise<void> {
   // TODO: real processing goes here.
-  console.log(`[gsoc] received ${message.length} bytes`);
+  console.log(`[gsoc] received ${JSON.stringify(message)}`);
 }
 
 function main(): void {
