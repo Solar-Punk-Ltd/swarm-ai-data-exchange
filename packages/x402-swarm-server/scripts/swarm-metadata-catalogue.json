@@ -2,12 +2,14 @@
   "schemeVersion": "v1",
   "dataItems": [
     {
+      "agentId": 5001,
       "swarmHash": "8564bb7df58c17e3396f7ceb3874168ed7b2461a56f0954ed3ebc8c7986397b5",
       "actHistoryRef": "303a6adedf0e4fa78c672ccd042d92be827257cb232fdfea70050e564fd41197",
       "granteeRef": "c679e33182dfe1ce94ff18f51be33a5ba80417c49f758a0082e6405e7b45f3afb29b658409310e2495dc0aa17fc26fc6fce519e7c7e99937a332744c1f8bbd4b",
+      "publisherPublicKey": "03a409900918c0e3089124f2d43806f79293706051ab3f146d1a7055d05317bbba",
       "displayName": "ACT Test",
-      "metadata": [],
-      "tags": []
+      "metadata": [{ "key": "category", "value": "test" }],
+      "tags": ["example"]
     }
   ]
 }

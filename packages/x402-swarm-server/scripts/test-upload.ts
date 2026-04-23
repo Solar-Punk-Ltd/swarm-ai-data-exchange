@@ -7,6 +7,8 @@ async function main() {
   const publisherPublicKey = process.env.PUBLISHER_PUBLIC_KEY ?? '';
   const feedTopic = process.env.METADATA_FEED_TOPIC ?? '';
   const feedPk = process.env.BEE_FEED_PK ?? '';
+  const agentIdRaw = process.env.AGENT_ID ?? '';
+  const displayName = process.env.DISPLAY_NAME ?? 'test-data';
 
   if (!postageBatchId) {
     console.error('POSTAGE_BATCH_ID is required');
@@ -22,6 +24,15 @@ async function main() {
   }
   if (!feedTopic) {
     console.error('METADATA_FEED_TOPIC is required');
+    process.exit(1);
+  }
+  if (!agentIdRaw) {
+    console.error('AGENT_ID is required (integer NFT token ID of the publishing agent)');
+    process.exit(1);
+  }
+  const agentId = Number.parseInt(agentIdRaw, 10);
+  if (!Number.isFinite(agentId) || !Number.isInteger(agentId)) {
+    console.error(`AGENT_ID must be an integer, got: ${agentIdRaw}`);
     process.exit(1);
   }
 
@@ -74,16 +85,20 @@ async function main() {
 
   // Step 3: Fetch existing catalogue from feed, or start fresh
   console.log('\nFetching existing catalogue from feed...');
+  type MetadataEntry = { key: string; value: string };
+  type DataItem = {
+    agentId: number;
+    swarmHash: string;
+    actHistoryRef: string;
+    granteeRef: string;
+    publisherPublicKey: string;
+    displayName: string;
+    metadata: MetadataEntry[];
+    tags: string[];
+  };
   let catalogue: {
     schemeVersion: string;
-    dataItems: {
-      swarmHash: string;
-      actHistoryRef: string;
-      granteeRef: string;
-      displayName: string;
-      metadata: unknown[];
-      tags: unknown[];
-    }[];
+    dataItems: DataItem[];
   };
   try {
     const feedUpdate = await bee.fetchLatestFeedUpdate(feedTopic, feedOwner);
@@ -95,11 +110,13 @@ async function main() {
   }
 
   // Step 4: Upsert data item
-  const newItem = {
+  const newItem: DataItem = {
+    agentId,
     swarmHash,
     actHistoryRef,
     granteeRef,
-    displayName: 'test-data',
+    publisherPublicKey,
+    displayName,
     metadata: [],
     tags: [],
   };
