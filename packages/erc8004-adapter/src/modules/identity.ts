@@ -199,7 +199,7 @@ export class IdentityModule {
     fromBlock?: number,
     toBlock?: number,
   ): Promise<{ agentId: bigint; uri: string; rawValue: Uint8Array }[]> {
-    const entries = await this.getAgentsByMetadata(metadataKey, fromBlock ?? 'earliest', toBlock);
+    const entries = await this.getAgentsByMetadata(metadataKey, fromBlock, toBlock);
 
     // Deduplicate: if a key was set multiple times for the same agent, keep the latest event
     const latestByAgent = new Map<bigint, { agentId: bigint; rawValue: Uint8Array }>();
