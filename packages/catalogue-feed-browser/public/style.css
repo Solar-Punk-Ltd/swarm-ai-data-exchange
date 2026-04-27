@@ -42,12 +42,35 @@ header span { color: var(--text-muted); font-size: 13px; }
 .config-bar {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  padding: 16px 24px;
+  padding: 12px 24px;
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.config-bar-top {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-settings-toggle {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.btn-settings-toggle:hover { color: var(--text); border-color: var(--text-muted); }
+
+.settings-panel {
+  display: none;
   flex-wrap: wrap;
   gap: 12px;
   align-items: flex-end;
 }
+.settings-panel.open { display: flex; }
 
 .field {
   display: flex;
@@ -270,9 +293,26 @@ main { padding: 24px; }
 
 .view-download-row {
   margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.btn-view-download {
+.btn-view {
+  background: rgba(99, 179, 237, 0.15);
+  color: #63b3ed;
+  border: 1px solid rgba(99, 179, 237, 0.4);
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-view:hover { background: rgba(99, 179, 237, 0.25); }
+.btn-view:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-download {
   background: rgba(52, 211, 153, 0.15);
   color: var(--success);
   border: 1px solid rgba(52, 211, 153, 0.4);
@@ -283,8 +323,8 @@ main { padding: 24px; }
   cursor: pointer;
   transition: background 0.15s;
 }
-.btn-view-download:hover { background: rgba(52, 211, 153, 0.25); }
-.btn-view-download:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-download:hover { background: rgba(52, 211, 153, 0.25); }
+.btn-download:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .content-preview {
   margin-top: 10px;
@@ -295,6 +335,21 @@ main { padding: 24px; }
   border-radius: 6px;
   border: 1px solid var(--border);
   display: block;
+}
+
+.preview-text {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 .preview-error {
