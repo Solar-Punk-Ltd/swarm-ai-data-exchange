@@ -10,7 +10,12 @@ const BEE_API_URL = process.env.BEE_API_URL ?? 'http://localhost:1633';
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(
+  express.static(path.join(__dirname, '..', 'public'), {
+    etag: false,
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+  }),
+);
 
 app.get('/api/config', (_req, res) => {
   res.json({
