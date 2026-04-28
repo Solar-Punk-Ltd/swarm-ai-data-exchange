@@ -261,7 +261,6 @@ The script logs each step and exits with a JSON result:
 }
 
 [2/3] Uploading to Swarm…
-  Reference: 3a4b5c6d7e8f...
   AgentURI:  https://api.gateway.ethswarm.org/feeds/f39fd6e51aad88f6f4ce6ab8827279cfffb92266/6167656e742d63617264...
 
 [3/3] Registering on-chain…
@@ -603,15 +602,18 @@ import {
   generateRegistrationFile, // alias for generateAgentCard
   serializeAgentCard,
   parseAgentCard,
+  uploadAgentCard,
+  downloadAgentCard,
 } from '@solarpunk/erc8004-adapter';
 ```
 
 | Function                        | Description                                                                                                                                                                                                                                                |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generateAgentCard(params)`     | Creates an `AgentCard` object. `name`, `description`, `version`, and `services` are required. `type`, `active`, `x402Support`, and `registrations` default when omitted. `capabilities` and `supportedTrust` are optional string arrays.                   |
+| `generateAgentCard(params)`     | Creates an `AgentCard` object. `name`, `description`, `version`, and `services` are required. `type`, `active` and `x402Support` are optional and default when omitted. `capabilities` and `supportedTrust` are optional string arrays.                    |
 | `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.                                                                                                                                                                     |
 | `parseAgentCard(json)`          | Parses and validates a JSON string. Throws if `type` is not the ERC-8004 registration type string, or if `name`, `description`, `services`, `x402Support`, or `active` are missing or invalid. `registrations` is optional and may be absent or undefined. |
-| `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads `BEE_FEED_PK`, `BEE_API_URL`, and `BEE_POSTAGE_STAMP` from the environment. `feedUrl` always uses the public Swarm gateway.                                              |
+| `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads `BEE_FEED_PK`, `BEE_API_URL` and `BEE_POSTAGE_STAMP` from the environment. `feedUrl` always uses the public Swarm gateway.                                               |
+| `downloadAgentCard(agentURI)`   | Fetches and parses an Agent Card from a Swarm feed URL (the `agentURI` stored on-chain). Always resolves to the latest version of the card. Throws if the fetch fails or the response is not a valid Agent Card.                                           |
 
 `uploadAgentCard` returns a `SwarmUploadResult`:
 
