@@ -6,8 +6,8 @@ import {
   parseAgentCard,
   uploadAgentCard,
   config,
-} from '../src';
-import { SWARM_AI_CAPABLE } from '../src/constants';
+} from '..';
+import { SWARM_AI_CAPABLE } from '../constants';
 
 if (!config.chain.privateKey) {
   console.error('PRIVATE_KEY is not set');

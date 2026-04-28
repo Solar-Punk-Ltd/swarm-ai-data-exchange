@@ -17,6 +17,7 @@ import { parseArgs } from 'util';
 import { ethers } from 'ethers';
 import { createERC8004Client, config } from '../src';
 import { downloadAgentCard } from '../src/agent-card';
+import { requireArg, resolvePrivateKey } from './utils/validation';
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -28,29 +29,16 @@ const { values: args } = parseArgs({
   strict: true,
 });
 
-// ── Validate required args ────────────────────────────────────────────────────
-
-if (!args.agentId) {
-  console.error('Error: --agentId is required');
-  process.exit(1);
-}
-
 // ── Resolve config (CLI flags > env vars / adapter config) ────────────────────
 
-const privateKey = args.privateKey ?? config.chain.privateKey;
-
-if (!privateKey) {
-  console.error('Error: --privateKey is required (or set PRIVATE_KEY env var)');
-  process.exit(1);
-}
+const agentId = requireArg(args.agentId, 'agentId');
+const privateKey = resolvePrivateKey(args.privateKey);
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const agentId = args.agentId!;
-
   const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const signer = new ethers.Wallet(privateKey!, provider);
+  const signer = new ethers.Wallet(privateKey, provider);
   const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
 
   const agentURI = await erc8004.identity.getAgentURI(BigInt(agentId));

@@ -17,6 +17,7 @@ import { ethers } from 'ethers';
 import { createERC8004Client, config } from '../src';
 import { downloadAgentCard } from '../src/agent-card';
 import { SWARM_AI_CAPABLE } from '../src/constants';
+import { resolvePrivateKey } from './utils/validation';
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -29,18 +30,13 @@ const { values: args } = parseArgs({
 
 // ── Resolve config (CLI flags > env vars / adapter config) ────────────────────
 
-const privateKey = args.privateKey ?? config.chain.privateKey;
-
-if (!privateKey) {
-  console.error('Error: --privateKey is required (or set PRIVATE_KEY env var)');
-  process.exit(1);
-}
+const privateKey = resolvePrivateKey(args.privateKey);
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const signer = new ethers.Wallet(privateKey!, provider);
+  const signer = new ethers.Wallet(privateKey, provider);
   const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
 
   console.log('Discovering swarm_ai_capable agents…');

@@ -35,6 +35,7 @@ import {
   uploadAgentCard,
 } from '../src';
 import { AGENT_CARD_TOPIC, SWARM_AI_CAPABLE } from '../src/constants';
+import { requireArg, resolvePrivateKey, resolveFeedPrivateKey } from './utils/validation';
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 
@@ -55,33 +56,15 @@ const { values: args } = parseArgs({
   strict: true,
 });
 
-function requireArg(value: string | undefined, flag: string): string {
-  if (!value?.trim()) {
-    console.error(`Error: --${flag} is required`);
-    process.exit(1);
-  }
-  return value.trim();
-}
-
 // ── Resolve config (CLI flags > env vars / adapter config) ────────────────────
 
 const name = requireArg(args.name, 'name');
 const description = requireArg(args.description, 'description');
 const version = args.version ?? '1.0.0';
 const beeApiUrl = args.beeApiUrl ?? config.bee.endpoint;
-const privateKey = args.privateKey ?? config.chain.privateKey;
-const feedPk = args.feedPrivateKey ?? config.bee.feedPrivateKey;
+const privateKey = resolvePrivateKey(args.privateKey);
+const feedPk = resolveFeedPrivateKey(args.feedPrivateKey);
 const batchId = args.postageBatchId ?? config.bee.postageBatchId;
-
-if (!privateKey) {
-  console.error('Error: --privateKey is required (or set PRIVATE_KEY env var)');
-  process.exit(1);
-}
-
-if (!feedPk) {
-  console.error('Error: --feedPrivateKey is required (or set BEE_FEED_PK env var)');
-  process.exit(1);
-}
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -131,7 +114,7 @@ async function main() {
   console.log('\n[3/3] Registering on-chain…');
 
   const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const signer = new ethers.Wallet(privateKey!, provider);
+  const signer = new ethers.Wallet(privateKey, provider);
   const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
 
   const { agentId, txHash } = await erc8004.identity.register(agentURI, [
