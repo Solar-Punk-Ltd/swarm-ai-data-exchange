@@ -2,7 +2,7 @@
  * CLI script to generate, upload, and register an ERC-8004 agent identity.
  *
  * Usage:
- *   tsx scripts/create-agent.ts \
+ *   tsx tools/create-agent/index.ts \
  *     --name "My Agent" \
  *     --description "What it does" \
  *     [--image "https://example.com/avatar.png"] \
@@ -25,7 +25,6 @@
  *   { agentId, txHash, agentURI }
  */
 
-import { parseArgs } from 'util';
 import { ethers } from 'ethers';
 import {
   createERC8004Client,
@@ -33,62 +32,37 @@ import {
   serializeAgentCard,
   config,
   uploadAgentCard,
-} from '../src';
-import { AGENT_CARD_TOPIC, SWARM_AI_CAPABLE } from '../src/constants';
-import { requireArg, resolvePrivateKey, resolveFeedPrivateKey } from './utils/validation';
-
-// ── Argument parsing ──────────────────────────────────────────────────────────
-
-const { values: args } = parseArgs({
-  options: {
-    name: { type: 'string' },
-    description: { type: 'string' },
-    image: { type: 'string' },
-    version: { type: 'string' },
-    x402: { type: 'string' },
-    swarm: { type: 'string' },
-    capabilities: { type: 'string' },
-    privateKey: { type: 'string' },
-    feedPrivateKey: { type: 'string' },
-    postageBatchId: { type: 'string' },
-    beeApiUrl: { type: 'string' },
-  },
-  strict: true,
-});
-
-// ── Resolve config (CLI flags > env vars / adapter config) ────────────────────
-
-const name = requireArg(args.name, 'name');
-const description = requireArg(args.description, 'description');
-const version = args.version ?? '1.0.0';
-const beeApiUrl = args.beeApiUrl ?? config.bee.endpoint;
-const privateKey = resolvePrivateKey(args.privateKey);
-const feedPk = resolveFeedPrivateKey(args.feedPrivateKey);
-const batchId = args.postageBatchId ?? config.bee.postageBatchId;
-
-// ── Main ──────────────────────────────────────────────────────────────────────
+} from '../../src';
+import { AGENT_CARD_TOPIC, SWARM_AI_CAPABLE } from '../../src/constants';
+import {
+  name,
+  description,
+  version,
+  image,
+  x402,
+  swarm,
+  capabilities,
+  beeApiUrl,
+  privateKey,
+  feedPk,
+  batchId,
+} from './args';
 
 async function main() {
   // ── 1. Generate agent card ─────────────────────────────────────────────────
 
-  const services = [];
-  if (args.x402?.trim()) services.push({ name: 'x402', endpoint: args.x402.trim() });
-  if (args.swarm?.trim()) services.push({ name: 'swarm', endpoint: args.swarm.trim() });
-
-  const capabilities = args.capabilities
-    ? args.capabilities
-        .split(',')
-        .map((c) => c.trim())
-        .filter(Boolean)
-    : [];
+  const services = [
+    ...(x402 ? [{ name: 'x402', endpoint: x402 }] : []),
+    ...(swarm ? [{ name: 'swarm', endpoint: swarm }] : []),
+  ];
 
   const card = generateAgentCard({
     name,
     description,
     version,
-    ...(args.image?.trim() && { image: args.image.trim() }),
+    ...(image && { image }),
     services,
-    x402Support: Boolean(args.x402?.trim()),
+    x402Support: Boolean(x402),
     capabilities,
     active: true,
   });
@@ -97,6 +71,7 @@ async function main() {
   console.log(serializeAgentCard(card));
 
   // ── 2. Upload agent card to Swarm ─────────────────────────────────────────
+
   console.log('\n[2/3] Uploading to Swarm…');
 
   const { feedUrl: agentURI } = await uploadAgentCard(

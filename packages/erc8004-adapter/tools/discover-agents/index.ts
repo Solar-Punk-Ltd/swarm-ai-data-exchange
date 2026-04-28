@@ -2,7 +2,7 @@
  * CLI script to discover ERC-8004 agents with swarm_ai_capable metadata set to 1.
  *
  * Usage:
- *   tsx scripts/discover-agents.ts \
+ *   tsx tools/discover-agents/index.ts \
  *     [--privateKey "0x..."]
  *
  * Optional flags fall back to env vars / erc8004-adapter config:
@@ -12,27 +12,11 @@
  *   [{ agentId, agentURI, agentCard }]
  */
 
-import { parseArgs } from 'util';
 import { ethers } from 'ethers';
-import { createERC8004Client, config } from '../src';
-import { downloadAgentCard } from '../src/agent-card';
-import { SWARM_AI_CAPABLE } from '../src/constants';
-import { resolvePrivateKey } from './utils/validation';
-
-// ── Argument parsing ──────────────────────────────────────────────────────────
-
-const { values: args } = parseArgs({
-  options: {
-    privateKey: { type: 'string' },
-  },
-  strict: true,
-});
-
-// ── Resolve config (CLI flags > env vars / adapter config) ────────────────────
-
-const privateKey = resolvePrivateKey(args.privateKey);
-
-// ── Main ──────────────────────────────────────────────────────────────────────
+import { createERC8004Client, config } from '../../src';
+import { downloadAgentCard } from '../../src/agent-card';
+import { SWARM_AI_CAPABLE } from '../../src/constants';
+import { privateKey } from './args';
 
 async function main() {
   const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);

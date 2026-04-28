@@ -12,9 +12,9 @@
     "dev": "tsc --watch",
     "test": "jest --passWithNoTests",
     "test:sepolia": "tsx scripts/test-sepolia.ts",
-    "create-agent": "tsx tools/create-agent.ts",
-    "discover-agents": "tsx tools/discover-agents.ts",
-    "get-agent": "tsx tools/get-agent.ts",
+    "create-agent": "tsx tools/create-agent/index.ts",
+    "discover-agents": "tsx tools/discover-agents/index.ts",
+    "get-agent": "tsx tools/get-agent/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },

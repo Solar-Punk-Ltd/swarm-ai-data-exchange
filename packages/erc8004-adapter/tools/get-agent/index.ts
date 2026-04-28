@@ -2,7 +2,7 @@
  * CLI script to fetch a single ERC-8004 agent by ID.
  *
  * Usage:
- *   tsx scripts/get-agent.ts \
+ *   tsx tools/get-agent/index.ts \
  *     --agentId <id> \
  *     [--privateKey "0x..."]
  *
@@ -13,28 +13,10 @@
  *   { agentId, agentURI, agentCard }
  */
 
-import { parseArgs } from 'util';
 import { ethers } from 'ethers';
-import { createERC8004Client, config } from '../src';
-import { downloadAgentCard } from '../src/agent-card';
-import { requireArg, resolvePrivateKey } from './utils/validation';
-
-// ── Argument parsing ──────────────────────────────────────────────────────────
-
-const { values: args } = parseArgs({
-  options: {
-    agentId: { type: 'string' },
-    privateKey: { type: 'string' },
-  },
-  strict: true,
-});
-
-// ── Resolve config (CLI flags > env vars / adapter config) ────────────────────
-
-const agentId = requireArg(args.agentId, 'agentId');
-const privateKey = resolvePrivateKey(args.privateKey);
-
-// ── Main ──────────────────────────────────────────────────────────────────────
+import { createERC8004Client, config } from '../../src';
+import { downloadAgentCard } from '../../src/agent-card';
+import { agentId, privateKey } from './args';
 
 async function main() {
   const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
