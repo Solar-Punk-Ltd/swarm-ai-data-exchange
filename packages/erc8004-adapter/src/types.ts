@@ -42,19 +42,11 @@ export interface AgentCard {
   capabilities?: string[];
 }
 
-export interface AgentCardParams {
-  name: string;
-  description: string;
-  version: string;
-  services: AgentService[];
-  type?: string; // Defaults to "https://eips.ethereum.org/EIPS/eip-8004#registration-v1"
-  image?: string;
-  x402Support?: boolean; // Defaults to false
-  active?: boolean; // Defaults to true
-  registrations?: AgentRegistration[];
-  supportedTrust?: string[];
-  capabilities?: string[];
-}
+export type AgentCardParams = Omit<AgentCard, 'type' | 'x402Support' | 'active'> & {
+  type?: string;
+  x402Support?: boolean;
+  active?: boolean;
+};
 
 export interface RegisterResult {
   agentId: bigint;

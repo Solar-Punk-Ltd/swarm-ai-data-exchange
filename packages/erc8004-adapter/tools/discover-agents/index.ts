@@ -1,11 +1,10 @@
 /**
- * CLI script to discover ERC-8004 agents with swarm_ai_capable metadata set to 1.
+ * Discovers ERC-8004 agents with swarm_ai_capable metadata set to 1.
  *
  * Usage:
- *   tsx tools/discover-agents/index.ts \
- *     [--privateKey "0x..."]
+ *   pnpm run discover-agents [--privateKey "0x..."]
  *
- * Optional flags fall back to env vars / erc8004-adapter config:
+ * Optional flags fall back to env vars:
  *   --privateKey → PRIVATE_KEY
  *
  * Outputs (JSON):

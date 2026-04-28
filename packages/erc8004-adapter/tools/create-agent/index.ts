@@ -1,8 +1,8 @@
 /**
- * CLI script to generate, upload, and register an ERC-8004 agent identity.
+ * Generates, uploads, and registers an ERC-8004 agent identity.
  *
  * Usage:
- *   tsx tools/create-agent/index.ts \
+ *   pnpm run create-agent \
  *     --name "My Agent" \
  *     --description "What it does" \
  *     [--image "https://example.com/avatar.png"] \
@@ -15,7 +15,7 @@
  *     [--postageBatchId "abc123..."] \
  *     [--beeApiUrl "http://localhost:1633"]
  *
- * Optional flags fall back to env vars / erc8004-adapter config:
+ * Optional flags fall back to env vars:
  *   --privateKey     → PRIVATE_KEY
  *   --feedPrivateKey → BEE_FEED_PK
  *   --postageBatchId → BEE_POSTAGE_STAMP

@@ -1,12 +1,10 @@
 /**
- * CLI script to fetch a single ERC-8004 agent by ID.
+ * Fetches a single ERC-8004 agent by ID.
  *
  * Usage:
- *   tsx tools/get-agent/index.ts \
- *     --agentId <id> \
- *     [--privateKey "0x..."]
+ *   pnpm run get-agent --agentId <id> [--privateKey "0x..."]
  *
- * Optional flags fall back to env vars / erc8004-adapter config:
+ * Optional flags fall back to env vars:
  *   --privateKey → PRIVATE_KEY
  *
  * Outputs (JSON):
