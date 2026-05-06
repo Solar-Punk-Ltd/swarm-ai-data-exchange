@@ -38,13 +38,15 @@ export async function executeBuy(
   swarmHash: string,
   serverUrl: string,
   beeUrl: string,
-): Promise<ActGrantResult> {
+  providedPublicKey?: string,
+): Promise<ActGrantResult & { beePublicKey: string }> {
   let privateKey = process.env.EVM_PRIVATE_KEY;
   if (!privateKey) throw new Error('EVM_PRIVATE_KEY environment variable is required');
   if (!privateKey.startsWith('0x')) privateKey = `0x${privateKey}`;
 
   const signer = privateKeyToAccount(privateKey as `0x${string}`);
-  const compressedPublicKey = await getBeePublicKey(beeUrl);
+  const compressedPublicKey = providedPublicKey ?? (await getBeePublicKey(beeUrl));
+  console.log(`[buy] Using public key: ${compressedPublicKey}`);
 
   const client = new x402Client();
   const publicClient = createPublicClient({ chain: baseSepolia, transport: http() });
@@ -89,5 +91,5 @@ export async function executeBuy(
     throw new Error(`Buy failed (${response.status}): ${body}`);
   }
 
-  return JSON.parse(body) as ActGrantResult;
+  return { ...(JSON.parse(body) as ActGrantResult), beePublicKey: compressedPublicKey };
 }

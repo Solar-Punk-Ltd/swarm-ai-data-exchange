@@ -22,7 +22,21 @@ app.get('/api/config', (_req, res) => {
     defaultFeedOwner: process.env.DEFAULT_FEED_OWNER ?? '',
     defaultFeedTopic: process.env.DEFAULT_FEED_TOPIC ?? '',
     defaultServerUrl: process.env.DEFAULT_SERVER_URL ?? 'http://localhost:3000',
+    defaultBeeUrl: BEE_API_URL,
   });
+});
+
+app.get('/api/bee-public-key', async (req, res) => {
+  const beeUrl = String(req.query.beeUrl ?? BEE_API_URL);
+  try {
+    const response = await fetch(`${beeUrl}/addresses`);
+    if (!response.ok) throw new Error(`Bee responded with ${response.status}`);
+    const data = (await response.json()) as { publicKey: string };
+    res.json({ publicKey: data.publicKey });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to fetch public key from Bee node: ${message}` });
+  }
 });
 
 app.get('/api/catalogue', async (req, res) => {
@@ -45,15 +59,27 @@ app.get('/api/catalogue', async (req, res) => {
 });
 
 app.post('/api/buy', async (req, res) => {
-  const { swarmHash, serverUrl } = req.body as { swarmHash?: string; serverUrl?: string };
+  const {
+    swarmHash,
+    serverUrl,
+    beeUrl: reqBeeUrl,
+    publicKey,
+  } = req.body as {
+    swarmHash?: string;
+    serverUrl?: string;
+    beeUrl?: string;
+    publicKey?: string;
+  };
 
   if (!swarmHash || !serverUrl) {
     res.status(400).json({ error: 'swarmHash and serverUrl are required' });
     return;
   }
 
+  const effectiveBeeUrl = reqBeeUrl || BEE_API_URL;
+
   try {
-    const result = await executeBuy(swarmHash, serverUrl, BEE_API_URL);
+    const result = await executeBuy(swarmHash, serverUrl, effectiveBeeUrl, publicKey);
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

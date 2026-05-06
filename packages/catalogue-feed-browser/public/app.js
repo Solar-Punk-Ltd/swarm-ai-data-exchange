@@ -13,8 +13,34 @@ async function loadConfig() {
       document.getElementById('feed-topic').value = config.defaultFeedTopic;
     if (config.defaultServerUrl)
       document.getElementById('server-url').value = config.defaultServerUrl;
+    if (config.defaultBeeUrl) {
+      document.getElementById('bee-url').value = config.defaultBeeUrl;
+      fetchBeePublicKey(config.defaultBeeUrl);
+    }
   } catch {
     // non-fatal
+  }
+}
+
+async function fetchBeePublicKey(beeUrl) {
+  const pkField = document.getElementById('bee-public-key');
+  pkField.readOnly = true;
+  pkField.placeholder = 'Fetching…';
+  try {
+    const res = await fetch(`/api/bee-public-key?beeUrl=${encodeURIComponent(beeUrl)}`);
+    const data = await res.json();
+    if (data.publicKey) {
+      pkField.value = data.publicKey;
+      pkField.readOnly = true;
+    } else {
+      pkField.value = '';
+      pkField.readOnly = false;
+      pkField.placeholder = 'Could not fetch — enter manually';
+    }
+  } catch {
+    pkField.value = '';
+    pkField.readOnly = false;
+    pkField.placeholder = 'Could not fetch — enter manually';
   }
 }
 
@@ -153,6 +179,7 @@ function renderGrantBlock(grant) {
         ['ACT History Address', grant.actHistoryAddress],
         ['Grantee Ref', grant.granteeRef],
         ['Publisher Public Key', grant.publisherPublickey],
+        ...(grant.beePublicKey ? [['Buyer Public Key', grant.beePublicKey]] : []),
       ]
         .map(
           ([label, value]) => `
@@ -231,11 +258,14 @@ async function _buyItem(swarmHash, serverUrl, btn) {
   const displayName = card.dataset.displayName || swarmHash;
   const mimeType = card.dataset.mimeType || '';
 
+  const beeUrl = document.getElementById('bee-url').value.trim();
+  const publicKey = document.getElementById('bee-public-key').value.trim();
+
   try {
     const res = await fetch('/api/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ swarmHash, serverUrl }),
+      body: JSON.stringify({ swarmHash, serverUrl, beeUrl, publicKey }),
     });
     const data = await res.json();
 
@@ -412,8 +442,11 @@ async function loadCatalogue() {
   btn.innerHTML = '<span class="spinner"></span>Loading…';
   setStatus('Fetching catalogue from Swarm feed…');
 
+  const beeUrl = document.getElementById('bee-url').value.trim();
+
   try {
     const params = new URLSearchParams({ feedOwner, feedTopic });
+    if (beeUrl) params.set('beeUrl', beeUrl);
     const res = await fetch(`/api/catalogue?${params}`);
     const data = await res.json();
 
@@ -450,6 +483,17 @@ async function loadCatalogue() {
 document.getElementById('load-btn').addEventListener('click', loadCatalogue);
 document.getElementById('feed-topic').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loadCatalogue();
+});
+document.getElementById('bee-url').addEventListener('change', () => {
+  const beeUrl = document.getElementById('bee-url').value.trim();
+  const pkField = document.getElementById('bee-public-key');
+  if (beeUrl) {
+    fetchBeePublicKey(beeUrl);
+  } else {
+    pkField.value = '';
+    pkField.readOnly = false;
+    pkField.placeholder = 'Enter public key manually';
+  }
 });
 
 async function init() {
