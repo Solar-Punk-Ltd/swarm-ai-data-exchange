@@ -41,8 +41,8 @@ What it does:
 Logs / status:
 
 ```bash
-ssh dev 'cd ~/swamr-ai-data-exchange/x402-swarm-server/.deploy && docker compose logs -f'
-ssh dev 'cd ~/swamr-ai-data-exchange/x402-swarm-server/.deploy && docker compose ps'
+ssh dev 'cd ~/swarm-ai-data-exchange/x402-swarm-server/.deploy && docker compose logs -f'
+ssh dev 'cd ~/swarm-ai-data-exchange/x402-swarm-server/.deploy && docker compose ps'
 ```
 
 ## Multi instance
@@ -53,10 +53,10 @@ Each instance needs its own `.env.devN` file in the package root with distinct v
 ./.deploy/deploy-multi.sh
 ```
 
-Defaults to instances `1 2 3 4 5`. Override:
+Defaults to instances `1 2 3`. Override:
 
 ```bash
-INSTANCES="1 2 3" ./.deploy/deploy-multi.sh
+INSTANCES="2 3" ./.deploy/deploy-multi.sh
 ```
 
 Each instance becomes its own compose project (`x402-swarm-server-N`) with container name `x402-swarm-server-N`, labelled `app=x402-swarm-server instance=N`.
@@ -65,7 +65,7 @@ Logs / status:
 
 ```bash
 ssh dev 'docker ps --filter label=app=x402-swarm-server'
-ssh dev 'cd ~/swamr-ai-data-exchange/x402-swarm-server/.deploy && INSTANCE_NUM=1 docker compose -f docker-compose.multi.yml logs -f'
+ssh dev 'cd ~/swarm-ai-data-exchange/x402-swarm-server/.deploy && INSTANCE_NUM=1 docker compose -f docker-compose.multi.yml logs -f'
 ```
 
 ## Notes
