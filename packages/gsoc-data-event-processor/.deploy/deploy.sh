@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REMOTE_HOST="${REMOTE_HOST:-dev}"
-REMOTE_DIR="${REMOTE_DIR:-swamr-ai-data-exchange/gsoc-data-event-processor}"
+REMOTE_DIR="${REMOTE_DIR:-swarm-ai-data-exchange/gsoc-data-event-processor}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_DIR="$(dirname "$SCRIPT_DIR")"
