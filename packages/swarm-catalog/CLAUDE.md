@@ -102,16 +102,15 @@ Public API:
 - `stageLifecycle(itemId: string, lifecycle): void` — queue a lifecycle change
 - `publish(): Promise<{ catalogRoot: string, feedUpdateTxId: string, stateFeeds: Array<{itemId, reference}> }>`
 
-The `publish()` method implements the 8-step flow from §12.2:
+The `publish()` method implements the spec's §12.2 flow (8 spec steps, reduced to 7 here because ACT-wrapping is caller responsibility):
 
 1. Upload priced content to Swarm (already ACT-protected by caller — builder receives the reference)
 2. Upload samples to Swarm
-3. Build `item.jsonld` for each staged item and upload
-4. Build/update the catalog Mantaray (copy-on-write from last root if feed has one, otherwise new)
+3. Build and upload `item.jsonld` for each staged item; also build and upload `catalog.jsonld` (collection-level document) — capture all references before touching the Mantaray
+4. Build/update the catalog Mantaray incorporating `/catalog.jsonld` and all `/items/{itemId}/item.jsonld` and sample nodes (copy-on-write from last root if feed has one, otherwise new)
 5. Upload the new Mantaray, capture root reference
 6. Push catalog feed update with bare root reference
-7. Upload `catalog.jsonld` (collection-level document)
-8. Initialize/update per-item state feeds for new/changed items
+7. Initialize/update per-item state feeds for new/changed items
 
 **Note:** For the prototype, the builder receives pre-uploaded, ACT-protected content references. ACT encryption (wrapping content with `bee.createActSession` / initial grantees) is the caller's responsibility before calling `stageItem`.
 

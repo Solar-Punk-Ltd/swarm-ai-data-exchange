@@ -74,7 +74,7 @@ Run the 11-step verification. See §11.5 for full details.
 
 Return `200 OK` with `ActGrantResult` body (type from `swarm-catalog`).
 
-## 11-step verification (§11.5)
+## 12-step verification (§11.5)
 
 Steps 1–8 are reversible (no state change on failure). Steps 9–11 are committing.
 
@@ -119,7 +119,7 @@ Steps 1–8 are reversible (no state change on failure). Steps 9–11 are commit
     → log state_feed_failed but DO NOT fail the response (grant already issued)
     → publisher must retry state feed write in background
 
-Return ActGrantResult
+12. Return ActGrantResult
 ```
 
 ## Storage — SQLite (better-sqlite3)

@@ -14,7 +14,7 @@ The catalog architecture is fully specified in:
 - Part 5 — Catalog Mantaray schema
 - Part 6 — Data model (CatalogItem, CatalogItemState, ActGrantResult)
 - Part 10 — HTTP API (purchase endpoint three-phase flow)
-- Part 11 — PurchaseIntent EIP-712 envelope and 11-step server verification
+- Part 11 — PurchaseIntent EIP-712 envelope and 12-step server verification
 - Part 12 — Publisher flow (SwarmCatalogBuilder steps)
 - Part 13 — Reader flow (Mantaray traversal)
 - Appendix A — TypeScript reference types (implement these exactly)
@@ -46,7 +46,7 @@ The catalog architecture is fully specified in:
 ### In scope
 
 - `packages/swarm-catalog`: all TypeScript types (Appendix A), `SwarmCatalogBuilder` (stage + publish), catalog feed management, per-item state feed management, JSON-LD serialization
-- `packages/x402-swarm-server`: refactor to `POST /v1/items/:itemId/purchase` (three-phase), PurchaseIntent EIP-712 verification (11 steps), nonce store, state feed write post-grant, Mantaray catalog lookup, purchase record store, structured `ApiError` responses
+- `packages/x402-swarm-server`: refactor to `POST /v1/items/:itemId/purchase` (three-phase), PurchaseIntent EIP-712 verification (12 steps), nonce store, state feed write post-grant, Mantaray catalog lookup, purchase record store, structured `ApiError` responses
 - `packages/catalogue-feed-browser`: catalog feed → Mantaray traversal, list/detail view, sample preview, PurchaseIntent signing + purchase flow
 - `packages/erc8004-adapter`: add `"swarm-ai-catalog"` services entry to Agent Card + `--catalog-feed-owner` CLI flag
 
