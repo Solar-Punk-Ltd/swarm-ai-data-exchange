@@ -41,8 +41,8 @@ What it does:
 ## Observe
 
 ```bash
-ssh dev 'cd ~/swamr-ai-data-exchange/gsoc-data-event-processor/.deploy && docker compose logs -f'
-ssh dev 'cd ~/swamr-ai-data-exchange/gsoc-data-event-processor/.deploy && docker compose ps'
+ssh dev 'cd ~/swarm-ai-data-exchange/gsoc-data-event-processor/.deploy && docker compose logs -f'
+ssh dev 'cd ~/swarm-ai-data-exchange/gsoc-data-event-processor/.deploy && docker compose ps'
 ssh dev 'docker ps --filter label=app=gsoc-data-event-processor'
 ```
 
