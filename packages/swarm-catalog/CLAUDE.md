@@ -100,6 +100,7 @@ Public API:
 - `stageItem(input: CatalogItem, initialActState?: { actHistoryRef: string, granteeRef: string }): void` — queue an item for the next publish. For the prototype, the caller must provide `initialActState` because the builder initializes the state feed (step 8).
 - `stageRemove(itemId: string): void` — queue a removal
 - `stageLifecycle(itemId: string, lifecycle): void` — queue a lifecycle change
+- `dryRun(): Promise<{ root: string, manifest: any }>` — compute the new Mantaray locally without uploading
 - `publish(): Promise<{ catalogRoot: string, feedUpdateTxId: string, stateFeeds: Array<{itemId, reference}> }>`
 
 The `publish()` method implements the spec's §12.2 flow (8 spec steps, reduced to 7 here because ACT-wrapping is caller responsibility):
@@ -130,7 +131,6 @@ writeItemState(bee: Bee, signer: FeedWriter, catalogFeedOwner: string, state: Ca
 
 Do NOT implement:
 
-- `dryRun()` on `SwarmCatalogBuilder`
 - Crash recovery / intent persistence (§12.5)
 - Inline Mantaray fork metadata (§5.5) — set empty metadata for now, add later
 - Croissant 1.1 field validation
