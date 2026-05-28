@@ -37,6 +37,28 @@ The existing `AgentService` type already has the right shape — `endpoint` carr
 
 3. **`src/types.ts`** — no change needed; `AgentService.endpoint` already covers it. Optionally add a type guard `isCatalogService(s: AgentService): boolean`.
 
+## Missing: registrations[] not populated post-registration
+
+The `AgentCard.registrations` field exists in the type but is never populated. The create-agent flow currently stops after step 3 (on-chain registration) without writing the `agentId` back into the card.
+
+The spec (§2 glossary) requires: _"All registrations are enumerated inside the Agent Card's `registrations[]` field per the ERC-8004 standard, making it the single source of truth for cross-chain and cross-registry agent identity."_
+
+**Fix needed in `tools/create-agent/index.ts`** — add a step 4:
+
+```typescript
+// After on-chain registration returns agentId:
+card.registrations = [
+  {
+    agentId,
+    agentRegistry: `eip155:84532:${erc8004.identity.contractAddress}`, // CAIP-10 format
+  },
+];
+// Re-upload the updated card to Swarm (same feed, same topic — overwrites)
+await uploadAgentCard(card, AGENT_CARD_TOPIC, beeApiUrl, batchId, feedPk);
+```
+
+The `agentRegistry` format is CAIP-10: `eip155:<chainId>:<contractAddress>`. The chain ID and contract address are already known from `createERC8004Client`.
+
 ## Everything else
 
 Do not change the Identity, Reputation, or AgentCard modules without a specific reason. They are complete and tested.

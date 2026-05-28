@@ -2,19 +2,25 @@
 
 React UI for discovering ERC-8004 registered agents. Largely complete — do not refactor without a specific reason.
 
-## Catalog integration touch point
+## Catalog integration fix needed (not complete)
 
-The "Browse Catalog" button in `src/components/AgentList.tsx` links to `CATALOGUE_FEED_BROWSER_URL` (defined in `src/constants.ts`, defaults to `http://localhost:3001/`).
+The "Browse Catalog" button in `src/components/AgentList.tsx` currently derives the catalog owner by parsing the `swarm` service endpoint URL through `extractOwner()` (which splits `https://gateway.ethswarm.org/feeds/<owner>/<topic>` and extracts the owner segment). This is **semantically wrong**.
 
-It currently passes `?owner=...&x402=...` query params. Once `erc8004-adapter` gains the `"swarm-ai-catalog"` services entry, the owner address should be read from there:
+The catalog feed owner is a separate EOA stored directly as the `endpoint` of the `"swarm-ai-catalog"` services entry. It is not derivable from the Agent Card's Swarm feed URL — they are different keys by design (cold catalog signer vs Agent Card signer).
+
+**Fix in `src/components/AgentList.tsx`** — replace the `ownerVar` derivation:
 
 ```typescript
-// Read catalog feed owner from the agent's services entry
-const catalogService = agent.card?.services?.find((s) => s.name === 'swarm-ai-catalog');
-const catalogOwner = catalogService?.endpoint;
+// Current (wrong): parses swarm endpoint URL to guess an owner
+const swarmEndpoint = card?.services.find((s) => s.name === 'swarm')?.endpoint ?? '';
+const ownerVar = extractOwner(swarmEndpoint);
+
+// Fixed: read catalog feed owner directly from the services entry
+const catalogService = card?.services?.find((s) => s.name === 'swarm-ai-catalog');
+const ownerVar = catalogService?.endpoint ?? '';
 ```
 
-If no `"swarm-ai-catalog"` services entry exists on the agent, the "Browse Catalog" button should be hidden (the agent has no catalog).
+The `browseUrl` condition stays the same — it's already `null` when `ownerVar` is empty, so the button hides automatically for agents without a `"swarm-ai-catalog"` services entry.
 
 ## Everything else
 

@@ -24,22 +24,22 @@ The catalog architecture is fully specified in:
 - TypeScript throughout
 - `@ethersphere/bee-js` for all Swarm interactions (Mantaray, feeds, ACT)
 - `ethers` v6 in `erc8004-adapter`; `viem` in `x402-swarm-server` and `catalogue-feed-browser`
-- `@x402/express`, `@x402/evm`, `@x402/core` for payment middleware
+- `@x402/express`, `@x402/evm`, `@x402/core`, `@x402/fetch` for payment middleware (`@x402/express` is server-side only; `@x402/fetch` is consumer-side only; `@x402/evm` and `@x402/core` are used in both)
 - Express for HTTP servers
 - `better-sqlite3` for local persistent stores (nonce store, purchase records)
 
 ## Package Structure
 
-| Package                              | Status   | Purpose                                                                    |
-| ------------------------------------ | -------- | -------------------------------------------------------------------------- |
-| `packages/erc8004-adapter`           | Complete | ERC-8004 identity, reputation, Agent Card lifecycle — SDK + CLI            |
-| `packages/erc8004-dashboard`         | Complete | React UI for agent discovery                                               |
-| `packages/swarm-mcp`                 | Complete | MCP server exposing Swarm operations to LLM agents                         |
-| `packages/swarm-catalog`             | **New**  | Publisher SDK: types, SwarmCatalogBuilder, catalog/state feed management   |
-| `packages/x402-swarm-server`         | Refactor | Publisher HTTP server: x402 purchase endpoint, ACT grant, state feed write |
-| `packages/catalogue-feed-browser`    | Refactor | Consumer UI/server: catalog reader, sample preview, purchase flow          |
-| `packages/catalogue-job`             | Existing | Background catalog indexing job                                            |
-| `packages/gsoc-data-event-processor` | Existing | GSoC data event processing                                                 |
+| Package                              | Status          | Purpose                                                                                                                                                                                                                        |
+| ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/erc8004-adapter`           | Mostly complete | ERC-8004 identity, reputation, Agent Card lifecycle — SDK + CLI. Gap: `registrations[]` not written back after on-chain registration.                                                                                          |
+| `packages/erc8004-dashboard`         | Mostly complete | React UI for agent discovery. Gap: "Browse Catalog" button reads owner from wrong services entry — needs to read the owner address from the `"swarm-ai-catalog"` service's `endpoint` field instead of the parsed `swarm` URL. |
+| `packages/swarm-mcp`                 | Complete        | MCP server exposing Swarm operations to LLM agents                                                                                                                                                                             |
+| `packages/swarm-catalog`             | **New**         | Publisher SDK: types, SwarmCatalogBuilder, catalog/state feed management                                                                                                                                                       |
+| `packages/x402-swarm-server`         | Refactor        | Publisher HTTP server: x402 purchase endpoint, ACT grant, state feed write                                                                                                                                                     |
+| `packages/catalogue-feed-browser`    | Refactor        | Consumer UI/server: catalog reader, sample preview, purchase flow                                                                                                                                                              |
+| `packages/catalogue-job`             | Existing        | Background catalog indexing job                                                                                                                                                                                                |
+| `packages/gsoc-data-event-processor` | Existing        | GSoC data event processing                                                                                                                                                                                                     |
 
 ## Prototype Scope
 
@@ -48,7 +48,7 @@ The catalog architecture is fully specified in:
 - `packages/swarm-catalog`: all TypeScript types (Appendix A), `SwarmCatalogBuilder` (stage + publish), catalog feed management, per-item state feed management, JSON-LD serialization
 - `packages/x402-swarm-server`: refactor to `POST /v1/items/:itemId/purchase` (three-phase), PurchaseIntent EIP-712 verification (12 steps), nonce store, state feed write post-grant, Mantaray catalog lookup, purchase record store, structured `ApiError` responses
 - `packages/catalogue-feed-browser`: catalog feed → Mantaray traversal, list/detail view, sample preview, PurchaseIntent signing + purchase flow
-- `packages/erc8004-adapter`: add `"swarm-ai-catalog"` services entry to Agent Card + `--catalog-feed-owner` CLI flag
+- `packages/erc8004-adapter`: add `"swarm-ai-catalog"` services entry + `--catalog-feed-owner` CLI flag; fix `registrations[]` not being written back to Agent Card after on-chain registration
 
 ### Out of scope for prototype
 
