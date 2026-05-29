@@ -35,7 +35,7 @@ Implement all types from Appendix A verbatim:
 - `PaymentRequirements`
 - `ContentSpec` — discriminated union: `ImageContent | VideoContent | AudioContent | TextContent | DocumentContent | DatasetContent | BytesContent`
 - `SampleSpec`
-- `CatalogItem` — publisher input type
+- `CatalogItem` — publisher input type; for the prototype treat `license` as optional (`license?: string`) despite being non-optional in Appendix A
 - `CroissantRecordSet`, `CroissantField`
 - `CatalogItemState` — wire type, primary purpose is tracking ACT state (actHistoryRef + granteeRef)
 - `ActGrantResult` — wire type
@@ -141,10 +141,6 @@ The builder MUST reject inputs that violate any of these rules (throw on `stageI
 - `id` does not equal `storage.reference`
 - `payment` array is empty
 - `lifecycle` is not one of `"active" | "deprecated" | "retired"`
-- `license` is missing or empty — treating as MUST-reject for the prototype.
-  The spec data model (§6.3) marks it Required and the TypeScript type has no `?`;
-  §12.3 only SHOULDs a warning, but for the prototype strict enforcement is preferable
-  to silently publishing unlicensed content.
 - Required fields per content type are missing:
   - `image` / `video`: `width`, `height`
   - `video` / `audio`: `duration`
@@ -153,6 +149,7 @@ The builder MUST reject inputs that violate any of these rules (throw on `stageI
 
 The builder SHOULD warn (log, do not throw) on:
 
+- `license` missing or empty
 - `tags` exceeding 20 entries (soft cap)
 - `sample` missing on items where `payment[0].amount` indicates a non-trivial price (suggested threshold: ≥ 1 USDC equivalent)
 
