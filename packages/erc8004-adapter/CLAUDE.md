@@ -38,6 +38,8 @@ The existing `AgentService` type already has the right shape — `endpoint` carr
 
 3. **`src/types.ts`** — no change needed; `AgentService.endpoint` already covers it. Optionally add a type guard `isCatalogService(s: AgentService): boolean`.
 
+**Note on the `swarm` service entry:** The `swarm` service entry is being removed. Do not add it for newly registered agents. The `--swarm` CLI flag in `create-agent` should also be removed — it has no replacement, since the Agent Card's own Swarm feed URL is already captured in `agentURI` (the on-chain tokenURI), and catalog discovery now uses `"swarm-ai-catalog"` + fixed topic exclusively. If `--swarm` exists in `tools/create-agent/args.ts`, remove it and remove the corresponding `services.push` in `tools/create-agent/index.ts`.
+
 ## Missing: registrations[] not populated post-registration
 
 The `AgentCard.registrations` field exists in the type but is never populated. The create-agent flow currently stops after step 3 (on-chain registration) without writing the `agentId` back into the card.
