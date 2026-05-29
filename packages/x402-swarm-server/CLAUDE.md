@@ -9,7 +9,7 @@ Publisher HTTP server: x402-gated purchase endpoint, ACT grant issuance, per-ite
 Read before implementing:
 
 - Part 10 — HTTP API (purchase endpoint, three-phase flow)
-- Part 11 — PurchaseIntent EIP-712 format and 11-step server verification
+- Part 11 — PurchaseIntent EIP-712 format and 12-step server verification
 - Part 14 — Per-item state feed write flow (post-grant)
 - Part 15 — Error handling (ApiError envelope + full error code catalog)
 
@@ -68,7 +68,7 @@ Return `402 Payment Required` with x402 challenge body. The `extra` block MUST i
 
 ### Phase 2 — with `X-Payment` header
 
-Run the 11-step verification. See §11.5 for full details.
+Run the 12-step verification. See §11.5 for full details.
 
 ### Phase 3 — success
 
@@ -86,21 +86,22 @@ Steps 1–8 are reversible (no state change on failure). Steps 9–11 are commit
    → 400 intent_signature_invalid
    → recover consumerAddress here (needed for purchase record at step 9)
 
-3. Check domain match (chainId + verifyingContract vs server config)
+3. Check domain match (domain.chainId + domain.verifyingContract MUST equal
+   what the server advertised in the 402 extra.purchaseIntentDomain)
    → 400 intent_domain_mismatch
 
 4. Check item match (message.itemId === path :itemId)
    → 400 intent_item_mismatch
 
-5. Check payment match (message.payment consistent with item's PaymentRequirements)
+5. Check payment match (message.payment MUST match one of the accepts entries
+   the server advertised in the 402 response — find the matching entry, used in step 8)
    → 400 intent_payment_mismatch
 
 6. Check time window (validAfter ≤ now ≤ validBefore)
    → 400 intent_expired / intent_not_yet_valid
 
-7. Check nonce freshness (query nonce store)
+7. Check nonce freshness (query nonce store — do NOT write yet)
    → 409 intent_replay
-   → write nonce to store here
 
 8. Facilitator /verify
    → 402 payment_verify_failed
@@ -109,6 +110,7 @@ Steps 1–8 are reversible (no state change on failure). Steps 9–11 are commit
 
 9. Facilitator /settle → txHash
    → 502 payment_settle_failed (retryable)
+   → WRITE nonce to nonce store HERE (prevents replay; only burns nonce once payment is confirmed)
    → WRITE purchase record (consumerAddress, itemId, txHash, settledAt) HERE
 
 10. ACT grant: bee.patchGrantees(itemRef, actHistoryRef, [granteePublicKey])
@@ -142,18 +144,34 @@ CREATE INDEX purchases_item_id ON purchases(item_id);
 CREATE INDEX purchases_consumer ON purchases(consumer_address);
 ```
 
-`nonces`: written at step 7, prevents replay.
+`nonces`: written at step 9 (after settle), prevents replay.
 `purchases`: written at step 9 (after settle, before grant). Used by the indexer to cross-reference payment-verified feedback without relying on the consumer to attach the txHash when calling `postFeedback`.
 
 ## Catalog lookup
 
 Replace `fetchCatalogue()` / `findDataItem()` with Mantaray-based lookup:
 
+**Important:** The catalog lookup runs as a prerequisite on every request, **before** checking for the `X-Payment` header. If the item is not found, retired, or its state feed is missing, return early immediately — do not enter the 12-step verification flow at all.
+
+```
+Request arrives
+  │
+  ├─ Catalog lookup (steps 1–6 below) ─→ early return on error
+  │
+  ├─ No X-Payment header? ─────────────→ Phase 1: return 402 challenge
+  │
+  └─ X-Payment header present ─────────→ Phase 2: run 12-step verification
+```
+
 1. Read catalog feed `(owner=CATALOG_FEED_OWNER env, topic=CATALOG_FEED_TOPIC from swarm-catalog)` → Mantaray root reference
-2. From Mantaray, fetch `/items/:itemId/item.jsonld`
-3. Parse as `CatalogItem` (type from `swarm-catalog`)
-4. If path not found → `404 item_not_found`
+2. From Mantaray, attempt to fetch `/items/:itemId/item.jsonld`
+3. If path not found → `404 item_not_found` (must be before parse)
+4. Parse fetched bytes as `CatalogItem` (type from `swarm-catalog`)
 5. If `lifecycle === "retired"` → `410 item_retired`
+   Note: `deprecated` items remain purchasable — do NOT gate on `deprecated`, only on `retired`
+6. Read item's state feed via `readItemState()` from `swarm-catalog` → `CatalogItemState`
+   If state feed missing → `404 item_not_purchasable` (state feed not initialised — spec §12.5 MUST)
+   Carry `actHistoryRef` and `granteeRef` into handler scope — `actHistoryRef` is required at step 10 (`bee.patchGrantees`)
 
 ## Error responses
 
