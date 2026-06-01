@@ -35,7 +35,7 @@ Implement all types from Appendix A verbatim:
 - `PaymentRequirements`
 - `ContentSpec` — discriminated union: `ImageContent | VideoContent | AudioContent | TextContent | DocumentContent | DatasetContent | BytesContent`
 - `SampleSpec`
-- `CatalogItem` — publisher input type; for the prototype treat `license` as optional (`license?: string`) despite being non-optional in Appendix A
+- `CatalogItem` — publisher input type; `license` is optional (`license?: string`)
 - `CroissantRecordSet`, `CroissantField`
 - `CatalogItemState` — wire type, primary purpose is tracking ACT state (actHistoryRef + granteeRef)
 - `ActGrantResult` — wire type
@@ -149,11 +149,9 @@ The builder MUST reject inputs that violate any of these rules (throw on `stageI
 
 The builder SHOULD warn (log, do not throw) on:
 
-- `license` missing or empty
+- `license` missing or empty (recommended for non-trivial value assets per spec §6.3)
 - `tags` exceeding 20 entries (soft cap)
 - `sample` missing on items where `payment[0].amount` indicates a non-trivial price (suggested threshold: ≥ 1 USDC equivalent)
-
-**Spec inconsistency to skip:** §12.3 also lists rules about `publisher.chainId` and `publisher.registry`, but no `publisher` field exists on `CatalogItem` in §6.3 or Appendix A — and §5.2 explicitly states the catalog carries no agent-identity fields. These two rules reference non-existent fields and should be ignored as a spec drafting leftover. Agent attribution lives in the Agent Card (§3.4), not the catalog item.
 
 ## state.ts
 
