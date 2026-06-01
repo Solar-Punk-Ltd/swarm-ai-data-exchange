@@ -1,0 +1,23 @@
+{
+  "name": "@solarpunk/swarm-catalog",
+  "version": "0.1.0",
+  "description": "Publisher SDK for the Swarm AI Data Exchange catalog protocol: types, SwarmCatalogBuilder, catalog/state feed management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@ethersphere/bee-js": "12.0.0",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}
