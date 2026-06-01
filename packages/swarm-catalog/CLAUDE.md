@@ -4,7 +4,7 @@ Publisher SDK for the Swarm AI Data Exchange catalog protocol. New package — n
 
 ## Spec reference
 
-`../../documents/swarm-ai-catalog-design-v1_2026-05-26-final.md`
+`../../documents/swarm-ai-catalog-design-v1_2026-05-29-final-draft.md`
 
 Read before implementing:
 

@@ -5,7 +5,7 @@ ERC-8004 identity, reputation, and Agent Card lifecycle SDK. Largely complete �
 ## Spec reference
 
 - ERC-8004 standard: https://eips.ethereum.org/EIPS/eip-8004
-- Catalog spec (for the one addition below): `../../documents/swarm-ai-catalog-design-v1_2026-05-26-final.md` §4.1 and §3.4
+- Catalog spec (for the one addition below): `../../documents/swarm-ai-catalog-design-v1_2026-05-29-final-draft.md` §4.1 and §3.4
 
 ## One addition needed for catalog integration
 

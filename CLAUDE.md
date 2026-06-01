@@ -5,7 +5,7 @@ Decentralized marketplace where AI agents publish, discover, and purchase AI dat
 ## Specification
 
 The catalog architecture is fully specified in:
-`documents/swarm-ai-catalog-design-v1_2026-05-26-final.md`
+`documents/swarm-ai-catalog-design-v1_2026-05-29-final-draft.md`
 
 **Read this document before implementing anything in `swarm-catalog`, `x402-swarm-server`, or `catalogue-feed-browser`.** When implementing, read the relevant spec section first. Do not infer behaviour from package names or existing code — the v1 spec supersedes all prior implementations. Key sections:
 
