@@ -341,7 +341,7 @@ Mantaray supports inline metadata per fork. To enable cheap list-view rendering,
 | `swarm-cat:priceAsset`     | string | CAIP-19 asset identifier (e.g. `eip155:8453/erc20:0x...`)                |
 | `swarm-cat:tags`           | string | Comma-separated tag list, lowercase                                      |
 | `swarm-cat:dateAdded`      | string | ISO 8601 timestamp the item was first listed                             |
-| `swarm-cat:version`        | string | Item content version, semantic ver. if used                              |
+| `swarm-cat:version`        | string | Item content version, semver if used                                     |
 | `swarm-cat:lifecycle`      | string | One of `active`, `deprecated`, `retired`                                 |
 
 These are advisory caches. The authoritative values live in `item.jsonld`. Indexers SHOULD trust inline metadata for list views and refetch `item.jsonld` only when the user opens the item or when staleness is suspected.
@@ -395,9 +395,9 @@ Multiple `PaymentRequirements` MAY be attached to one item (e.g. same price on m
 | `storage`      | `SwarmStorage`                                | Yes      | Where the asset is on Swarm                                                               |
 | `payment`      | `PaymentRequirements[]`                       | Yes      | Payment terms (≥ 1)                                                                       |
 | `sample`       | `SampleSpec`                                  | No       | Description of the `sample/` subdirectory contents                                        |
-| `license`      | string (URL or SPDX id)                       | No       | License under which the asset is offered; Recommended for non-trivial value assets        |
+| `license`      | string (URL or SPDX id)                       | Yes      | License under which the asset is offered                                                  |
 | `tags`         | string[]                                      | No       | Lowercase tags. MUST be unique; SHOULD be drawn from a controlled vocabulary if available |
-| `version`      | string                                        | No       | Semantic ver. or publisher-defined version string                                         |
+| `version`      | string                                        | No       | Semver or publisher-defined version string                                                |
 | `lifecycle`    | `"active" \| "deprecated" \| "retired"`       | Yes      | Listing state                                                                             |
 | `dateAdded`    | string (ISO 8601)                             | Yes      | When the item was first listed                                                            |
 | `dateModified` | string (ISO 8601)                             | Yes      | Last edit timestamp                                                                       |
@@ -1125,6 +1125,8 @@ The builder MUST reject inputs that violate:
 - `payment` is empty
 - `lifecycle` is not one of the three valid values
 - Required fields per content type are missing (e.g. `width`/`height` for image, `duration` for video)
+- `chainId` in `publisher` is not a valid CAIP-2 string
+- `publisher.registry` is not a 0x-prefixed 20-byte hex address
 - Any URL field is not a valid IRI
 
 The builder SHOULD warn on:
