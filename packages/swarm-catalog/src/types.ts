@@ -114,7 +114,6 @@ export interface SampleSpec {
 }
 
 // --- CatalogItem (publisher input) ---
-// `license` is optional in the prototype (spec §6.3: recommended for non-trivial value assets).
 export interface CatalogItem {
   id: string; // equals storage.reference
   name: string;

@@ -1,16 +1,52 @@
 import type { CatalogItem, ContentSpec } from './types.js';
+import {
+  CROISSANT_CONFORMS_TO,
+  CR_DATASET,
+  CR_RECORD_SET,
+  CR_FIELD,
+  CR_CONFORMS_TO,
+  CR_RECORD_SET_PROP,
+  CR_FIELD_PROP,
+  CR_DATA_TYPE_PROP,
+} from './schemas/croissant.js';
+import {
+  SWARM_CAT_CONTEXT,
+  SWARM_CAT_PROTOCOL_VERSION,
+  SWARM_CAT_CATALOG_ITEM,
+  SWARM_CAT_SAMPLE_SPEC,
+  SWARM_CAT_CATALOG,
+  SWARM_CAT_COLOR_SPACE,
+  SWARM_CAT_FPS,
+  SWARM_CAT_CODEC,
+  SWARM_CAT_HAS_AUDIO,
+  SWARM_CAT_CHANNELS,
+  SWARM_CAT_SAMPLE_RATE,
+  SWARM_CAT_IS_MULTI_FILE,
+  SWARM_CAT_MODEL_ARCHITECTURE,
+  SWARM_CAT_PARAMETERS,
+  SWARM_CAT_SUPERSEDED_BY,
+  SWARM_CAT_ITEM_COUNT,
+  SWARM_CAT_PROTOCOL_VERSION_PROP,
+} from './schemas/swarmCat.js';
+import {
+  SC_IMAGE_OBJECT,
+  SC_VIDEO_OBJECT,
+  SC_AUDIO_OBJECT,
+  SC_TEXT_DIGITAL_DOCUMENT,
+  SC_CREATIVE_WORK,
+  SC_DATASET,
+  SC_MEDIA_OBJECT,
+  SC_DATA_CATALOG,
+} from './schemas/schemaOrg.js';
 
-const CONTEXT = 'https://swarm-ai-catalog.eth/v1';
-
-// Maps ContentSpec.type to JSON-LD @type array per §7.4 co-typing table.
 const CONTENT_TYPE_MAP: Record<ContentSpec['type'], string[]> = {
-  image: ['swarm-cat:CatalogItem', 'sc:ImageObject'],
-  video: ['swarm-cat:CatalogItem', 'sc:VideoObject'],
-  audio: ['swarm-cat:CatalogItem', 'sc:AudioObject'],
-  text: ['swarm-cat:CatalogItem', 'sc:TextDigitalDocument'],
-  document: ['swarm-cat:CatalogItem', 'sc:CreativeWork'],
-  dataset: ['swarm-cat:CatalogItem', 'cr:Dataset', 'sc:Dataset'],
-  bytes: ['swarm-cat:CatalogItem', 'sc:MediaObject'],
+  image: [SWARM_CAT_CATALOG_ITEM, SC_IMAGE_OBJECT],
+  video: [SWARM_CAT_CATALOG_ITEM, SC_VIDEO_OBJECT],
+  audio: [SWARM_CAT_CATALOG_ITEM, SC_AUDIO_OBJECT],
+  text: [SWARM_CAT_CATALOG_ITEM, SC_TEXT_DIGITAL_DOCUMENT],
+  document: [SWARM_CAT_CATALOG_ITEM, SC_CREATIVE_WORK],
+  dataset: [SWARM_CAT_CATALOG_ITEM, CR_DATASET, SC_DATASET],
+  bytes: [SWARM_CAT_CATALOG_ITEM, SC_MEDIA_OBJECT],
 };
 
 // Serialize a CatalogItem to its item.jsonld object.
@@ -19,7 +55,7 @@ const CONTENT_TYPE_MAP: Record<ContentSpec['type'], string[]> = {
 export function serializeItem(item: CatalogItem): Record<string, unknown> {
   const content = item.content;
   const doc: Record<string, unknown> = {
-    '@context': CONTEXT,
+    '@context': SWARM_CAT_CONTEXT,
     '@type': CONTENT_TYPE_MAP[content.type],
     id: item.id,
     name: item.name,
@@ -39,32 +75,31 @@ export function serializeItem(item: CatalogItem): Record<string, unknown> {
 
   // swarm-cat: extension properties (not in schema.org)
   if ('colorSpace' in content && content.colorSpace != null)
-    doc['swarm-cat:colorSpace'] = content.colorSpace;
-  if ('fps' in content && content.fps != null) doc['swarm-cat:fps'] = content.fps;
-  if ('codec' in content && content.codec != null) doc['swarm-cat:codec'] = content.codec;
+    doc[SWARM_CAT_COLOR_SPACE] = content.colorSpace;
+  if ('fps' in content && content.fps != null) doc[SWARM_CAT_FPS] = content.fps;
+  if ('codec' in content && content.codec != null) doc[SWARM_CAT_CODEC] = content.codec;
   if ('hasAudio' in content && content.hasAudio != null)
-    doc['swarm-cat:hasAudio'] = content.hasAudio;
-  if ('channels' in content && content.channels != null)
-    doc['swarm-cat:channels'] = content.channels;
+    doc[SWARM_CAT_HAS_AUDIO] = content.hasAudio;
+  if ('channels' in content && content.channels != null) doc[SWARM_CAT_CHANNELS] = content.channels;
   if ('sampleRate' in content && content.sampleRate != null)
-    doc['swarm-cat:sampleRate'] = content.sampleRate;
+    doc[SWARM_CAT_SAMPLE_RATE] = content.sampleRate;
   if ('isMultiFile' in content && content.isMultiFile != null)
-    doc['swarm-cat:isMultiFile'] = content.isMultiFile;
+    doc[SWARM_CAT_IS_MULTI_FILE] = content.isMultiFile;
   if ('modelArchitecture' in content && content.modelArchitecture != null)
-    doc['swarm-cat:modelArchitecture'] = content.modelArchitecture;
+    doc[SWARM_CAT_MODEL_ARCHITECTURE] = content.modelArchitecture;
   if ('parameters' in content && content.parameters != null)
-    doc['swarm-cat:parameters'] = content.parameters;
+    doc[SWARM_CAT_PARAMETERS] = content.parameters;
 
   // Croissant 1.1 fields for dataset type
   if (content.type === 'dataset' && content.recordSets && content.recordSets.length > 0) {
-    doc['cr:conformsTo'] = 'http://mlcommons.org/croissant/1.1';
-    doc['cr:recordSet'] = content.recordSets.map((rs) => ({
-      '@type': 'cr:RecordSet',
+    doc[CR_CONFORMS_TO] = CROISSANT_CONFORMS_TO;
+    doc[CR_RECORD_SET_PROP] = content.recordSets.map((rs) => ({
+      '@type': CR_RECORD_SET,
       name: rs.name,
-      field: rs.fields.map((f) => ({
-        '@type': 'cr:Field',
+      [CR_FIELD_PROP]: rs.fields.map((f) => ({
+        '@type': CR_FIELD,
         name: f.name,
-        dataType: f.dataType,
+        [CR_DATA_TYPE_PROP]: f.dataType,
       })),
     }));
   }
@@ -87,7 +122,7 @@ export function serializeItem(item: CatalogItem): Record<string, unknown> {
 
   if (item.sample) {
     const sampleDoc: Record<string, unknown> = {
-      '@type': 'swarm-cat:SampleSpec',
+      '@type': SWARM_CAT_SAMPLE_SPEC,
       kind: item.sample.kind,
       path: item.sample.path,
     };
@@ -99,7 +134,7 @@ export function serializeItem(item: CatalogItem): Record<string, unknown> {
   if (item.license) doc.license = item.license;
   if (item.tags && item.tags.length > 0) doc.tags = item.tags;
   if (item.version) doc.version = item.version;
-  if (item.supersededBy) doc['swarm-cat:supersededBy'] = item.supersededBy;
+  if (item.supersededBy) doc[SWARM_CAT_SUPERSEDED_BY] = item.supersededBy;
   doc.dateAdded = item.dateAdded;
   doc.dateModified = item.dateModified;
 
@@ -110,10 +145,10 @@ export function serializeItem(item: CatalogItem): Record<string, unknown> {
 // Carries no agent-identity fields — agent attribution lives in the Agent Card (§3.4).
 export function serializeCatalog(items: CatalogItem[]): Record<string, unknown> {
   return {
-    '@context': CONTEXT,
-    '@type': ['sc:DataCatalog', 'swarm-cat:Catalog'],
-    'swarm-cat:itemCount': items.length,
-    'swarm-cat:protocolVersion': '1.0',
+    '@context': SWARM_CAT_CONTEXT,
+    '@type': [SC_DATA_CATALOG, SWARM_CAT_CATALOG],
+    [SWARM_CAT_ITEM_COUNT]: items.length,
+    [SWARM_CAT_PROTOCOL_VERSION_PROP]: SWARM_CAT_PROTOCOL_VERSION,
     dateModified: new Date().toISOString(),
   };
 }

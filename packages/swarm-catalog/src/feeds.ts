@@ -5,9 +5,6 @@ import { keccak256, toUtf8Bytes, getBytes, concat } from 'ethers';
 // keccak256("swarm-ai-catalog.v1") — 0x-prefixed hex string, accepted directly by bee-js makeFeedWriter/makeFeedReader.
 export const CATALOG_FEED_TOPIC: string = keccak256(toUtf8Bytes('swarm-ai-catalog.v1'));
 
-// Per-item state feed topic — binds the state feed to its catalog, prevents reattachment attacks.
-// topic = keccak256("swarm-ai-catalog-state.v1" || catalogFeedOwner(20 bytes) || itemId(utf-8))
-// Returns 0x-prefixed hex string.
 export function stateFeedTopic(catalogFeedOwner: string, itemId: string): string {
   return keccak256(
     concat([
