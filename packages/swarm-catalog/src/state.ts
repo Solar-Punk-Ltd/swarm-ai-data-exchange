@@ -46,5 +46,6 @@ export async function writeItemState(
   const topic = stateFeedTopic(catalogFeedOwner, state.itemId);
   const writer = bee.makeFeedWriter(topic, signer);
   await writer.uploadPayload(postageBatchId, stateRef);
+
   return stateRef;
 }
