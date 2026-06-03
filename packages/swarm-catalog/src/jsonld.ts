@@ -1,4 +1,4 @@
-import type { CatalogItem, ContentSpec } from './types.js';
+import type { CatalogItem, ContentType } from './types.js';
 import {
   CROISSANT_CONFORMS_TO,
   CR_DATASET,
@@ -39,7 +39,7 @@ import {
   SC_DATA_CATALOG,
 } from './schemas/schemaOrg.js';
 
-const CONTENT_TYPE_MAP: Record<ContentSpec['type'], string[]> = {
+const CONTENT_TYPE_MAP: Record<ContentType, string[]> = {
   image: [SWARM_CAT_CATALOG_ITEM, SC_IMAGE_OBJECT],
   video: [SWARM_CAT_CATALOG_ITEM, SC_VIDEO_OBJECT],
   audio: [SWARM_CAT_CATALOG_ITEM, SC_AUDIO_OBJECT],

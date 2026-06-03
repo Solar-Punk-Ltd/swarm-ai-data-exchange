@@ -30,6 +30,10 @@ export type ContentSpec =
   | DatasetContent
   | BytesContent;
 
+// Discriminant union of content types, derived from ContentSpec so the member
+// interfaces remain the single source of truth (auto-updates if a type is added).
+export type ContentType = ContentSpec['type'];
+
 export interface ImageContent {
   type: 'image';
   encodingFormat: string; // MIME
@@ -113,6 +117,12 @@ export interface SampleSpec {
   contentSize?: number;
 }
 
+// --- Lifecycle ---
+// Single source of truth: the const tuple is runtime-iterable (validation), the
+// derived union preserves the exact wire-format string literals (Appendix A).
+export const LIFECYCLE_VALUES = ['active', 'deprecated', 'retired'] as const;
+export type Lifecycle = (typeof LIFECYCLE_VALUES)[number];
+
 // --- CatalogItem (publisher input) ---
 export interface CatalogItem {
   id: string; // equals storage.reference
@@ -125,7 +135,7 @@ export interface CatalogItem {
   license?: string; // URL or SPDX id
   tags?: string[];
   version?: string;
-  lifecycle: 'active' | 'deprecated' | 'retired';
+  lifecycle: Lifecycle;
   supersededBy?: string; // itemId, when deprecated
   dateAdded: string; // ISO 8601
   dateModified: string; // ISO 8601
@@ -138,7 +148,7 @@ export interface CatalogItemState {
   itemId: string;
   actHistoryRef: string; // current ACT history reference; advances per grant
   granteeRef: string; // current grantee-list reference; advances per grant
-  lifecycle: 'active' | 'deprecated' | 'retired';
+  lifecycle: Lifecycle;
   version?: string;
   catalogRootAtUpdate?: string;
   dateModified: string;

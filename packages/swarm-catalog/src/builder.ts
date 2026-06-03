@@ -1,8 +1,16 @@
 import { Bee, MantarayNode, PrivateKey } from '@ethersphere/bee-js';
 import { CATALOG_FEED_TOPIC, readCatalogFeedRoot } from './feeds.js';
+import { itemManifestPath, itemSamplePath, CATALOG_MANIFEST_PATH } from './paths.js';
 import { serializeItem, serializeCatalog } from './jsonld.js';
 import { writeItemState } from './state.js';
-import type { CatalogItem, CatalogItemState, ContentSpec, PaymentRequirements } from './types.js';
+import { LIFECYCLE_VALUES } from './types.js';
+import type {
+  CatalogItem,
+  CatalogItemState,
+  ContentSpec,
+  Lifecycle,
+  PaymentRequirements,
+} from './types.js';
 
 type FeedSigner = PrivateKey | Uint8Array | string;
 
@@ -23,8 +31,6 @@ interface ActSeed {
   actHistoryRef: string;
   granteeRef: string;
 }
-
-type Lifecycle = 'active' | 'deprecated' | 'retired';
 
 export class SwarmCatalogBuilder {
   private readonly bee: Bee;
@@ -92,7 +98,7 @@ export class SwarmCatalogBuilder {
   async dryRun(): Promise<{ root: string; manifest: MantarayNode }> {
     const node = new MantarayNode();
     for (const [itemId] of this.staged) {
-      node.addFork(`/items/${itemId}/item.jsonld`, new Uint8Array(32), null);
+      node.addFork(itemManifestPath(itemId), new Uint8Array(32), null);
     }
     return { root: '', manifest: node };
   }
@@ -135,7 +141,7 @@ export class SwarmCatalogBuilder {
       const sampleBytes = this.sampleData.get(itemId);
       if (item.sample && sampleBytes != null) {
         const sampleResult = await this.bee.uploadData(this.postageBatchId, sampleBytes);
-        const sampleManifestPath = `/items/${itemId}/${item.sample.path}`;
+        const sampleManifestPath = itemSamplePath(itemId, item.sample.path);
         manifest.addFork(sampleManifestPath, sampleResult.reference.toString(), null);
       }
 
@@ -143,19 +149,19 @@ export class SwarmCatalogBuilder {
       const itemJsonLd = serializeItem(item);
       const itemJsonLdBytes = JSON.stringify(itemJsonLd, null, 2);
       const itemResult = await this.bee.uploadData(this.postageBatchId, itemJsonLdBytes);
-      manifest.addFork(`/items/${itemId}/item.jsonld`, itemResult.reference.toString(), null);
+      manifest.addFork(itemManifestPath(itemId), itemResult.reference.toString(), null);
     }
 
     // Process removals: remove item.jsonld fork from Mantaray.
     for (const itemId of this.removals) {
-      manifest.removeFork(`/items/${itemId}/item.jsonld`);
+      manifest.removeFork(itemManifestPath(itemId));
     }
 
     // Process lifecycle changes for items NOT in the staged set.
     // Prototype limitation: in-place Mantaray update requires downloading and re-uploading item.jsonld.
     for (const [itemId, lifecycle] of this.lifecycleChanges) {
       if (this.staged.has(itemId)) continue; // already handled above
-      const node = manifest.find(`/items/${itemId}/item.jsonld`);
+      const node = manifest.find(itemManifestPath(itemId));
       if (!node || !node.targetAddress || node.targetAddress.every((b) => b === 0)) {
         console.warn(`[swarm-catalog] Lifecycle change for unknown item ${itemId}, skipping`);
         continue;
@@ -166,7 +172,7 @@ export class SwarmCatalogBuilder {
         parsed['lifecycle'] = lifecycle;
         const updated = JSON.stringify(parsed, null, 2);
         const updatedResult = await this.bee.uploadData(this.postageBatchId, updated);
-        manifest.addFork(`/items/${itemId}/item.jsonld`, updatedResult.reference.toString(), null);
+        manifest.addFork(itemManifestPath(itemId), updatedResult.reference.toString(), null);
       } catch (err) {
         console.warn(`[swarm-catalog] Failed to update lifecycle for ${itemId}, skipping:`, err);
       }
@@ -176,7 +182,7 @@ export class SwarmCatalogBuilder {
     const catalogJsonLd = serializeCatalog(Array.from(this.staged.values()));
     const catalogJsonLdBytes = JSON.stringify(catalogJsonLd, null, 2);
     const catalogDataResult = await this.bee.uploadData(this.postageBatchId, catalogJsonLdBytes);
-    manifest.addFork('/catalog.jsonld', catalogDataResult.reference.toString(), null);
+    manifest.addFork(CATALOG_MANIFEST_PATH, catalogDataResult.reference.toString(), null);
 
     // Step 6 (§12.2): Upload new Mantaray and capture root reference.
     const saveResult = await manifest.saveRecursively(this.bee, this.postageBatchId);
@@ -226,7 +232,7 @@ function validateItem(input: CatalogItem): void {
   if (!input.payment || input.payment.length === 0) {
     throw new Error(`CatalogItem validation: payment array must not be empty (id: ${input.id})`);
   }
-  if (!['active', 'deprecated', 'retired'].includes(input.lifecycle)) {
+  if (!LIFECYCLE_VALUES.includes(input.lifecycle)) {
     throw new Error(
       `CatalogItem validation: invalid lifecycle "${input.lifecycle}" (id: ${input.id})`,
     );
