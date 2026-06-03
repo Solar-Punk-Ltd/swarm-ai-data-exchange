@@ -145,7 +145,7 @@ The builder MUST reject inputs that violate any of these rules (throw on `stageI
   - `image` / `video`: `width`, `height`
   - `video` / `audio`: `duration`
   - all types: `encodingFormat`
-- Any URL field is not a valid IRI (`license` URL, `payment[].facilitator`, `swarm-cat:supersededBy` if present)
+- Any URL field is not a valid IRI (`license` URL, `payment[].facilitator`)
 
 The builder SHOULD warn (log, do not throw) on:
 
