@@ -1,6 +1,6 @@
 import { MantarayNode } from '@ethersphere/bee-js';
-import { SwarmCatalogBuilder } from '../src/builder.js';
-import type { CatalogItem, ContentSpec } from '../src/types.js';
+import { SwarmCatalogBuilder } from '../src/builder';
+import type { CatalogItem, ContentSpec } from '../src/types';
 
 // Well-known test private key (Hardhat account #0). Real bee-js PrivateKey accepts it.
 const SIGNER = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';

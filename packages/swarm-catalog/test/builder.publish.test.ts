@@ -21,8 +21,8 @@ jest.mock('@ethersphere/bee-js', () => {
   return { MantarayNode, PrivateKey };
 });
 
-import { SwarmCatalogBuilder } from '../src/builder.js';
-import type { CatalogItem } from '../src/types.js';
+import { SwarmCatalogBuilder } from '../src/builder';
+import type { CatalogItem } from '../src/types';
 
 const SIGNER = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
 const BATCH = 'f'.repeat(64);

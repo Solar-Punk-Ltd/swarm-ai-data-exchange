@@ -1,5 +1,5 @@
-import { serializeItem, serializeCatalog } from '../src/jsonld.js';
-import type { CatalogItem, ContentSpec } from '../src/types.js';
+import { serializeItem, serializeCatalog } from '../src/jsonld';
+import type { CatalogItem, ContentSpec } from '../src/types';
 
 const REF = 'a'.repeat(64);
 

@@ -1,4 +1,4 @@
-import type { CatalogItem, ContentType } from './types.js';
+import type { CatalogItem, ContentType } from './types';
 import {
   CROISSANT_CONFORMS_TO,
   CR_DATASET,
@@ -8,7 +8,7 @@ import {
   CR_RECORD_SET_PROP,
   CR_FIELD_PROP,
   CR_DATA_TYPE_PROP,
-} from './schemas/croissant.js';
+} from './schemas/croissant';
 import {
   SWARM_CAT_CONTEXT,
   SWARM_CAT_PROTOCOL_VERSION,
@@ -27,7 +27,7 @@ import {
   SWARM_CAT_SUPERSEDED_BY,
   SWARM_CAT_ITEM_COUNT,
   SWARM_CAT_PROTOCOL_VERSION_PROP,
-} from './schemas/swarmCat.js';
+} from './schemas/swarmCat';
 import {
   SC_IMAGE_OBJECT,
   SC_VIDEO_OBJECT,
@@ -37,7 +37,7 @@ import {
   SC_DATASET,
   SC_MEDIA_OBJECT,
   SC_DATA_CATALOG,
-} from './schemas/schemaOrg.js';
+} from './schemas/schemaOrg';
 
 const CONTENT_TYPE_MAP: Record<ContentType, string[]> = {
   image: [SWARM_CAT_CATALOG_ITEM, SC_IMAGE_OBJECT],

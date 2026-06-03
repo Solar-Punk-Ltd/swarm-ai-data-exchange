@@ -1,16 +1,16 @@
 import { Bee, MantarayNode, PrivateKey } from '@ethersphere/bee-js';
-import { CATALOG_FEED_TOPIC, readCatalogFeedRoot } from './feeds.js';
-import { itemManifestPath, itemSamplePath, CATALOG_MANIFEST_PATH } from './paths.js';
-import { serializeItem, serializeCatalog } from './jsonld.js';
-import { writeItemState } from './state.js';
-import { LIFECYCLE_VALUES } from './types.js';
+import { CATALOG_FEED_TOPIC, readCatalogFeedRoot } from './feeds';
+import { itemManifestPath, itemSamplePath, CATALOG_MANIFEST_PATH } from './paths';
+import { serializeItem, serializeCatalog } from './jsonld';
+import { writeItemState } from './state';
+import { LIFECYCLE_VALUES } from './types';
 import type {
   CatalogItem,
   CatalogItemState,
   ContentSpec,
   Lifecycle,
   PaymentRequirements,
-} from './types.js';
+} from './types';
 
 type FeedSigner = PrivateKey | Uint8Array | string;
 

@@ -1,5 +1,5 @@
 import { keccak256, toUtf8Bytes, getBytes, concat } from 'ethers';
-import { CATALOG_FEED_TOPIC, stateFeedTopic, readCatalogFeedRoot } from '../src/feeds.js';
+import { CATALOG_FEED_TOPIC, stateFeedTopic, readCatalogFeedRoot } from '../src/feeds';
 
 const OWNER_A = '0x1111111111111111111111111111111111111111';
 const OWNER_B = '0x2222222222222222222222222222222222222222';

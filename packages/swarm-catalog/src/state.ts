@@ -1,6 +1,6 @@
 import { Bee, PrivateKey } from '@ethersphere/bee-js';
-import { stateFeedTopic } from './feeds.js';
-import type { CatalogItemState } from './types.js';
+import { stateFeedTopic } from './feeds';
+import type { CatalogItemState } from './types';
 
 type FeedSigner = PrivateKey | Uint8Array | string;
 

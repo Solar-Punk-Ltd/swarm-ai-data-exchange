@@ -1,6 +1,6 @@
-export * from './types.js';
-export * from './feeds.js';
-export * from './paths.js';
-export * from './jsonld.js';
-export * from './state.js';
-export { SwarmCatalogBuilder } from './builder.js';
+export * from './types';
+export * from './feeds';
+export * from './paths';
+export * from './jsonld';
+export * from './state';
+export { SwarmCatalogBuilder } from './builder';

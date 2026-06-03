@@ -1,6 +1,6 @@
-import { readItemState, writeItemState, NoStateFeedError } from '../src/state.js';
-import { stateFeedTopic } from '../src/feeds.js';
-import type { CatalogItemState } from '../src/types.js';
+import { readItemState, writeItemState, NoStateFeedError } from '../src/state';
+import { stateFeedTopic } from '../src/feeds';
+import type { CatalogItemState } from '../src/types';
 
 const OWNER = '0x1111111111111111111111111111111111111111';
 const SIGNER = '0x'.padEnd(66, 'a');
