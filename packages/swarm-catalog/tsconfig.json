@@ -4,7 +4,6 @@
     "module": "node16",
     "moduleResolution": "node16",
     "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "declaration": true,
@@ -12,6 +11,8 @@
     "sourceMap": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*"],
+  // Editor + typecheck config: covers src and tests so @types/jest globals resolve.
+  // Emit is done via tsconfig.build.json (src only). rootDir lives there.
+  "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist"]
 }
