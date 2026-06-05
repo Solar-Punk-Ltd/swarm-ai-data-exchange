@@ -141,14 +141,34 @@ export function serializeItem(item: CatalogItem): Record<string, unknown> {
   return doc;
 }
 
+// Collection-level metadata for catalog.jsonld (§5.2). All fields optional; emitted
+// only when set. Carries no agent-identity fields — agent attribution lives in the
+// Agent Card (§3.4), not here.
+export interface CatalogMeta {
+  name?: string;
+  description?: string;
+  license?: string;
+}
+
 // Serialize the collection-level catalog.jsonld document (§5.2).
+// `itemCount` is the catalog-wide total — the caller computes it from the final catalog
+// Mantaray (count of /items/{itemId}/item.jsonld leaves), not from a partial staged set,
+// so the count stays correct under copy-on-write publishes and removals.
 // Carries no agent-identity fields — agent attribution lives in the Agent Card (§3.4).
-export function serializeCatalog(items: CatalogItem[]): Record<string, unknown> {
-  return {
+export function serializeCatalog(
+  itemCount: number,
+  meta: CatalogMeta = {},
+): Record<string, unknown> {
+  const doc: Record<string, unknown> = {
     '@context': SWARM_CAT_CONTEXT,
     '@type': [SC_DATA_CATALOG, SWARM_CAT_CATALOG],
-    [SWARM_CAT_ITEM_COUNT]: items.length,
-    [SWARM_CAT_PROTOCOL_VERSION_PROP]: SWARM_CAT_PROTOCOL_VERSION,
-    dateModified: new Date().toISOString(),
   };
+  // Human-readable collection fields (schema.org names) — only when provided.
+  if (meta.name) doc.name = meta.name;
+  if (meta.description) doc.description = meta.description;
+  if (meta.license) doc.license = meta.license;
+  doc[SWARM_CAT_ITEM_COUNT] = itemCount;
+  doc[SWARM_CAT_PROTOCOL_VERSION_PROP] = SWARM_CAT_PROTOCOL_VERSION;
+  doc.dateModified = new Date().toISOString();
+  return doc;
 }

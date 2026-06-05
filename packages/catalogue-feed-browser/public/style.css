@@ -48,6 +48,34 @@ header span { color: var(--text-muted); font-size: 13px; }
   gap: 12px;
 }
 
+.catalog-meta {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.catalog-meta-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+.catalog-meta-desc {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.catalog-meta-license {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 10px;
+}
+.catalog-meta-license a { color: var(--accent); text-decoration: none; }
+.catalog-meta-license a:hover { text-decoration: underline; }
+
 .config-bar-top {
   display: flex;
   gap: 10px;

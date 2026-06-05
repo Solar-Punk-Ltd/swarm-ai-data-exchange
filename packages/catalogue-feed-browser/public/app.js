@@ -34,6 +34,8 @@ function setStatus(msg, isError = false) {
   el.hidden = false;
   document.getElementById('grid').hidden = true;
   document.getElementById('count-badge').hidden = true;
+  const meta = document.getElementById('catalog-meta');
+  if (meta) meta.hidden = true;
 }
 
 function truncate(str, len = 20) {
@@ -395,6 +397,54 @@ async function _downloadContent(btn) {
   }
 }
 
+// ── Collection-level catalog metadata (catalog.jsonld) ──────────────────────────
+
+/**
+ * Renders the optional collection-level header (name/description/license) above the
+ * item grid. Hidden when no metadata is available (e.g. flat-feed catalogs that have
+ * no /catalog.jsonld).
+ */
+function renderCatalogMeta(meta) {
+  const el = document.getElementById('catalog-meta');
+  if (!el) return;
+  const hasContent = meta && (meta.name || meta.description || meta.license);
+  if (!hasContent) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+
+  const parts = [];
+  if (meta.name) parts.push(`<h2 class="catalog-meta-name">${escHtml(meta.name)}</h2>`);
+  if (meta.description) parts.push(`<p class="catalog-meta-desc">${escHtml(meta.description)}</p>`);
+  if (meta.license) {
+    const lic = String(meta.license);
+    const licHtml = /^https?:\/\//.test(lic)
+      ? `<a href="${escHtml(lic)}" target="_blank" rel="noopener noreferrer">${escHtml(lic)}</a>`
+      : escHtml(lic);
+    parts.push(`<div class="catalog-meta-license">License: ${licHtml}</div>`);
+  }
+  el.innerHTML = parts.join('');
+  el.hidden = false;
+}
+
+/**
+ * Fetches collection metadata for the v1 Mantaray catalog. Best-effort: any failure
+ * (no catalog.jsonld, flat-feed catalog, network error) just hides the header.
+ */
+async function loadCatalogMeta(feedOwner) {
+  try {
+    const res = await fetch(`/api/catalog/${encodeURIComponent(feedOwner)}/meta`);
+    if (!res.ok) {
+      renderCatalogMeta(null);
+      return;
+    }
+    renderCatalogMeta(await res.json());
+  } catch {
+    renderCatalogMeta(null);
+  }
+}
+
 // ── Catalogue loading ─────────────────────────────────────────────────────────
 
 async function loadCatalogue() {
@@ -435,6 +485,9 @@ async function loadCatalogue() {
     grid.hidden = false;
 
     document.getElementById('status').hidden = true;
+
+    // Best-effort: show the collection header if this catalog has a v1 /catalog.jsonld.
+    loadCatalogMeta(feedOwner);
 
     const badge = document.getElementById('count-badge');
     badge.textContent = `${items.length} item${items.length !== 1 ? 's' : ''}`;

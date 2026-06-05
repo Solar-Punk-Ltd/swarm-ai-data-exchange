@@ -2,7 +2,9 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { Readable } from 'stream';
+import { Bee } from '@ethersphere/bee-js';
 import { fetchCatalogue } from './catalogue.js';
+import { readCatalogMeta } from './reader.js';
 import { executeBuy } from './buyer.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
@@ -41,6 +43,28 @@ app.get('/api/catalogue', async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
+  }
+});
+
+// Collection-level metadata (name/description/license) from /catalog.jsonld, resolved via the
+// v1 Mantaray catalog. Topic is the fixed CATALOG_FEED_TOPIC, so only the owner is needed.
+// 404s (not 500) when the catalog or its catalog.jsonld is absent — the UI treats it as optional.
+app.get('/api/catalog/:owner/meta', async (req, res) => {
+  const owner = String(req.params.owner ?? '');
+  const beeUrl = String(req.query.beeUrl ?? BEE_API_URL);
+
+  if (!owner) {
+    res.status(400).json({ error: 'owner is required' });
+    return;
+  }
+
+  try {
+    const bee = new Bee(beeUrl);
+    const meta = await readCatalogMeta(bee, owner);
+    res.json(meta);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(404).json({ error: message });
   }
 });
 

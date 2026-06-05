@@ -44,6 +44,9 @@ importers:
       '@noble/curves':
         specifier: ^1.4.0
         version: 1.9.7
+      '@solarpunk/swarm-catalog':
+        specifier: workspace:*
+        version: link:../swarm-catalog
       '@x402/core':
         specifier: latest
         version: 2.14.0

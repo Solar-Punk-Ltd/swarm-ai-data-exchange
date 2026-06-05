@@ -1,7 +1,7 @@
 import { Bee, MantarayNode, PrivateKey } from '@ethersphere/bee-js';
 import { CATALOG_FEED_TOPIC, readCatalogFeedRoot } from './feeds';
 import { itemManifestPath, itemSamplePath, CATALOG_MANIFEST_PATH } from './paths';
-import { serializeItem, serializeCatalog } from './jsonld';
+import { serializeItem, serializeCatalog, type CatalogMeta } from './jsonld';
 import { writeItemState } from './state';
 import { LIFECYCLE_VALUES } from './types';
 import type {
@@ -47,6 +47,8 @@ export class SwarmCatalogBuilder {
   private actSeeds = new Map<string, ActSeed>();
   // Prototype extension: sample bytes to upload during publish().
   private sampleData = new Map<string, Uint8Array | string>();
+  // Collection-level metadata (name/description/license) for catalog.jsonld (§5.2).
+  private catalogMeta: CatalogMeta = {};
 
   constructor(opts: BuilderOpts) {
     this.bee = opts.bee;
@@ -90,6 +92,15 @@ export class SwarmCatalogBuilder {
   // The bytes are uploaded and linked into the Mantaray at /items/{itemId}/{sample.path}.
   stageSampleData(itemId: string, data: Uint8Array | string): void {
     this.sampleData.set(itemId, data);
+  }
+
+  // Set collection-level metadata (name/description/license) for catalog.jsonld (§5.2).
+  // Merges with any previously-set fields; only provided keys are written.
+  setCatalogMeta(meta: CatalogMeta): void {
+    if (meta.license && isUrlShaped(meta.license) && !isValidIri(meta.license)) {
+      throw new Error(`setCatalogMeta: license is not a valid IRI "${meta.license}"`);
+    }
+    this.catalogMeta = { ...this.catalogMeta, ...meta };
   }
 
   // Compute the new Mantaray structure locally without uploading (§12.4 dry-run mode).
@@ -178,8 +189,10 @@ export class SwarmCatalogBuilder {
       }
     }
 
-    // Upload catalog.jsonld (collection-level metadata).
-    const catalogJsonLd = serializeCatalog(Array.from(this.staged.values()));
+    // Upload catalog.jsonld (collection-level metadata). itemCount is the catalog-wide total,
+    // derived from the final Mantaray AFTER adds/removals/lifecycle changes — not from the
+    // staged set — so it stays correct under copy-on-write publishes and removals.
+    const catalogJsonLd = serializeCatalog(countCatalogItems(manifest), this.catalogMeta);
     const catalogJsonLdBytes = JSON.stringify(catalogJsonLd, null, 2);
     const catalogDataResult = await this.bee.uploadData(this.postageBatchId, catalogJsonLdBytes);
     manifest.addFork(CATALOG_MANIFEST_PATH, catalogDataResult.reference.toString(), null);
@@ -219,6 +232,14 @@ export class SwarmCatalogBuilder {
 
     return { catalogRoot, feedUpdateTxId, stateFeeds: stateFeedResults };
   }
+}
+
+// Count the /items/{itemId}/item.jsonld leaves in the catalog Mantaray — the catalog-wide
+// item total written to catalog.jsonld (swarm-cat:itemCount). Sample leaves
+// (/items/{itemId}/sample/...) and /catalog.jsonld are excluded by the path shape.
+const ITEM_JSONLD_PATH_RE = /^\/?items\/[^/]+\/item\.jsonld$/;
+function countCatalogItems(manifest: MantarayNode): number {
+  return manifest.collect().filter((node) => ITEM_JSONLD_PATH_RE.test(node.fullPathString)).length;
 }
 
 // --- Validation (§12.3) ---

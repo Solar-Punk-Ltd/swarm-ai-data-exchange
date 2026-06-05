@@ -3,9 +3,20 @@
 
 jest.mock('@ethersphere/bee-js', () => {
   class MantarayNode {
-    addFork = jest.fn();
-    removeFork = jest.fn();
+    forks = new Map<string, string>();
+    addFork = jest.fn((path: string, ref: string) => {
+      this.forks.set(path, ref);
+    });
+    removeFork = jest.fn((path: string) => {
+      this.forks.delete(path);
+    });
     find = jest.fn();
+    collect = jest.fn(() =>
+      Array.from(this.forks.entries()).map(([fullPathString, ref]) => ({
+        fullPathString,
+        targetAddress: ref,
+      })),
+    );
     loadRecursively = jest.fn();
     saveRecursively = jest
       .fn()
@@ -87,13 +98,41 @@ function fakeBee(opts: FakeBeeOpts = {}) {
 // A mock Mantaray instance returned by MantarayNode.unmarshal in copy-on-write tests,
 // so assertions can target the manifest the builder mutates.
 function makeManifest() {
+  const forks = new Map<string, string>();
   return {
-    addFork: jest.fn(),
-    removeFork: jest.fn(),
+    forks, // exposed so tests can seed prior items before copy-on-write
+    addFork: jest.fn((path: string, ref: string) => {
+      forks.set(path, ref);
+    }),
+    removeFork: jest.fn((path: string) => {
+      forks.delete(path);
+    }),
     find: jest.fn(),
+    collect: jest.fn(() =>
+      Array.from(forks.entries()).map(([fullPathString, ref]) => ({
+        fullPathString,
+        targetAddress: ref,
+      })),
+    ),
     loadRecursively: jest.fn().mockResolvedValue(undefined),
     saveRecursively: jest.fn().mockResolvedValue({ reference: { toString: () => CATALOG_ROOT } }),
   };
+}
+
+// Find the uploadData payload that parsed to the collection-level catalog.jsonld doc.
+function findCatalogDoc(uploadData: jest.Mock): Record<string, unknown> | undefined {
+  for (const call of uploadData.mock.calls) {
+    const payload = call[1];
+    if (typeof payload !== 'string') continue;
+    try {
+      const parsed = JSON.parse(payload) as Record<string, unknown>;
+      const type = parsed['@type'];
+      if (Array.isArray(type) && type.includes('sc:DataCatalog')) return parsed;
+    } catch {
+      // not JSON (e.g. bare root) — skip
+    }
+  }
+  return undefined;
 }
 
 // Wire MantarayNode.unmarshal (a jest.fn from the module mock) to resolve a given manifest.
@@ -275,5 +314,114 @@ describe('publish — mutation paths', () => {
       expect.anything(),
     );
     warn.mockRestore();
+  });
+});
+
+describe('publish — catalog.jsonld itemCount (catalog-wide total)', () => {
+  function seeded() {
+    return { actHistoryRef: 'e'.repeat(64), granteeRef: 'c'.repeat(64) };
+  }
+
+  it('counts staged items for a fresh catalog', async () => {
+    const { bee, uploadData } = fakeBee();
+    const builder = makeBuilder(bee);
+
+    builder.stageItem(pricedItem());
+    builder.stageItem(secondPricedItem());
+    builder.seedActState(REF, seeded());
+    builder.seedActState(REF2, seeded());
+
+    await builder.publish();
+
+    expect(findCatalogDoc(uploadData)?.['swarm-cat:itemCount']).toBe(2);
+  });
+
+  it('counts carried-over items plus newly staged ones (copy-on-write)', async () => {
+    const { bee, uploadData } = fakeBee({ priorRoot: PREV_ROOT });
+    const manifest = makeManifest();
+    // Prior catalog already contains item A (carried over, NOT re-staged this publish).
+    manifest.forks.set(itemManifestPath(REF), 'refA');
+    stubPriorManifest(manifest);
+    const builder = makeBuilder(bee);
+
+    builder.stageItem(secondPricedItem()); // add item B
+    builder.seedActState(REF2, seeded());
+
+    await builder.publish();
+
+    // staged.size would be 1 (the old bug) — the manifest holds both A and B.
+    expect(findCatalogDoc(uploadData)?.['swarm-cat:itemCount']).toBe(2);
+  });
+
+  it('reflects removals in the count', async () => {
+    const { bee, uploadData } = fakeBee({ priorRoot: PREV_ROOT });
+    const manifest = makeManifest();
+    manifest.forks.set(itemManifestPath(REF), 'refA');
+    manifest.forks.set(itemManifestPath(REF2), 'refB');
+    stubPriorManifest(manifest);
+    const builder = makeBuilder(bee);
+
+    builder.stageRemove(REF);
+    await builder.publish();
+
+    expect(findCatalogDoc(uploadData)?.['swarm-cat:itemCount']).toBe(1);
+  });
+
+  it('does not count sample leaves under /items/{id}/', async () => {
+    const { bee, uploadData } = fakeBee();
+    const builder = makeBuilder(bee);
+
+    builder.stageItem(pricedItem()); // sample.path === 'sample/p.txt'
+    builder.stageSampleData(REF, 'SAMPLE-BYTES');
+    builder.seedActState(REF, seeded());
+
+    await builder.publish();
+
+    // Manifest has /items/REF/item.jsonld + /items/REF/sample/p.txt — only the former counts.
+    expect(findCatalogDoc(uploadData)?.['swarm-cat:itemCount']).toBe(1);
+  });
+});
+
+describe('setCatalogMeta', () => {
+  it('writes name/description/license into catalog.jsonld', async () => {
+    const { bee, uploadData } = fakeBee();
+    const builder = makeBuilder(bee);
+    builder.setCatalogMeta({
+      name: 'Acme AI Vision Datasets',
+      description: 'Curated training data.',
+      license: 'https://example.com/licenses/acme-data-v1',
+    });
+    builder.stageItem(pricedItem());
+    builder.seedActState(REF, { actHistoryRef: 'e'.repeat(64), granteeRef: 'c'.repeat(64) });
+
+    await builder.publish();
+
+    const catalogDoc = findCatalogDoc(uploadData);
+    expect(catalogDoc).toBeDefined();
+    expect(catalogDoc?.name).toBe('Acme AI Vision Datasets');
+    expect(catalogDoc?.description).toBe('Curated training data.');
+    expect(catalogDoc?.license).toBe('https://example.com/licenses/acme-data-v1');
+  });
+
+  it('rejects a URL-shaped license that is not a valid IRI', () => {
+    const { bee } = fakeBee();
+    const builder = makeBuilder(bee);
+    expect(() => builder.setCatalogMeta({ license: 'https://' })).toThrow(/not a valid IRI/);
+  });
+
+  it('merges across calls and only writes provided keys', async () => {
+    const { bee, uploadData } = fakeBee();
+    const builder = makeBuilder(bee);
+    builder.setCatalogMeta({ name: 'First' });
+    builder.setCatalogMeta({ description: 'Second' });
+    builder.stageItem(pricedItem());
+    builder.seedActState(REF, { actHistoryRef: 'e'.repeat(64), granteeRef: 'c'.repeat(64) });
+
+    await builder.publish();
+
+    const catalogDoc = findCatalogDoc(uploadData);
+    expect(catalogDoc?.name).toBe('First');
+    expect(catalogDoc?.description).toBe('Second');
+    expect(catalogDoc).not.toHaveProperty('license');
   });
 });
