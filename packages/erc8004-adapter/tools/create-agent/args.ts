@@ -9,8 +9,8 @@ const { values } = parseArgs({
     image: { type: 'string' },
     version: { type: 'string' },
     x402: { type: 'string' },
-    swarm: { type: 'string' },
     capabilities: { type: 'string' },
+    catalogFeedOwner: { type: 'string' },
     privateKey: { type: 'string' },
     feedPrivateKey: { type: 'string' },
     postageBatchId: { type: 'string' },
@@ -24,7 +24,7 @@ export const description = requireArg(values.description, 'description');
 export const version = values.version ?? '1.0.0';
 export const image = values.image?.trim() || undefined;
 export const x402 = values.x402?.trim() || undefined;
-export const swarm = values.swarm?.trim() || undefined;
+export const catalogFeedOwner = values.catalogFeedOwner?.trim() || undefined;
 export const capabilities = values.capabilities
   ? values.capabilities
       .split(',')

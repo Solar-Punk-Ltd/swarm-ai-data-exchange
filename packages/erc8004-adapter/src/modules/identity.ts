@@ -31,6 +31,14 @@ export class IdentityModule {
     this.deployBlock = deployBlock;
   }
 
+  get contractAddress(): string {
+    return this.contract.target as string;
+  }
+
+  get networkChainId(): bigint {
+    return this.chainId;
+  }
+
   async register(agentURI?: string, metadata?: MetadataEntry[]): Promise<RegisterResult> {
     let tx;
     try {

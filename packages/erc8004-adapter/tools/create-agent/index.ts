@@ -8,7 +8,7 @@
  *     [--image "https://example.com/avatar.png"] \
  *     [--version "1.0.0"] \
  *     [--x402 "https://provider.example.com/data"] \
- *     [--swarm "https://swarm.example.com"] \
+ *     [--catalogFeedOwner "0xabcd...1234"] \
  *     [--capabilities "cap1,cap2,cap3"] \
  *     [--privateKey "0x..."] \
  *     [--feedPrivateKey "0x..."] \
@@ -40,7 +40,7 @@ import {
   version,
   image,
   x402,
-  swarm,
+  catalogFeedOwner,
   capabilities,
   beeApiUrl,
   privateKey,
@@ -53,7 +53,7 @@ async function main() {
 
   const services = [
     ...(x402 ? [{ name: 'x402', endpoint: x402 }] : []),
-    ...(swarm ? [{ name: 'swarm', endpoint: swarm }] : []),
+    ...(catalogFeedOwner ? [{ name: 'swarm-ai-catalog', endpoint: catalogFeedOwner }] : []),
   ];
 
   const card = generateAgentCard({
@@ -95,6 +95,19 @@ async function main() {
   const { agentId, txHash } = await erc8004.identity.register(agentURI, [
     { metadataKey: SWARM_AI_CAPABLE, metadataValue: new Uint8Array([1]) },
   ]);
+
+  // ── 4. Write registrations[] back to the card ──────────────────────────────
+
+  console.log('\n[4/4] Updating Agent Card with registration…');
+
+  card.registrations = [
+    {
+      agentId,
+      agentRegistry: `eip155:${erc8004.identity.networkChainId}:${erc8004.identity.contractAddress}`,
+    },
+  ];
+
+  await uploadAgentCard(card, AGENT_CARD_TOPIC, beeApiUrl, batchId, feedPk);
 
   // ── Result ─────────────────────────────────────────────────────────────────
 
