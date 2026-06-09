@@ -23,13 +23,13 @@ The build uses `tsconfig.docker.json` (in the package root, not here) instead of
 From the package root:
 
 ```bash
-./.deploy/deploy.sh
+./deploy/deploy.sh
 ```
 
 Overrides (optional):
 
 ```bash
-REMOTE_HOST=my-host REMOTE_DIR=path/on/remote ./.deploy/deploy.sh
+REMOTE_HOST=my-host REMOTE_DIR=path/on/remote ./deploy/deploy.sh
 ```
 
 What it does:
@@ -41,8 +41,8 @@ What it does:
 ## Observe
 
 ```bash
-ssh dev 'cd ~/swarm-ai-data-exchange/gsoc-data-event-processor/.deploy && docker compose logs -f'
-ssh dev 'cd ~/swarm-ai-data-exchange/gsoc-data-event-processor/.deploy && docker compose ps'
+ssh dev 'cd ~/swarm-ai-data-exchange/gsoc-data-event-processor/deploy && docker compose logs -f'
+ssh dev 'cd ~/swarm-ai-data-exchange/gsoc-data-event-processor/deploy && docker compose ps'
 ssh dev 'docker ps --filter label=app=gsoc-data-event-processor'
 ```
 
