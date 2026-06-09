@@ -1,11 +1,10 @@
 /**
  * Fetches a single ERC-8004 agent by ID.
  *
- * Usage:
- *   pnpm run get-agent --agentId <id> [--privateKey "0x..."]
+ * Read-only — no private key required, only an RPC endpoint (RPC_URL).
  *
- * Optional flags fall back to env vars:
- *   --privateKey → PRIVATE_KEY
+ * Usage:
+ *   pnpm run get-agent --agentId <id>
  *
  * Outputs (JSON):
  *   { agentId, agentURI, agentCard }
@@ -14,12 +13,11 @@
 import { ethers } from 'ethers';
 import { createERC8004Client, config } from '../../src';
 import { downloadAgentCard } from '../../src/agent-card';
-import { agentId, privateKey } from './args';
+import { agentId } from './args';
 
 async function main() {
   const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const signer = new ethers.Wallet(privateKey, provider);
-  const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
+  const erc8004 = createERC8004Client({ provider, chain: config.chain.chain });
 
   const agentURI = await erc8004.identity.getAgentURI(BigInt(agentId));
 
@@ -32,7 +30,14 @@ async function main() {
     );
   }
 
-  console.log(JSON.stringify({ agentId, agentURI, agentCard }, null, 2));
+  // Agent cards rehydrate registrations[].agentId as bigint — stringify them for output.
+  console.log(
+    JSON.stringify(
+      { agentId, agentURI, agentCard },
+      (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+      2,
+    ),
+  );
 }
 
 main().catch((err) => {

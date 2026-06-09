@@ -26,10 +26,10 @@ This is a **read-only** command: no transactions are sent and no Swarm uploads o
 
 | # | Item | Source |
 |---|------|--------|
-| 1 | **`--privateKey`** — wallet key used to initialize the provider for contract queries | `--privateKey` flag OR `PRIVATE_KEY` env var |
+| 1 | **`RPC_URL`** — JSON-RPC endpoint for contract queries | `RPC_URL` env var (defaults to the Base Sepolia public RPC) |
 
-Only a private key is needed (for provider/signer initialization). No testnet ETH is
-required since no transactions are sent.
+No private key and no testnet ETH are required — discovery is read-only and uses a
+provider-only client. The only input is an RPC endpoint.
 
 ---
 
@@ -38,26 +38,21 @@ required since no transactions are sent.
 ### Running from within the package directory
 
 ```sh
-pnpm discover-agents [--privateKey "<0x… wallet private key>"]
+pnpm discover-agents
 ```
 
 ### Running from the monorepo root (use `--filter`)
 
 ```sh
-pnpm --filter @solarpunk/erc8004-adapter discover-agents \
-  [--privateKey "<0x… wallet private key>"]
+pnpm --filter @solarpunk/erc8004-adapter discover-agents
 ```
 
 ---
 
 ## Flag reference
 
-| Flag | Required | Default | Notes |
-|------|----------|---------|-------|
-| `--privateKey` | No* | `PRIVATE_KEY` env | Wallet key for provider/signer initialization |
-
-\* Required in practice — can come from `PRIVATE_KEY` env var instead. With `PRIVATE_KEY` set
-in `.env`, no flags are needed at all.
+This command takes no flags. It reads `RPC_URL` from the environment (falling back to the
+Base Sepolia public RPC) and queries the registry read-only.
 
 ---
 
@@ -92,7 +87,7 @@ A successful run prints a JSON array:
       "description": "Provides historical and real-time weather data for on-chain applications.",
       "services": [
         { "name": "x402", "endpoint": "https://data.solarpunk.buzz/weather/v1" },
-        { "name": "swarm",  "endpoint": "https://swarm.solarpunk.buzz/weather" }
+        { "name": "swarm-ai-catalog", "endpoint": "0x5468Fb0537098aB63A8848dfC30f283894B37179" }
       ],
       "x402Support": true,
       "active": true,
@@ -114,13 +109,14 @@ All registered agents are also browsable at [8004scan.io](https://8004scan.io).
 
 ## Environment variable setup (`.env`)
 
-If `PRIVATE_KEY` is already set, no flags are needed at all:
+Only the RPC endpoint is read, and it defaults to the Base Sepolia public RPC. Set it
+explicitly only to use a different/faster provider:
 
 ```env
-PRIVATE_KEY=0x<on-chain wallet private key>
+RPC_URL=https://sepolia.base.org
 ```
 
-Then the command simplifies to:
+The command takes no flags:
 
 ```sh
 pnpm discover-agents
@@ -132,30 +128,21 @@ pnpm discover-agents
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| `No private key` / wallet error | Neither `--privateKey` nor `PRIVATE_KEY` set | Set the flag or env var |
 | `agentCard: null` for some agents | Swarm fetch failed (node temporarily unreachable) | Retry; check Bee node or gateway availability |
-| Empty results array `[]` | No agents with `swarm_ai_capable = 1` found | Register an agent first with `pnpm create-agent` |
-| RPC timeout / slow scan | Large block range to scan | Normal on Base Sepolia — can take a few seconds |
+| Empty results array `[]` | No agents with `swarm_ai_capable = 1` in the scanned block range | Register an agent first with `pnpm create-agent`; the scan only covers recent blocks |
+| RPC timeout / `query exceeds max block range` | Provider caps `eth_getLogs` range | The scan chunks into 2,000-block windows; use an RPC with a higher limit if it persists |
 
 ---
 
 ## Full worked example
 
 ```sh
-# With --privateKey flag
-pnpm discover-agents \
-  --privateKey "0xac0974bec29a17e37ba4a6b4d238ff947bacb478cbed5efcae784d7bf4f2ff80"
-
-# With PRIVATE_KEY already in .env
+# From within the package directory
 pnpm discover-agents
 
 # From monorepo root
-pnpm --filter @solarpunk/erc8004-adapter discover-agents \
-  --privateKey "0xac0974bec29a17e37ba4a6b4d238ff947bacb478cbed5efcae784d7bf4f2ff80"
+pnpm --filter @solarpunk/erc8004-adapter discover-agents
 ```
-
-> **Note:** The private key above is the standard Hardhat/Anvil dev account and is safe to
-> use as an example. Never use it with real funds.
 
 ---
 
@@ -176,8 +163,9 @@ Once you have the agent list, suggest these follow-up actions based on context:
    // Uint8Array(1) [ 1 ]
    ```
 
-3. **Initiate a data exchange** — use the `x402` or `swarm` endpoint from the agent's
-   `services` array to start a purchase flow.
+3. **Initiate a data exchange** — use the `x402` endpoint to start a purchase flow, or the
+   `swarm-ai-catalog` entry's `endpoint` (the catalog feed owner address) to browse the
+   agent's catalog.
 
 4. **Register your own agent** — use `pnpm create-agent` to join the registry.
 

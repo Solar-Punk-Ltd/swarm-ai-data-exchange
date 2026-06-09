@@ -1,6 +1,7 @@
 import { Contract, getBytes, type Signer, type Provider, type Log, type EventLog } from 'ethers';
 import { IDENTITY_REGISTRY_ABI } from '../abis/IdentityRegistry';
 import type { RegisterResult, WalletAuth, MetadataEntry } from '../types';
+import { RECENT_BLOCK_COUNT } from '../constants';
 
 const WALLET_AUTH_TYPES = {
   WalletAuth: [
@@ -158,7 +159,7 @@ export class IdentityModule {
     toBlock?: number,
   ): Promise<{ agentId: bigint; agentURI: string; owner: string }[]> {
     const latest = await this.provider.getBlockNumber();
-    const from = fromBlock === 'recent' ? latest - 10000 : fromBlock;
+    const from = fromBlock === 'recent' ? latest - RECENT_BLOCK_COUNT : fromBlock;
     const to = toBlock ?? latest;
 
     const filter = this.contract.filters.Registered();
@@ -183,7 +184,7 @@ export class IdentityModule {
     toBlock?: number,
   ): Promise<{ agentId: bigint; rawValue: Uint8Array }[]> {
     const latest = await this.provider.getBlockNumber();
-    const from = fromBlock === 'recent' ? latest - 10000 : fromBlock;
+    const from = fromBlock === 'recent' ? latest - RECENT_BLOCK_COUNT : fromBlock;
     const to = toBlock ?? latest;
 
     const filter = this.contract.filters.MetadataSet(null, metadataKey);

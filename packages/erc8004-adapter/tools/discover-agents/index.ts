@@ -1,11 +1,10 @@
 /**
  * Discovers ERC-8004 agents with swarm_ai_capable metadata set to 1.
  *
- * Usage:
- *   pnpm run discover-agents [--privateKey "0x..."]
+ * Read-only — no private key required, only an RPC endpoint (RPC_URL).
  *
- * Optional flags fall back to env vars:
- *   --privateKey → PRIVATE_KEY
+ * Usage:
+ *   pnpm run discover-agents
  *
  * Outputs (JSON):
  *   [{ agentId, agentURI, agentCard }]
@@ -15,12 +14,10 @@ import { ethers } from 'ethers';
 import { createERC8004Client, config } from '../../src';
 import { downloadAgentCard } from '../../src/agent-card';
 import { SWARM_AI_CAPABLE } from '../../src/constants';
-import { privateKey } from './args';
 
 async function main() {
   const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const signer = new ethers.Wallet(privateKey, provider);
-  const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
+  const erc8004 = createERC8004Client({ provider, chain: config.chain.chain });
 
   console.log('Discovering swarm_ai_capable agents…');
 
@@ -47,7 +44,8 @@ async function main() {
     }),
   );
 
-  console.log(JSON.stringify(results, null, 2));
+  // Agent cards rehydrate registrations[].agentId as bigint — stringify them for output.
+  console.log(JSON.stringify(results, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2));
 }
 
 main().catch((err) => {
