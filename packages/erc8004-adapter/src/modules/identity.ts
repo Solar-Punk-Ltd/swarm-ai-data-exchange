@@ -141,7 +141,7 @@ export class IdentityModule {
     filter: ReturnType<Contract['filters'][string]>,
     fromBlock: number,
     toBlock: number,
-    chunkSize = 9_999,
+    chunkSize = 2_000,
   ): Promise<(Log | EventLog)[]> {
     const results: (Log | EventLog)[] = [];
 
@@ -154,11 +154,11 @@ export class IdentityModule {
   }
 
   async getRegisteredAgents(
-    fromBlock: number | 'earliest' = 'earliest',
+    fromBlock: number | 'recent' = 'recent',
     toBlock?: number,
   ): Promise<{ agentId: bigint; agentURI: string; owner: string }[]> {
     const latest = await this.provider.getBlockNumber();
-    const from = fromBlock === 'earliest' ? this.deployBlock : fromBlock;
+    const from = fromBlock === 'recent' ? latest - 10000 : fromBlock;
     const to = toBlock ?? latest;
 
     const filter = this.contract.filters.Registered();
@@ -179,11 +179,11 @@ export class IdentityModule {
 
   async getAgentsByMetadata(
     metadataKey: string,
-    fromBlock: number | 'earliest' = 'earliest',
+    fromBlock: number | 'recent' = 'recent',
     toBlock?: number,
   ): Promise<{ agentId: bigint; rawValue: Uint8Array }[]> {
     const latest = await this.provider.getBlockNumber();
-    const from = fromBlock === 'earliest' ? this.deployBlock : fromBlock;
+    const from = fromBlock === 'recent' ? latest - 10000 : fromBlock;
     const to = toBlock ?? latest;
 
     const filter = this.contract.filters.MetadataSet(null, metadataKey);

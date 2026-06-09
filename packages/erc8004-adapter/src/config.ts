@@ -8,8 +8,6 @@ export interface ChainConfig {
   chain: string;
   /** Provider wallet private key — used to register agents and sign FeedbackAuth */
   privateKey?: string;
-  /** Consumer wallet private key — must differ from privateKey; used to post feedback */
-  consumerPrivateKey?: string;
 }
 
 export interface BeeConfig {
@@ -37,7 +35,6 @@ const config: ERC8004AdapterConfig = {
     rpcUrl: process.env.RPC_URL ?? DEFAULT_RPC_URL,
     chain: process.env.CHAIN ?? DEFAULT_CHAIN,
     privateKey: process.env.PRIVATE_KEY,
-    consumerPrivateKey: process.env.CONSUMER_PRIVATE_KEY,
   },
 
   bee: {

@@ -35,25 +35,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Consumer wallet — must be a different address from the provider.
-  // The ERC-8004 Reputation Registry rejects self-feedback at the contract level.
-  let consumerSigner: ethers.Wallet;
-  if (
-    config.chain.consumerPrivateKey &&
-    config.chain.consumerPrivateKey !== config.chain.privateKey
-  ) {
-    consumerSigner = new ethers.Wallet(config.chain.consumerPrivateKey, provider);
-  } else {
-    // Ephemeral wallet — used only for FeedbackAuth signing verification (step 3).
-    // Step 4 (on-chain postFeedback) will be skipped without a funded consumer wallet.
-    consumerSigner = ethers.Wallet.createRandom().connect(provider);
-    console.log('\n  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 3.');
-    console.log('  Step 4 (post feedback on-chain) will be skipped.');
-    console.log('  Set CONSUMER_PRIVATE_KEY to a different funded wallet to run the full flow.');
-  }
-  const consumerAddress = await consumerSigner.getAddress();
-  log('Consumer wallet', consumerAddress);
-
   const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
 
   // ── 1. Generate Agent Card ─────────────────────────────────────────────────
@@ -69,8 +50,10 @@ async function main() {
         endpoint: 'https://provider.example.com/data',
       },
       {
-        name: 'swarm',
-        endpoint: 'http://data_discovery_layer',
+        // Catalog discovery entry point — endpoint is the catalog feed owner address (§4.1).
+        // Demo uses the provider EOA; a real publisher would point this at its catalog feed signer.
+        name: 'swarm-ai-catalog',
+        endpoint: address,
       },
     ],
     x402Support: true,
@@ -133,6 +116,26 @@ async function main() {
   const testMetadataValue = await erc8004.identity.getMetadata(agentId, 'TEST_METADATA');
   log('Test metadata value: ', testMetadataValue);
 
+  // ── 3b. Write registrations[] back into the Agent Card ─────────────────────
+  // The card is the single source of truth for cross-registry identity (ERC-8004 §2).
+  // agentRegistry is CAIP-10: eip155:<chainId>:<contractAddress>, derived from the client.
+  log('Step 3b: Populate registrations[] and re-upload card');
+
+  card.registrations = [
+    {
+      agentId,
+      agentRegistry: `eip155:${erc8004.identity.networkChainId}:${erc8004.identity.contractAddress}`,
+    },
+  ];
+  log('Updated Agent Card', serializeAgentCard(card));
+
+  if (config.bee.feedPrivateKey) {
+    await uploadAgentCard(card);
+    log('Re-uploaded card with registrations[]', 'OK');
+  } else {
+    console.log('  Skipped re-upload — BEE_FEED_PK not set.');
+  }
+
   // ── Query agents with swarm_ai_capable = 1 ──────────────────────────────────
   log('Query: agents with swarm_ai_capable metadata');
 
@@ -144,101 +147,6 @@ async function main() {
     'Agent cards',
     capableAgents.map((a) => ({ agentId: a.agentId.toString(), uri: a.uri })),
   );
-
-  return;
-
-  // ── 4. Set Agent Wallet ────────────────────────────────────────────────────
-  log('Step 4: Set agent wallet (Identity Registry)');
-
-  // The hot wallet is an ephemeral signer — it doesn't need ETH, only signs the auth.
-  // In production this would be a dedicated payment wallet separate from the NFT owner.
-  const hotWalletSigner = ethers.Wallet.createRandom();
-  const walletAuth = await erc8004.identity.signAgentWalletAuth(agentId, hotWalletSigner);
-
-  log('WalletAuth', { ...walletAuth, agentId: walletAuth.agentId.toString() });
-
-  console.log('  Sending transaction...');
-  const setWalletTxHash = await erc8004.identity.setAgentWallet(
-    agentId,
-    walletAuth.wallet,
-    walletAuth.deadline,
-    walletAuth.signature,
-  );
-
-  log('Set wallet tx', setWalletTxHash);
-
-  const linkedWallet = await erc8004.identity.getAgentWallet(agentId);
-  log('Linked agent wallet', linkedWallet);
-  console.assert(
-    linkedWallet.toLowerCase() === hotWalletSigner.address.toLowerCase(),
-    'Agent wallet mismatch after setAgentWallet',
-  );
-
-  // ── 5. FeedbackAuth sign / verify ─────────────────────────────────────────
-  log('Step 5: Sign FeedbackAuth (provider → consumer)');
-
-  const feedbackAuth = await erc8004.reputation.signFeedbackAuth(agentId, consumerAddress);
-
-  log('FeedbackAuth', { ...feedbackAuth, agentId: feedbackAuth.agentId.toString() });
-
-  const recovered = erc8004.reputation.verifyFeedbackAuth(feedbackAuth, consumerAddress);
-  log('Recovered signer', recovered);
-  console.assert(recovered.toLowerCase() === address.toLowerCase(), 'FeedbackAuth signer mismatch');
-  log('FeedbackAuth verify', 'OK');
-
-  // ── 6. Post Feedback ───────────────────────────────────────────────────────
-  log('Step 6: Post feedback (Reputation Registry)');
-
-  const consumerBalance = await provider.getBalance(consumerAddress);
-  if (!config.chain.consumerPrivateKey || consumerBalance === 0n) {
-    console.log(
-      '  Skipped — set CONSUMER_PRIVATE_KEY to a different funded wallet to run this step.',
-    );
-    console.log(
-      '  The contract does not allow the agent owner to submit feedback on their own agent.',
-    );
-  } else {
-    console.log('  Sending transaction...');
-
-    const consumerErc8004 = createERC8004Client({
-      provider,
-      signer: consumerSigner,
-      chain: config.chain.chain,
-    });
-    const feedbackTxHash = await consumerErc8004.reputation.postFeedback({
-      agentId,
-      score: 90,
-      tags: ['test', 'image-data'],
-      evidenceURI: `bzz://evidence-placeholder-${Date.now()}`,
-      feedbackAuth,
-    });
-
-    log('Feedback tx', feedbackTxHash);
-
-    // ── 7. Calculate Reputation ──────────────────────────────────────────────
-    log('Step 7: Calculate reputation');
-
-    const reputation = await erc8004.aggregate.calculateReputation(agentId);
-    log('Reputation', {
-      agentId: reputation.agentId.toString(),
-      score: reputation.score,
-      feedbackCount: reputation.feedbackCount.toString(),
-      reliable: reputation.reliable,
-    });
-  }
-
-  // ── 8. Query by Metadata ───────────────────────────────────────────────────
-  log('Step 8: Query Agents by Metadata (swarm_ai_capable)');
-  const aiAgents = await erc8004.identity.getAgentsByMetadata(SWARM_AI_CAPABLE);
-  log(`Found ${aiAgents.length} agents with SWARM_AI_CAPABLE metadata`);
-  aiAgents.forEach((a) =>
-    console.log(`   Agent ID: ${a.agentId.toString()} | Value encoded: ${a.rawValue.length} bytes`),
-  );
-
-  // ── Done ───────────────────────────────────────────────────────────────────
-  console.log('\n✓ Steps completed successfully');
-  console.log(`  agentId: ${agentId}`);
-  console.log(`  View on BaseScan: https://sepolia.basescan.org/tx/${txHash}`);
 }
 
 main().catch((err) => {

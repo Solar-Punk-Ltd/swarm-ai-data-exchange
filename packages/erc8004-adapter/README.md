@@ -709,7 +709,6 @@ Edit `.env`:
 
 ```env
 PRIVATE_KEY=0x<provider-private-key>
-CONSUMER_PRIVATE_KEY=0x<consumer-private-key>   # must be a different funded wallet
 RPC_URL=https://sepolia.base.org                 # optional, this is the default
 CHAIN=base-sepolia                               # optional, this is the default
 BEE_FEED_PK=0x<hex-private-key>                 # required to upload Agent Card to Swarm
@@ -717,9 +716,7 @@ BEE_API_URL=http://localhost:1633                # optional, this is the default
 BEE_POSTAGE_STAMP=<64-char-hex-stamp-id>         # optional, auto-discovered from Bee node if not set
 ```
 
-Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) for both wallets.
-
-> **Why two wallets?** The ERC-8004 contract rejects feedback submitted by the agent owner — self-feedback is not allowed at the contract level. `CONSUMER_PRIVATE_KEY` is optional: if omitted, steps 1–4 still run and the FeedbackAuth signing is verified off-chain, but the on-chain feedback transaction (step 5) is skipped.
+Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) for your wallet.
 
 > **Swarm upload:** `BEE_FEED_PK` is required to upload the Agent Card to Swarm. If not set, step 2 is skipped and a placeholder `bzz://` URI is registered on-chain instead. `BEE_POSTAGE_STAMP` is optional — if omitted, the Bee node is queried automatically for a usable batch. To buy a stamp, run `bee stamp buy --depth 20 --amount 100` on your Bee node.
 
@@ -742,12 +739,6 @@ Expected output:
 [Provider wallet] 0xProviderAddress
 [Balance] 0.05 ETH
 
-  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 3.
-  Step 4 (post feedback on-chain) will be skipped.
-  Set CONSUMER_PRIVATE_KEY to a different funded wallet to run the full flow.
-
-[Consumer wallet] 0xEphemeralAddress
-
 [Step 1: Generate Agent Card]
 [Agent Card] { name: 'Test Data Provider', ... }
 [Agent Card round-trip] OK
@@ -769,7 +760,7 @@ Expected output:
 [FeedbackAuth verify] OK
 
 [Step 5: Post feedback (Reputation Registry)]
-  Skipped — set CONSUMER_PRIVATE_KEY to a different funded wallet to run this step.
+  Skipped — feedback must come from a different funded wallet than the agent owner.
   The contract does not allow the agent owner to submit feedback on their own agent.
 
 ✓ Steps completed successfully
@@ -777,7 +768,7 @@ Expected output:
   View on BaseScan: https://sepolia.basescan.org/tx/0x...
 ```
 
-With both `BEE_FEED_PK` and `CONSUMER_PRIVATE_KEY` set, the full flow runs:
+With `BEE_FEED_PK` set, the full flow runs:
 
 ```
 [Step 2: Upload Agent Card to Swarm]
