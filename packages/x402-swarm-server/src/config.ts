@@ -3,7 +3,6 @@ import 'dotenv/config';
 // Server configuration loaded from the environment. Fail fast on missing required values.
 export interface ServerConfig {
   port: number;
-  paymentAddress: string;
   network: string; // CAIP-2, e.g. "eip155:84532"
   chainId: number; // numeric chain id parsed from network
   facilitatorUrl: string;
@@ -37,7 +36,6 @@ export function loadConfig(): ServerConfig {
   const network = process.env.NETWORK ?? 'eip155:84532';
   return {
     port: Number(process.env.PORT ?? 3000),
-    paymentAddress: required('PAYMENT_ADDRESS'),
     network,
     chainId: parseChainId(network),
     facilitatorUrl: process.env.FACILITATOR_URL ?? 'https://x402.org/facilitator',

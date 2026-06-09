@@ -90,7 +90,6 @@ Each layer depends on the previous:
 | `ITEM_STATE_FEED_PK`              | `x402-swarm-server`                                     | Per-item state feed signer private key (hot key, new var in refactor)                                      |
 | `POSTAGE_BATCH_ID`                | `swarm-catalog`, `x402-swarm-server`                    | Postage stamp batch ID for uploads (note: `erc8004-adapter` uses `BEE_POSTAGE_STAMP` for the same concept) |
 | `CATALOG_FEED_OWNER`              | `x402-swarm-server`                                     | EOA address of the catalog feed signer — used to locate the catalog on Swarm (new var in refactor)         |
-| `PAYMENT_ADDRESS`                 | `x402-swarm-server`                                     | EVM address that receives x402 payments                                                                    |
 | `PURCHASE_INTENT_DOMAIN_CONTRACT` | `x402-swarm-server`                                     | `verifyingContract` address for EIP-712 `PurchaseIntent` domain (new var in refactor)                      |
 | `FACILITATOR_URL`                 | `x402-swarm-server`                                     | x402 facilitator endpoint, default `https://x402.org/facilitator`                                          |
 | `EVM_PRIVATE_KEY`                 | `catalogue-feed-browser`                                | Consumer wallet private key for signing `PurchaseIntent` and ERC-3009 authorization                        |

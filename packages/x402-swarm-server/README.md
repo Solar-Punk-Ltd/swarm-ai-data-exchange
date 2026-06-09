@@ -130,7 +130,6 @@ Copy `.env.example` → `.env` and fill in:
 | Variable                          | Purpose                                                            |
 | --------------------------------- | ------------------------------------------------------------------ |
 | `PORT`                            | HTTP listen port (default `3000`)                                  |
-| `PAYMENT_ADDRESS`                 | EVM address that receives x402 payments                            |
 | `NETWORK`                         | CAIP-2 network id, e.g. `eip155:84532`                             |
 | `FACILITATOR_URL`                 | x402 facilitator endpoint (default `https://x402.org/facilitator`) |
 | `PURCHASE_INTENT_DOMAIN_CONTRACT` | `verifyingContract` for the EIP-712 `PurchaseIntent` domain        |

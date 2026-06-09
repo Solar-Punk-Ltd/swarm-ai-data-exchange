@@ -74,6 +74,18 @@ async function main() {
 
   console.log('\n[2/3] Uploading to Swarm…');
 
+  console.log('=====uploadAgentCard=====');
+  console.log('=====card=====');
+  console.log(card);
+  console.log('=====AGENT_CARD_TOPIC=====');
+  console.log(AGENT_CARD_TOPIC);
+  console.log('=====beeApiUrl=====');
+  console.log(beeApiUrl);
+  console.log('=====batchId=====');
+  console.log(batchId);
+  console.log('=====feedPk=====');
+  console.log(feedPk);
+
   const { feedUrl: agentURI } = await uploadAgentCard(
     card,
     AGENT_CARD_TOPIC,

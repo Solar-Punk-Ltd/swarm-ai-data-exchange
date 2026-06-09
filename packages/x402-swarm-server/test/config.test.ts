@@ -13,7 +13,6 @@ describe('parseChainId', () => {
 
 describe('loadConfig', () => {
   const REQUIRED = {
-    PAYMENT_ADDRESS: '0xpay',
     PURCHASE_INTENT_DOMAIN_CONTRACT: '0xcontract',
     POSTAGE_BATCH_ID: 'f'.repeat(64),
     CATALOG_FEED_OWNER: '0xowner',
@@ -40,7 +39,6 @@ describe('loadConfig', () => {
     expect(cfg.chainId).toBe(84532);
     expect(cfg.facilitatorUrl).toBe('https://x402.org/facilitator');
     expect(cfg.dbPath).toBe('./data/store.db');
-    expect(cfg.paymentAddress).toBe('0xpay');
   });
 
   it('throws when a required variable is missing', () => {
