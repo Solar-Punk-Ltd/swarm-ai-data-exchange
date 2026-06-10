@@ -22,4 +22,4 @@ export const DEFAULT_AGENT_IMAGE =
 
 export const SWARM_AI_CAPABLE = 'swarm_ai_capable';
 
-export const RECENT_BLOCK_COUNT = 10000;
+export const RECENT_BLOCK_COUNT = 100000;

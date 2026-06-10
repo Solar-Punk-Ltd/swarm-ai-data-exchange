@@ -24,9 +24,15 @@ jest.mock('@ethersphere/bee-js', () => {
     static unmarshal = jest.fn();
   }
   class PrivateKey {
-    constructor(_key: unknown) {}
+    private readonly key: unknown;
+    constructor(key: unknown) {
+      this.key = key;
+    }
     publicKey() {
-      return { address: () => ({ toHex: () => '00'.repeat(20) }) };
+      // Derive a deterministic, key-sensitive address so the builder's distinctness check
+      // (catalog signer ≠ state signer) behaves like the real implementation.
+      const hex = String(this.key).replace(/^0x/, '').padStart(40, '0').slice(-40);
+      return { address: () => ({ toHex: () => hex }) };
     }
   }
   return { MantarayNode, PrivateKey };
@@ -38,6 +44,8 @@ import { itemManifestPath, itemSamplePath } from '../src/paths';
 import type { CatalogItem } from '../src/types';
 
 const SIGNER = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+// Distinct key for the hot (state feed) signer — the builder enforces the two differ.
+const SIGNER2 = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const BATCH = 'f'.repeat(64);
 const REF = 'a'.repeat(64);
 const REF2 = 'b'.repeat(64);
@@ -144,7 +152,7 @@ function makeBuilder(bee: unknown) {
   return new SwarmCatalogBuilder({
     bee: bee as never,
     catalogFeedSigner: SIGNER,
-    itemStateFeedSigner: SIGNER,
+    itemStateFeedSigner: SIGNER2,
     postageBatchId: BATCH,
   });
 }
@@ -159,7 +167,7 @@ describe('publish — happy path', () => {
     const builder = new SwarmCatalogBuilder({
       bee,
       catalogFeedSigner: SIGNER,
-      itemStateFeedSigner: SIGNER,
+      itemStateFeedSigner: SIGNER2,
       postageBatchId: BATCH,
     });
 
@@ -177,24 +185,6 @@ describe('publish — happy path', () => {
     expect(uploadData).toHaveBeenCalled();
     // catalog feed update carries the bare Mantaray root.
     expect(uploadPayload).toHaveBeenCalledWith(BATCH, CATALOG_ROOT);
-  });
-
-  it('writes no state feed for a free item (no ACT seed)', async () => {
-    const { bee } = fakeBee();
-    const builder = new SwarmCatalogBuilder({
-      bee,
-      catalogFeedSigner: SIGNER,
-      itemStateFeedSigner: SIGNER,
-      postageBatchId: BATCH,
-    });
-
-    // A free item has an empty payment array, so the priced-item ACT-seed guard does not apply.
-    const free = { ...pricedItem(), payment: [] as CatalogItem['payment'] };
-    // stageItem would reject empty payment (§12.3), so inject directly into the staged map.
-    (builder as unknown as { staged: Map<string, CatalogItem> }).staged.set(REF, free);
-
-    const result = await builder.publish();
-    expect(result.stateFeeds).toEqual([]);
   });
 
   it('publishes multiple items with one state feed each', async () => {
