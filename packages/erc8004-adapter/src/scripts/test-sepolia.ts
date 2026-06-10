@@ -294,12 +294,23 @@ async function buildDemoCatalog(publisherAddress: string) {
 
   const now = new Date().toISOString();
   for (const a of assets) {
-    // Caller responsibility (a): upload (ACT-wrapped) content → reference; itemId === reference.
-    const uploaded = await bee.uploadData(postageBatchId, a.bytes);
+    // Caller responsibility (a): ACT-wrap + upload the full content. The content address
+    // becomes the itemId (id === storage.reference). Mirrors the working ACT pattern in
+    // x402-swarm-server/scripts/test-upload.ts:
+    //   1. createGrantees → initial grantee list (publisher's own key) + its history.
+    //   2. uploadData with act:true, passing the grantee history as context, so the
+    //      ciphertext is bound to that ACT.
+    const grantees = await bee.createGrantees(postageBatchId, [publisherPubKey]);
+    const uploaded = await bee.uploadData(postageBatchId, a.bytes, {
+      act: true,
+      actHistoryAddress: grantees.historyref,
+    });
     const itemId = uploaded.reference.toString();
 
-    // Caller responsibility (b): capture the initial ACT refs from the ACT-wrapping step.
-    const grantees = await bee.createGrantees(postageBatchId, [publisherPubKey]);
+    // Caller responsibility (b): capture the ACT refs that gate decryption. The upload
+    // returns its OWN history head, chained off the grantee history — that (not the grantee
+    // history) is the ref a grant/patchGrantees advances at purchase time.
+    const actHistoryRef = uploaded.historyAddress.getOrThrow().toString();
 
     const item: CatalogItem = {
       id: itemId,
@@ -326,7 +337,7 @@ async function buildDemoCatalog(publisherAddress: string) {
     builder.stageItem(item);
     builder.stageSampleData(itemId, a.sample);
     builder.seedActState(itemId, {
-      actHistoryRef: grantees.historyref.toString(),
+      actHistoryRef,
       granteeRef: grantees.ref.toString(),
     });
     log('Staged item', { itemId, name: a.name });
