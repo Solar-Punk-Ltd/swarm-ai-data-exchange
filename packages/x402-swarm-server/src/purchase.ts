@@ -60,7 +60,12 @@ export function purchaseHandler(deps: Deps) {
     const itemId = req.params.itemId;
     try {
       // Catalog lookup prerequisite — runs before the X-Payment branch; early return on any miss.
-      const lookup = await lookupItem(bee, config.catalogFeedOwner, itemId);
+      const lookup = await lookupItem(
+        bee,
+        config.catalogFeedOwner,
+        itemId,
+        config.itemStateFeedOwner,
+      );
       const resource = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
 
       const xPayment = req.header('X-Payment');

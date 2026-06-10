@@ -3,6 +3,7 @@ import { stateFeedTopic } from '../src/feeds';
 import type { CatalogItemState } from '../src/types';
 
 const OWNER = '0x1111111111111111111111111111111111111111';
+const STATE_OWNER = '0x2222222222222222222222222222222222222222';
 const SIGNER = '0x'.padEnd(66, 'a');
 const ITEM = 'a'.repeat(64);
 const STATE_REF = 'd'.repeat(64);
@@ -43,10 +44,11 @@ describe('readItemState', () => {
     const downloadData = jest.fn().mockResolvedValue({ toUtf8: () => JSON.stringify(STATE) });
     const bee = { makeFeedReader, downloadData } as never;
 
-    const result = await readItemState(bee, OWNER, ITEM);
+    const result = await readItemState(bee, OWNER, ITEM, STATE_OWNER);
 
     expect(result).toEqual(STATE);
-    expect(makeFeedReader).toHaveBeenCalledWith(stateFeedTopic(OWNER, ITEM), OWNER);
+    // Topic is bound to the catalog owner, but the feed is owned by the hot state-feed signer.
+    expect(makeFeedReader).toHaveBeenCalledWith(stateFeedTopic(OWNER, ITEM), STATE_OWNER);
     expect(downloadData).toHaveBeenCalledWith(STATE_REF);
   });
 
@@ -54,6 +56,8 @@ describe('readItemState', () => {
     const downloadPayload = jest.fn().mockRejectedValue(new Error('not found'));
     const bee = { makeFeedReader: () => ({ downloadPayload }), downloadData: jest.fn() } as never;
 
-    await expect(readItemState(bee, OWNER, ITEM)).rejects.toBeInstanceOf(NoStateFeedError);
+    await expect(readItemState(bee, OWNER, ITEM, STATE_OWNER)).rejects.toBeInstanceOf(
+      NoStateFeedError,
+    );
   });
 });

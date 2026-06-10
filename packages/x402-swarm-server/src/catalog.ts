@@ -32,6 +32,7 @@ export async function lookupItem(
   bee: Bee,
   catalogFeedOwner: string,
   itemId: string,
+  stateFeedOwner: string,
 ): Promise<CatalogLookup> {
   // 1. Resolve the catalog feed → Mantaray root. A missing feed means an empty catalog.
   let root: string;
@@ -66,7 +67,7 @@ export async function lookupItem(
   // 6. Read the per-item state feed (verification + actHistoryRef for the grant).
   let state: CatalogItemState;
   try {
-    state = await readItemState(bee, catalogFeedOwner, itemId);
+    state = await readItemState(bee, catalogFeedOwner, itemId, stateFeedOwner);
   } catch (err) {
     if (err instanceof NoStateFeedError) {
       throw new PurchaseError(

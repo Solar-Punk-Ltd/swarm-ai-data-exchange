@@ -16,7 +16,7 @@ describe('loadConfig', () => {
     PURCHASE_INTENT_DOMAIN_CONTRACT: '0xcontract',
     POSTAGE_BATCH_ID: 'f'.repeat(64),
     CATALOG_FEED_OWNER: '0xowner',
-    ITEM_STATE_FEED_PK: '0xpk',
+    ITEM_STATE_FEED_PK: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d',
   };
 
   let saved: NodeJS.ProcessEnv;
@@ -39,6 +39,8 @@ describe('loadConfig', () => {
     expect(cfg.chainId).toBe(84532);
     expect(cfg.facilitatorUrl).toBe('https://x402.org/facilitator');
     expect(cfg.dbPath).toBe('./data/store.db');
+    // Derived from ITEM_STATE_FEED_PK (Hardhat account #1).
+    expect(cfg.itemStateFeedOwner).toBe('0x70997970c51812dc3a010c7d01b50e0d17dc79c8');
   });
 
   it('throws when a required variable is missing', () => {
