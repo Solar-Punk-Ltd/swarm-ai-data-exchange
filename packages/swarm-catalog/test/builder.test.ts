@@ -1,5 +1,6 @@
 import { MantarayNode } from '@ethersphere/bee-js';
 import { SwarmCatalogBuilder } from '../src/builder';
+import { itemManifestPath } from '../src/paths';
 import type { CatalogItem, ContentSpec } from '../src/types';
 
 // Well-known test private key (Hardhat account #0). Real bee-js PrivateKey accepts it.
@@ -188,8 +189,8 @@ describe('dryRun', () => {
     const { root, manifest } = await builder.dryRun();
     expect(root).toBe('');
     expect(manifest).toBeInstanceOf(MantarayNode);
-    expect(manifest.find(`/items/${REF}/item.jsonld`)).toBeTruthy();
-    expect(manifest.find(`/items/${'b'.repeat(64)}/item.jsonld`)).toBeTruthy();
+    expect(manifest.find(itemManifestPath(REF))).toBeTruthy();
+    expect(manifest.find(itemManifestPath('b'.repeat(64)))).toBeTruthy();
   });
 
   it('performs no Bee I/O', async () => {

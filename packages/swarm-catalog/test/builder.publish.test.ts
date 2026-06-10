@@ -220,7 +220,10 @@ describe('publish — copy-on-write from a prior catalog', () => {
     expect(MantarayNode.unmarshal as unknown as jest.Mock).toHaveBeenCalledWith(bee, PREV_ROOT);
     expect(manifest.loadRecursively).toHaveBeenCalled();
     // The new item is linked into the *existing* manifest (not a fresh one).
-    expect(manifest.addFork).toHaveBeenCalledWith(itemManifestPath(REF), 'blobref', null);
+    expect(manifest.addFork).toHaveBeenCalledWith(itemManifestPath(REF), 'blobref', {
+      'Content-Type': 'application/ld+json',
+      Filename: 'item.jsonld',
+    });
     expect(result.catalogRoot).toBe(CATALOG_ROOT);
   });
 });
@@ -282,7 +285,10 @@ describe('publish — mutation paths', () => {
       BATCH,
       expect.stringContaining('"lifecycle": "deprecated"'),
     );
-    expect(manifest.addFork).toHaveBeenCalledWith(itemManifestPath(REF), 'blobref', null);
+    expect(manifest.addFork).toHaveBeenCalledWith(itemManifestPath(REF), 'blobref', {
+      'Content-Type': 'application/ld+json',
+      Filename: 'item.jsonld',
+    });
   });
 
   it('warns and skips a lifecycle change for an unknown item', async () => {

@@ -258,7 +258,7 @@ async function buildDemoCatalog(publisherAddress: string) {
   builder.setCatalogMeta({
     name: 'Test Data Provider Catalog',
     description: 'Demo catalog published by test-sepolia',
-    license: 'CC-BY-4.0',
+    license: 'https://creativecommons.org/licenses/by/4.0/',
   });
 
   const publisherPubKey = await getBeePublicKey(config.bee.endpoint);

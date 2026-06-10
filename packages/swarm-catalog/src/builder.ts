@@ -175,14 +175,22 @@ export class SwarmCatalogBuilder {
       if (item.sample && sampleBytes != null) {
         const sampleResult = await this.bee.uploadData(this.postageBatchId, sampleBytes);
         const sampleManifestPath = itemSamplePath(itemId, item.sample.path);
-        manifest.addFork(sampleManifestPath, sampleResult.reference.toString(), null);
+        manifest.addFork(
+          sampleManifestPath,
+          sampleResult.reference.toString(),
+          forkMetadata(item.sample.encodingFormat, basename(item.sample.path)),
+        );
       }
 
       // Step 4: Serialize and upload item.jsonld. Inline fork metadata (§5.5) is empty for prototype.
       const itemJsonLd = serializeItem(item);
       const itemJsonLdBytes = JSON.stringify(itemJsonLd, null, 2);
       const itemResult = await this.bee.uploadData(this.postageBatchId, itemJsonLdBytes);
-      manifest.addFork(itemManifestPath(itemId), itemResult.reference.toString(), null);
+      manifest.addFork(
+        itemManifestPath(itemId),
+        itemResult.reference.toString(),
+        forkMetadata(JSONLD_CONTENT_TYPE, 'item.jsonld'),
+      );
     }
 
     // Process removals: remove item.jsonld fork from Mantaray.
@@ -205,7 +213,11 @@ export class SwarmCatalogBuilder {
         parsed['lifecycle'] = lifecycle;
         const updated = JSON.stringify(parsed, null, 2);
         const updatedResult = await this.bee.uploadData(this.postageBatchId, updated);
-        manifest.addFork(itemManifestPath(itemId), updatedResult.reference.toString(), null);
+        manifest.addFork(
+          itemManifestPath(itemId),
+          updatedResult.reference.toString(),
+          forkMetadata(JSONLD_CONTENT_TYPE, 'item.jsonld'),
+        );
       } catch (err) {
         console.warn(`[swarm-catalog] Failed to update lifecycle for ${itemId}, skipping:`, err);
       }
@@ -217,7 +229,11 @@ export class SwarmCatalogBuilder {
     const catalogJsonLd = serializeCatalog(countCatalogItems(manifest), this.catalogMeta);
     const catalogJsonLdBytes = JSON.stringify(catalogJsonLd, null, 2);
     const catalogDataResult = await this.bee.uploadData(this.postageBatchId, catalogJsonLdBytes);
-    manifest.addFork(CATALOG_MANIFEST_PATH, catalogDataResult.reference.toString(), null);
+    manifest.addFork(
+      CATALOG_MANIFEST_PATH,
+      catalogDataResult.reference.toString(),
+      forkMetadata(JSONLD_CONTENT_TYPE, 'catalog.jsonld'),
+    );
 
     // Step 6 (§12.2): Upload new Mantaray and capture root reference.
     const saveResult = await manifest.saveRecursively(this.bee, this.postageBatchId);
@@ -264,6 +280,25 @@ export class SwarmCatalogBuilder {
 
     return { catalogRoot, feedUpdateTxId, stateFeeds: stateFeedResults };
   }
+}
+
+// JSON-LD documents are served as application/ld+json so the bzz endpoint returns the
+// correct Content-Type when a leaf is fetched directly by URL.
+const JSONLD_CONTENT_TYPE = 'application/ld+json';
+
+// Build Mantaray fork metadata so the bzz endpoint serves a leaf with the right MIME type
+// (and a filename for downloads). Returns null when no content type is known, leaving the
+// fork metadata empty rather than guessing.
+function forkMetadata(
+  contentType: string | undefined,
+  filename: string,
+): Record<string, string> | null {
+  if (!contentType) return null;
+  return { 'Content-Type': contentType, Filename: filename };
+}
+
+function basename(path: string): string {
+  return path.split('/').pop() ?? path;
 }
 
 // Count the /items/{itemId}/item.jsonld leaves in the catalog Mantaray — the catalog-wide

@@ -3,6 +3,7 @@ import {
   readCatalogFeedRoot,
   CATALOG_MANIFEST_PATH,
   itemManifestPath,
+  itemSamplePath,
   type CatalogMeta,
   type Lifecycle,
   type PaymentRequirements,
@@ -178,7 +179,7 @@ export async function getSample(
   const sample = doc.sample as { path?: string; encodingFormat?: string } | undefined;
   if (!sample?.path) throw new Error(`Item ${itemId} has no sample`);
 
-  const sampleNode = manifest.find(`/items/${itemId}/${sample.path}`);
+  const sampleNode = manifest.find(itemSamplePath(itemId, sample.path));
   if (!hasTarget(sampleNode)) throw new Error(`Sample blob not found for item ${itemId}`);
 
   const raw = await bee.downloadData(sampleNode.targetAddress);
