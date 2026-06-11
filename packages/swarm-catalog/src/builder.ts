@@ -175,7 +175,8 @@ export class SwarmCatalogBuilder {
       if (item.sample && sampleBytes != null) {
         const sampleResult = await this.bee.uploadData(this.postageBatchId, sampleBytes);
         const sampleManifestPath = itemSamplePath(itemId, item.sample.path);
-        manifest.addFork(
+        upsertFork(
+          manifest,
           sampleManifestPath,
           sampleResult.reference.toString(),
           forkMetadata(item.sample.encodingFormat, basename(item.sample.path)),
@@ -186,7 +187,8 @@ export class SwarmCatalogBuilder {
       const itemJsonLd = serializeItem(item);
       const itemJsonLdBytes = JSON.stringify(itemJsonLd, null, 2);
       const itemResult = await this.bee.uploadData(this.postageBatchId, itemJsonLdBytes);
-      manifest.addFork(
+      upsertFork(
+        manifest,
         itemManifestPath(itemId),
         itemResult.reference.toString(),
         forkMetadata(JSONLD_CONTENT_TYPE, 'item.jsonld'),
@@ -213,7 +215,8 @@ export class SwarmCatalogBuilder {
         parsed['lifecycle'] = lifecycle;
         const updated = JSON.stringify(parsed, null, 2);
         const updatedResult = await this.bee.uploadData(this.postageBatchId, updated);
-        manifest.addFork(
+        upsertFork(
+          manifest,
           itemManifestPath(itemId),
           updatedResult.reference.toString(),
           forkMetadata(JSONLD_CONTENT_TYPE, 'item.jsonld'),
@@ -229,7 +232,8 @@ export class SwarmCatalogBuilder {
     const catalogJsonLd = serializeCatalog(countCatalogItems(manifest), this.catalogMeta);
     const catalogJsonLdBytes = JSON.stringify(catalogJsonLd, null, 2);
     const catalogDataResult = await this.bee.uploadData(this.postageBatchId, catalogJsonLdBytes);
-    manifest.addFork(
+    upsertFork(
+      manifest,
       CATALOG_MANIFEST_PATH,
       catalogDataResult.reference.toString(),
       forkMetadata(JSONLD_CONTENT_TYPE, 'catalog.jsonld'),
@@ -299,6 +303,21 @@ function forkMetadata(
 
 function basename(path: string): string {
   return path.split('/').pop() ?? path;
+}
+
+// Add or replace a fork at `path`. bee-js MantarayNode.addFork is a silent no-op when the
+// exact path already exists (it never updates the leaf's targetAddress/metadata), so a
+// copy-on-write republish would carry the stale leaf forward. Remove any existing fork first.
+function upsertFork(
+  manifest: MantarayNode,
+  path: string,
+  reference: string,
+  metadata: Record<string, string> | null,
+): void {
+  if (manifest.find(path)) {
+    manifest.removeFork(path);
+  }
+  manifest.addFork(path, reference, metadata);
 }
 
 // Count the /items/{itemId}/item.jsonld leaves in the catalog Mantaray — the catalog-wide
