@@ -34,17 +34,6 @@ const MONO = 'ui-monospace, "SF Mono", Menlo, monospace';
 // ────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────
-function extractOwner(swarmEndpoint: string): string {
-  try {
-    const { pathname } = new URL(swarmEndpoint);
-    const parts = pathname.split('/').filter(Boolean);
-    const idx = parts.indexOf('feeds');
-    return idx !== -1 ? (parts[idx + 1] ?? '') : '';
-  } catch {
-    return '';
-  }
-}
-
 /** Pull the feed identifier (hash-like) out of a Swarm endpoint URL for display. */
 function extractFeedId(swarmEndpoint: string): string {
   try {
