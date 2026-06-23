@@ -1,0 +1,171 @@
+// JSON-Schema tool descriptions advertised to MCP clients in ListTools.
+// Keep in sync with the Zod schemas in ./zod-schemas.ts (runtime validation).
+
+const paymentRequirementsSchema = {
+  type: 'object',
+  properties: {
+    scheme: { type: 'string', enum: ['exact'] },
+    chainId: { type: 'string', description: 'CAIP-2 chain id.' },
+    asset: { type: 'string', description: 'CAIP-19 asset id.' },
+    amount: { type: 'string', description: 'Smallest-unit decimal string.' },
+    payTo: { type: 'string', description: '0x payee address.' },
+    facilitator: { type: 'string', description: 'Facilitator URL.' },
+    description: { type: 'string' },
+  },
+  required: ['scheme', 'chainId', 'asset', 'amount', 'payTo'],
+};
+
+const catalogItemSchema = {
+  type: 'object',
+  description:
+    'A CatalogItem (swarm-catalog). id MUST equal storage.reference; payment MUST be non-empty.',
+  properties: {
+    id: { type: 'string', description: '64-char hex content reference.' },
+    name: { type: 'string' },
+    description: { type: 'string' },
+    content: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['image', 'video', 'audio', 'text', 'document', 'dataset', 'bytes'],
+        },
+        encodingFormat: { type: 'string', description: 'MIME type.' },
+      },
+      required: ['type', 'encodingFormat'],
+    },
+    storage: {
+      type: 'object',
+      properties: {
+        reference: { type: 'string' },
+        contentSize: { type: 'number' },
+      },
+      required: ['reference'],
+    },
+    payment: { type: 'array', items: paymentRequirementsSchema, minItems: 1 },
+    sample: {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['subset', 'clip', 'thumbnail', 'manifest'],
+        },
+        path: { type: 'string' },
+        encodingFormat: { type: 'string' },
+        contentSize: { type: 'number' },
+      },
+      required: ['kind', 'path'],
+    },
+    license: { type: 'string' },
+    tags: { type: 'array', items: { type: 'string' } },
+    version: { type: 'string' },
+    lifecycle: {
+      type: 'string',
+      enum: ['active', 'deprecated', 'retired'],
+    },
+    supersededBy: { type: 'string' },
+    dateAdded: { type: 'string', description: 'ISO 8601.' },
+    dateModified: { type: 'string', description: 'ISO 8601.' },
+  },
+  required: [
+    'id',
+    'name',
+    'description',
+    'content',
+    'storage',
+    'payment',
+    'lifecycle',
+    'dateAdded',
+    'dateModified',
+  ],
+};
+
+export const SwarmMarketToolsSchema = [
+  {
+    name: 'build_catalog',
+    title: 'Build catalog',
+    description:
+      'Publish a catalog of priced, ACT-protected AI data assets to Swarm. ' +
+      'Stages one or more CatalogItems and publishes them: uploads samples + item.jsonld + ' +
+      'catalog.jsonld, builds/updates the catalog Mantaray, pushes the catalog feed, and ' +
+      'initializes each per-item state feed. ' +
+      "ACT wrapping is NOT done here: upload + ACT-wrap content first (e.g. via swarm-mcp's " +
+      'upload_data_act / create_grantees), then pass the captured actHistoryRef + granteeRef ' +
+      "in each item's actSeed.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          minItems: 1,
+          description: 'Items to stage and publish.',
+          items: {
+            type: 'object',
+            properties: {
+              item: catalogItemSchema,
+              actSeed: {
+                type: 'object',
+                description:
+                  'ACT refs captured when ACT-wrapping the content (required for every priced item).',
+                properties: {
+                  actHistoryRef: { type: 'string' },
+                  granteeRef: { type: 'string' },
+                },
+                required: ['actHistoryRef', 'granteeRef'],
+              },
+              sampleData: {
+                type: 'string',
+                description:
+                  "Optional sample bytes (utf-8) uploaded and linked under the item's sample path.",
+              },
+            },
+            required: ['item', 'actSeed'],
+          },
+        },
+        catalogMeta: {
+          type: 'object',
+          description: 'Optional collection-level metadata for /catalog.jsonld.',
+          properties: {
+            name: { type: 'string' },
+            description: { type: 'string' },
+            license: { type: 'string' },
+          },
+        },
+        postageBatchId: {
+          type: 'string',
+          description: 'Override the upload postage batch; falls back to POSTAGE_BATCH_ID env.',
+        },
+      },
+      required: ['items'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        catalogRoot: {
+          type: 'string',
+          description: 'New Mantaray root reference.',
+        },
+        feedUpdateTxId: {
+          type: 'string',
+          description: 'Catalog feed update reference.',
+        },
+        stateFeeds: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              itemId: { type: 'string' },
+              reference: { type: 'string' },
+            },
+            required: ['itemId', 'reference'],
+          },
+        },
+        message: { type: 'string' },
+      },
+      required: ['catalogRoot', 'feedUpdateTxId', 'stateFeeds'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+];

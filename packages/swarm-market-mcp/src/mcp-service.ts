@@ -1,0 +1,73 @@
+/**
+ * MCP Service for the Swarm AI marketplace catalog operations.
+ */
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  ListToolsRequestSchema,
+  McpError,
+} from '@modelcontextprotocol/sdk/types.js';
+import { ZodError } from 'zod';
+import { Bee } from '@ethersphere/bee-js';
+import config from './config';
+import { SwarmMarketToolsSchema } from './schemas';
+import { getToolErrorResponse, ToolResponse } from './utils';
+import { buildCatalog } from './tools/build_catalog';
+import type { BuildCatalogArgs } from './tools/build_catalog/models';
+import { buildCatalogSchema } from './schemas/zod-schemas';
+
+export class SwarmMarketMCPServer {
+  public readonly server: McpServer;
+  private readonly bee: Bee;
+
+  constructor() {
+    this.bee = new Bee(config.bee.endpoint);
+
+    this.server = new McpServer(
+      {
+        name: 'swarm-market-mcp-server',
+        version: '0.1.0',
+      },
+      {
+        capabilities: {
+          logging: {},
+          tools: {},
+        },
+      },
+    );
+
+    const server = this.server.server;
+
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: [...SwarmMarketToolsSchema],
+    }));
+
+    server.setRequestHandler(CallToolRequestSchema, async (request): Promise<ToolResponse> => {
+      const { name, arguments: args } = request.params;
+      try {
+        switch (name) {
+          case 'build_catalog': {
+            const validArgs = buildCatalogSchema.parse(args);
+            return buildCatalog(validArgs as unknown as BuildCatalogArgs, this.bee);
+          }
+
+          default:
+            throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+        }
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return getToolErrorResponse(error.errors[0].message);
+        }
+        throw error;
+      }
+    });
+
+    this.server.server.onerror = (error: Error) => console.error('[Error]', error);
+
+    process.on('SIGINT', async () => {
+      await this.server.close();
+      process.exit(0);
+    });
+  }
+}
