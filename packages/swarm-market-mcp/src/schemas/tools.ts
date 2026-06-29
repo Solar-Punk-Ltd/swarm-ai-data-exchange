@@ -168,4 +168,69 @@ export const SwarmMarketToolsSchema = [
       taskSupport: 'forbidden',
     },
   },
+  {
+    name: 'get_agent',
+    title: 'Get agent',
+    description:
+      'Resolve an ERC-8004 agent id to its on-chain Agent Card (read-only). When ' +
+      'includeCatalog is true, also resolves the agent\'s "swarm-ai-catalog" service entry ' +
+      'to its catalog feed owner and enumerates the catalog items (id, name, lifecycle, ' +
+      'payment, tags). Returns { agentId, agentURI, agentCard, catalog? }.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'ERC-8004 NFT token id of the agent.',
+        },
+        includeCatalog: {
+          type: 'boolean',
+          description: "Also resolve the agent's catalog feed and list its items.",
+        },
+      },
+      required: ['agentId'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string' },
+        agentURI: { type: 'string', description: 'Swarm feed URL of the Agent Card.' },
+        agentCard: { type: 'object', description: 'The fetched ERC-8004 Agent Card.' },
+        catalog: {
+          type: ['object', 'null'],
+          description: 'Present only when includeCatalog is true.',
+          properties: {
+            owner: { type: 'string', description: 'Catalog feed owner address.' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            license: { type: 'string' },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  itemId: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string' },
+                  contentType: { type: 'string' },
+                  lifecycle: { type: 'string' },
+                  tags: { type: 'array', items: { type: 'string' } },
+                  payment: { type: 'array' },
+                  hasSample: { type: 'boolean' },
+                },
+                required: ['itemId', 'name', 'lifecycle', 'payment'],
+              },
+            },
+            error: { type: 'string', description: 'Set when the catalog feed is unreadable.' },
+          },
+          required: ['owner', 'items'],
+        },
+        catalogNote: { type: 'string' },
+      },
+      required: ['agentId', 'agentURI', 'agentCard'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
 ];

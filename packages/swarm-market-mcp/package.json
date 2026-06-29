@@ -17,10 +17,12 @@
   },
   "license": "ISC",
   "dependencies": {
+    "@solarpunk/erc8004-adapter": "workspace:*",
     "@solarpunk/swarm-catalog": "workspace:*",
     "@ethersphere/bee-js": "12.0.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "dotenv": "^17.2.3",
+    "ethers": "^6.13.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

@@ -71,3 +71,8 @@ export const buildCatalogSchema = z.object({
     .optional(),
   postageBatchId: z.string().optional(),
 });
+
+export const getAgentSchema = z.object({
+  agentId: z.string().min(1, { message: 'Missing required parameter: agentId.' }),
+  includeCatalog: z.boolean().optional(),
+});

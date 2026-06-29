@@ -62,6 +62,23 @@ export interface BuildCatalogItem {
 2. For each item: `stageItem(item)` → `seedActState(item.id, actSeed)` → optional `stageSampleData` / top-level `setCatalogMeta`.
 3. `await builder.publish()` and return its result as structured content.
 
+### `get_agent`
+
+Resolves an ERC-8004 agent id to its on-chain Agent Card (read-only — RPC + Swarm fetch, no signer). Optionally enumerates the agent's catalog.
+
+**Args** (`src/tools/get_agent/models.ts`):
+
+```typescript
+export interface GetAgentArgs {
+  agentId: string; // ERC-8004 NFT token id
+  includeCatalog?: boolean; // also resolve the "swarm-ai-catalog" feed and list items
+}
+```
+
+**Flow:** `identity.getAgentURI(agentId)` → `downloadAgentCard(uri)`. When `includeCatalog` is true, reads the catalog feed owner from the Agent Card's `"swarm-ai-catalog"` service `endpoint`, resolves the catalog feed → Mantaray root, and enumerates `/items/{itemId}/item.jsonld` leaves (mirrors the §13.2 reader list flow using `@solarpunk/swarm-catalog` primitives).
+
+**Return:** `{ agentId, agentURI, agentCard, catalog? }` where `catalog` is `{ owner, name?, description?, license?, items[] }`, or `null` (with `catalogNote`) if the card has no catalog service, or `{ owner, items: [], error }` if the feed is unreadable. `registrations[].agentId` (bigint) is stringified in the response.
+
 ## Caller responsibilities (NOT done by this tool)
 
 Two §12.2 steps are the caller's, exactly as in `swarm-catalog`:
@@ -87,6 +104,8 @@ The tool throws if any priced item is missing its `actSeed` (the builder enforce
 | `BEE_FEED_PK`        | Catalog feed signer private key (cold key)                                        |
 | `ITEM_STATE_FEED_PK` | Per-item state feed signer private key (hot key) — MUST differ from `BEE_FEED_PK` |
 | `POSTAGE_BATCH_ID`   | Postage stamp batch ID for uploads                                                |
+| `RPC_URL`            | EVM RPC endpoint for `get_agent` reads (default `https://sepolia.base.org`)       |
+| `ERC8004_CHAIN`      | Chain key for the ERC-8004 client (default `base-sepolia`)                        |
 
 ## Package skeleton (match `swarm-mcp`)
 

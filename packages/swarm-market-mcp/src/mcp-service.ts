@@ -15,7 +15,9 @@ import { SwarmMarketToolsSchema } from './schemas';
 import { getToolErrorResponse, ToolResponse } from './utils';
 import { buildCatalog } from './tools/build_catalog';
 import type { BuildCatalogArgs } from './tools/build_catalog/models';
-import { buildCatalogSchema } from './schemas/zod-schemas';
+import { getAgent } from './tools/get_agent';
+import type { GetAgentArgs } from './tools/get_agent/models';
+import { buildCatalogSchema, getAgentSchema } from './schemas/zod-schemas';
 
 export class SwarmMarketMCPServer {
   public readonly server: McpServer;
@@ -50,6 +52,11 @@ export class SwarmMarketMCPServer {
           case 'build_catalog': {
             const validArgs = buildCatalogSchema.parse(args);
             return buildCatalog(validArgs as unknown as BuildCatalogArgs, this.bee);
+          }
+
+          case 'get_agent': {
+            const validArgs = getAgentSchema.parse(args);
+            return getAgent(validArgs as GetAgentArgs, this.bee);
           }
 
           default:
