@@ -17,7 +17,16 @@ import { buildCatalog } from './tools/build_catalog';
 import type { BuildCatalogArgs } from './tools/build_catalog/models';
 import { getAgent } from './tools/get_agent';
 import type { GetAgentArgs } from './tools/get_agent/models';
-import { buildCatalogSchema, getAgentSchema } from './schemas/zod-schemas';
+import { deleteCatalogItem } from './tools/delete_catalog_item';
+import type { DeleteCatalogItemArgs } from './tools/delete_catalog_item/models';
+import { deleteCatalog } from './tools/delete_catalog';
+import type { DeleteCatalogArgs } from './tools/delete_catalog/models';
+import {
+  buildCatalogSchema,
+  deleteCatalogItemSchema,
+  deleteCatalogSchema,
+  getAgentSchema,
+} from './schemas/zod-schemas';
 
 export class SwarmMarketMCPServer {
   public readonly server: McpServer;
@@ -57,6 +66,16 @@ export class SwarmMarketMCPServer {
           case 'get_agent': {
             const validArgs = getAgentSchema.parse(args);
             return getAgent(validArgs as GetAgentArgs, this.bee);
+          }
+
+          case 'delete_catalog_item': {
+            const validArgs = deleteCatalogItemSchema.parse(args);
+            return deleteCatalogItem(validArgs as DeleteCatalogItemArgs, this.bee);
+          }
+
+          case 'delete_catalog': {
+            const validArgs = deleteCatalogSchema.parse(args);
+            return deleteCatalog(validArgs as DeleteCatalogArgs, this.bee);
           }
 
           default:

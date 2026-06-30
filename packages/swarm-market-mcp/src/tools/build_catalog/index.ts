@@ -64,7 +64,11 @@ export async function buildCatalog(args: BuildCatalogArgs, bee: Bee): Promise<To
       builder.stageItem(entry.item);
       builder.seedActState(entry.item.id, entry.actSeed);
       if (entry.sampleData != null) {
-        builder.stageSampleData(entry.item.id, entry.sampleData);
+        const sampleBytes =
+          entry.sampleEncoding === 'base64'
+            ? new Uint8Array(Buffer.from(entry.sampleData, 'base64'))
+            : entry.sampleData;
+        builder.stageSampleData(entry.item.id, sampleBytes);
       }
     }
     if (args.catalogMeta) {

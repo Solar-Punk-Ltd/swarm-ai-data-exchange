@@ -116,7 +116,14 @@ export const SwarmMarketToolsSchema = [
               sampleData: {
                 type: 'string',
                 description:
-                  "Optional sample bytes (utf-8) uploaded and linked under the item's sample path.",
+                  "Optional sample bytes uploaded and linked under the item's sample path. " +
+                  'Interpreted per sampleEncoding (utf-8 by default).',
+              },
+              sampleEncoding: {
+                type: 'string',
+                enum: ['utf8', 'base64'],
+                description:
+                  "How to interpret sampleData: 'utf8' (default) or 'base64' for binary samples (e.g. PNG thumbnails).",
               },
             },
             required: ['item', 'actSeed'],
@@ -228,6 +235,110 @@ export const SwarmMarketToolsSchema = [
         catalogNote: { type: 'string' },
       },
       required: ['agentId', 'agentURI', 'agentCard'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
+    name: 'delete_catalog_item',
+    title: 'Delete catalog item',
+    description:
+      'Remove one or more items from the Swarm catalog. Stages a removal per itemId and ' +
+      'publishes: copy-on-writes a new catalog Mantaray with the /items/{itemId}/ forks ' +
+      'dropped and pushes the catalog feed update. Swarm chunks are immutable, so this does ' +
+      'not erase uploaded content — it makes the catalog feed resolve to a Mantaray that no ' +
+      'longer references the removed items. To empty the whole catalog, pass every itemId.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemIds: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'string' },
+          description: '64-char hex content references of the items to remove.',
+        },
+        postageBatchId: {
+          type: 'string',
+          description: 'Override the upload postage batch; falls back to POSTAGE_BATCH_ID env.',
+        },
+      },
+      required: ['itemIds'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        catalogRoot: {
+          type: 'string',
+          description: 'New Mantaray root reference.',
+        },
+        feedUpdateTxId: {
+          type: 'string',
+          description: 'Catalog feed update reference.',
+        },
+        stateFeeds: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              itemId: { type: 'string' },
+              reference: { type: 'string' },
+            },
+            required: ['itemId', 'reference'],
+          },
+        },
+        message: { type: 'string' },
+      },
+      required: ['catalogRoot', 'feedUpdateTxId', 'stateFeeds'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
+    name: 'delete_catalog',
+    title: 'Delete catalog',
+    description:
+      'Empty the entire catalog. Derives the catalog feed owner from the catalog feed signer ' +
+      '(BEE_FEED_PK), enumerates every item in the current Mantaray, removes them all, and ' +
+      'pushes a feed update pointing at an emptied catalog. Swarm feeds cannot be truly ' +
+      'deleted and chunks are immutable — this leaves the feed resolving to a catalog with no ' +
+      'items. Destructive: requires confirm: true.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        confirm: {
+          type: 'boolean',
+          description:
+            'Must be true to proceed. Safety latch against accidentally wiping the catalog.',
+        },
+        postageBatchId: {
+          type: 'string',
+          description: 'Override the upload postage batch; falls back to POSTAGE_BATCH_ID env.',
+        },
+      },
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        catalogRoot: { type: 'string', description: 'New (emptied) Mantaray root reference.' },
+        feedUpdateTxId: { type: 'string', description: 'Catalog feed update reference.' },
+        stateFeeds: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              itemId: { type: 'string' },
+              reference: { type: 'string' },
+            },
+            required: ['itemId', 'reference'],
+          },
+        },
+        owner: { type: 'string', description: 'Catalog feed owner address.' },
+        removed: { type: 'number', description: 'Number of items removed.' },
+        message: { type: 'string' },
+      },
+      required: ['message'],
     },
     execution: {
       taskSupport: 'forbidden',

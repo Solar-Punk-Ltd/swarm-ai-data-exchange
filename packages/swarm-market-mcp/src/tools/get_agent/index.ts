@@ -22,11 +22,26 @@ import {
   getResponseWithStructuredContent,
   getToolErrorResponse,
   ToolResponse,
+  withTimeout,
 } from '../../utils';
 import { AgentCatalog, CatalogItemSummary, GetAgentArgs } from './models';
 
 const CATALOG_SERVICE_NAME = 'swarm-ai-catalog';
 const ITEM_JSONLD_PATH_RE = /^\/?items\/([^/]+)\/item\.jsonld$/;
+
+// Fail-fast budgets so a slow/unreachable endpoint returns an error well under the MCP
+// client's tool timeout instead of hanging.
+const RPC_TIMEOUT_MS = 15_000;
+const CARD_TIMEOUT_MS = 15_000;
+const CATALOG_TIMEOUT_MS = 30_000;
+
+// chainId per supported chain key — used to pin the provider's network so ethers skips
+// the eth_chainId auto-detection round-trip on first call.
+const CHAIN_IDS: Record<string, number> = {
+  'base-sepolia': 84532,
+  base: 8453,
+  mainnet: 1,
+};
 
 function hasTarget(node: MantarayNode | null | undefined): node is MantarayNode {
   return !!node?.targetAddress && !node.targetAddress.every((b) => b === 0);
@@ -113,14 +128,25 @@ export async function getAgent(args: GetAgentArgs, bee: Bee): Promise<ToolRespon
     return getToolErrorResponse(`Invalid agentId: ${args.agentId} is not an integer.`);
   }
 
-  const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
+  const chainId = CHAIN_IDS[config.chain.chain];
+  const provider = chainId
+    ? new ethers.JsonRpcProvider(config.chain.rpcUrl, chainId, { staticNetwork: true })
+    : new ethers.JsonRpcProvider(config.chain.rpcUrl);
   const erc8004 = createERC8004Client({ provider, chain: config.chain.chain });
 
   let agentURI: string;
   let card: AgentCard;
   try {
-    agentURI = await erc8004.identity.getAgentURI(agentIdBn);
-    card = await downloadAgentCard(agentURI);
+    agentURI = await withTimeout(
+      erc8004.identity.getAgentURI(agentIdBn),
+      RPC_TIMEOUT_MS,
+      `RPC tokenURI(${args.agentId}) on ${config.chain.chain}`,
+    );
+    card = await withTimeout(
+      downloadAgentCard(agentURI),
+      CARD_TIMEOUT_MS,
+      `Agent Card fetch from ${agentURI}`,
+    );
   } catch (err) {
     return getToolErrorResponse(`Failed to resolve agent ${args.agentId}: ${getErrorMessage(err)}`);
   }
@@ -138,7 +164,11 @@ export async function getAgent(args: GetAgentArgs, bee: Bee): Promise<ToolRespon
       result.catalogNote = `Agent has no "${CATALOG_SERVICE_NAME}" service entry.`;
     } else {
       try {
-        result.catalog = await readCatalog(bee, owner);
+        result.catalog = await withTimeout(
+          readCatalog(bee, owner),
+          CATALOG_TIMEOUT_MS,
+          `Catalog read for owner ${owner}`,
+        );
       } catch (err) {
         // Card advertises a catalog but the feed is unpublished/unreadable — report, don't fail.
         result.catalog = { owner, items: [], error: getErrorMessage(err) } satisfies AgentCatalog;

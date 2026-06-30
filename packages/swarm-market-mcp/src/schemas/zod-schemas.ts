@@ -58,6 +58,10 @@ const buildCatalogItemSchema = z.object({
     granteeRef: z.string().min(1),
   }),
   sampleData: z.string().optional(),
+  // How to interpret sampleData before upload. 'utf8' (default) uploads the string
+  // bytes as-is; 'base64' decodes to raw bytes first (required for binary samples
+  // like PNG thumbnails).
+  sampleEncoding: z.enum(['utf8', 'base64']).optional(),
 });
 
 export const buildCatalogSchema = z.object({
@@ -75,4 +79,14 @@ export const buildCatalogSchema = z.object({
 export const getAgentSchema = z.object({
   agentId: z.string().min(1, { message: 'Missing required parameter: agentId.' }),
   includeCatalog: z.boolean().optional(),
+});
+
+export const deleteCatalogItemSchema = z.object({
+  itemIds: z.array(z.string().min(1)).min(1, { message: 'Missing required parameter: itemIds.' }),
+  postageBatchId: z.string().optional(),
+});
+
+export const deleteCatalogSchema = z.object({
+  confirm: z.boolean().optional(),
+  postageBatchId: z.string().optional(),
 });

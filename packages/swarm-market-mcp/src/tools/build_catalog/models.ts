@@ -5,8 +5,11 @@ export interface BuildCatalogItem {
   item: CatalogItem;
   // REQUIRED for every priced item: the ACT refs the caller captured when ACT-wrapping the content.
   actSeed: { actHistoryRef: string; granteeRef: string };
-  // Optional sample bytes (utf-8 string) → builder.stageSampleData(itemId, ...).
+  // Optional sample bytes → builder.stageSampleData(itemId, ...). Interpreted per
+  // sampleEncoding: 'utf8' (default) uses the string as-is; 'base64' decodes to raw
+  // bytes first (required for binary samples like PNG thumbnails).
   sampleData?: string;
+  sampleEncoding?: 'utf8' | 'base64';
 }
 
 export interface BuildCatalogArgs {
