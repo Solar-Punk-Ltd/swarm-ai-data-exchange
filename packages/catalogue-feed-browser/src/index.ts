@@ -94,12 +94,39 @@ app.post('/api/purchase', async (req, res) => {
 
     const walletSigner = privateKeyToAccount(pk as `0x${string}`);
     const granteePublicKey = await getBeePublicKey(BEE_API_URL);
-    const publisherEndpoint = `${publisherUrl.replace(/\/$/, '')}/v1/items/${itemId}/purchase`;
+    const publisherBase = publisherUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
+    const publisherEndpoint = `${publisherBase}/v1/items/${itemId}/purchase`;
 
     const result = await purchase({ publisherEndpoint, itemId, granteePublicKey, walletSigner });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: errMessage(err) });
+  }
+});
+
+// Download the purchased ACT-protected content. The consumer's Bee node was added as a grantee
+// during the purchase, so it derives the decryption key via ECDH from the publisher's public key
+// (grantorPublicKey) + the ACT history reference. reference is the item's content address (itemId).
+app.post('/api/content', async (req, res) => {
+  const { reference, actPublisher, actHistoryRef } = req.body as {
+    reference?: string;
+    actPublisher?: string;
+    actHistoryRef?: string;
+  };
+  if (!reference || !actPublisher || !actHistoryRef) {
+    res.status(400).json({ error: 'reference, actPublisher and actHistoryRef are required' });
+    return;
+  }
+  try {
+    // The priced content is uploaded as a Mantaray file (manifest), so downloadFile walks the
+    // manifest to the actual file. downloadData would return the raw manifest chunk bytes.
+    const file = await bee.downloadFile(reference, undefined, {
+      actPublisher,
+      actHistoryAddress: actHistoryRef,
+    });
+    res.json({ content: file.data.toUtf8(), contentType: file.contentType });
+  } catch (err) {
+    res.status(502).json({ error: errMessage(err) });
   }
 });
 

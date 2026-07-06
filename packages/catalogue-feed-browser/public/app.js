@@ -103,6 +103,14 @@ function renderGrantBlock(grant) {
     ['Tx Hash', grant.txHash],
     ['Granted At', grant.grantedAt],
   ];
+  const canView =
+    grant.grantorPublicKey && grant.actHistoryRef && (grant.reference || grant.itemId);
+  const viewRow = canView
+    ? `<div class="view-download-row">
+        <button class="btn-view" onclick="_viewContent('${a(grant.itemId)}', this)">View content</button>
+      </div>
+      <div class="content-preview" id="content-${a(grant.itemId)}" hidden></div>`
+    : '';
   return `
     <div class="buy-result success">
       <div class="buy-result-title">✓ Access Granted</div>
@@ -116,7 +124,60 @@ function renderGrantBlock(grant) {
         </div>`,
         )
         .join('')}
+      ${viewRow}
     </div>`;
+}
+
+// Fetch and display the purchased ACT-protected content. Uses the grant stored at purchase time
+// (grantorPublicKey = actPublisher, actHistoryRef, reference) — the server-side Bee node decrypts.
+async function _viewContent(itemId, btn) {
+  const container = document.getElementById(`content-${itemId}`);
+  if (!container) return;
+  if (!container.hidden) {
+    container.hidden = true;
+    btn.textContent = 'View content';
+    return;
+  }
+
+  const grant = JSON.parse(localStorage.getItem(GRANT_KEY(itemId)) ?? '{}');
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.innerHTML = '<span class="spinner"></span>Loading…';
+  try {
+    const res = await fetch('/api/content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reference: grant.reference || grant.itemId,
+        actPublisher: grant.grantorPublicKey,
+        actHistoryRef: grant.actHistoryRef,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Failed to load content');
+    const text = prettyMaybeJson(data.content);
+    container.innerHTML = `
+      <div class="purchased-content">
+        <div class="purchased-content-label">Purchased content</div>
+        <pre class="purchased-content-body">${escHtml(text)}</pre>
+      </div>`;
+    container.hidden = false;
+    btn.textContent = 'Hide content';
+  } catch (err) {
+    container.innerHTML = `<span class="preview-error">${escHtml(err.message ?? 'Error')}</span>`;
+    container.hidden = false;
+    btn.textContent = prev;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function prettyMaybeJson(text) {
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
 }
 
 function renderCard(item) {

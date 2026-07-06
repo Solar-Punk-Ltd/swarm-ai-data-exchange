@@ -159,6 +159,7 @@ export interface ActGrantResult {
   itemId: string;
   actHistoryRef: string;
   grantTo: string; // hex pubkey
+  grantorPublicKey?: string; // publisher Bee-node public key — the actPublisher a grantee needs to decrypt
   reference: string;
   txHash: string;
   grantedAt: string; // ISO 8601
