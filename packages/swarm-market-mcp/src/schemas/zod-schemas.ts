@@ -90,3 +90,9 @@ export const deleteCatalogSchema = z.object({
   confirm: z.boolean().optional(),
   postageBatchId: z.string().optional(),
 });
+
+export const purchaseCatalogItemSchema = z.object({
+  itemId: z.string().min(1, { message: 'Missing required parameter: itemId.' }),
+  x402Endpoint: z.string().optional(),
+  granteePublicKey: z.string().optional(),
+});

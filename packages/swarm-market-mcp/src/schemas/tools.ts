@@ -344,4 +344,53 @@ export const SwarmMarketToolsSchema = [
       taskSupport: 'forbidden',
     },
   },
+  {
+    name: 'purchase_catalog_item',
+    title: 'Purchase catalog item',
+    description:
+      "Buy an ACT-protected catalog item via the seller's x402 server. Runs the two-phase " +
+      'x402 flow: fetches the 402 payment challenge, signs an EIP-712 PurchaseIntent plus an ' +
+      'ERC-3009 TransferWithAuthorization (shared nonce + time window) with the buyer wallet ' +
+      '(BUYER_WALLET_PK), and settles with an X-Payment envelope. The grantee defaults to this ' +
+      "Bee node's ACT publisher key so the granted content is decryptable by the same node. " +
+      'Returns { txHash, actHistoryRef, grantorPublicKey } for a subsequent download_files_act.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        itemId: {
+          type: 'string',
+          description: '64-char hex content reference of the item to buy.',
+        },
+        x402Endpoint: {
+          type: 'string',
+          description:
+            "Seller's x402 base URL (e.g. https://seller/v1). Falls back to X402_ENDPOINT env.",
+        },
+        granteePublicKey: {
+          type: 'string',
+          description:
+            "Override the grantee public key; defaults to this node's ACT publisher key.",
+        },
+      },
+      required: ['itemId'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string' },
+        granteePublicKey: { type: 'string' },
+        txHash: { type: 'string', description: 'Settlement transaction hash.' },
+        actHistoryRef: { type: 'string', description: 'ACT history reference of the grant.' },
+        grantorPublicKey: {
+          type: 'string',
+          description: 'Publisher (grantor) public key needed to decrypt the content.',
+        },
+        message: { type: 'string' },
+      },
+      required: ['itemId', 'granteePublicKey'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
 ];

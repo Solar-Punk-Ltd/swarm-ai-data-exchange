@@ -21,11 +21,14 @@ import { deleteCatalogItem } from './tools/delete_catalog_item';
 import type { DeleteCatalogItemArgs } from './tools/delete_catalog_item/models';
 import { deleteCatalog } from './tools/delete_catalog';
 import type { DeleteCatalogArgs } from './tools/delete_catalog/models';
+import { purchaseCatalogItem } from './tools/purchase_catalog_item';
+import type { PurchaseCatalogItemArgs } from './tools/purchase_catalog_item/models';
 import {
   buildCatalogSchema,
   deleteCatalogItemSchema,
   deleteCatalogSchema,
   getAgentSchema,
+  purchaseCatalogItemSchema,
 } from './schemas/zod-schemas';
 
 export class SwarmMarketMCPServer {
@@ -76,6 +79,11 @@ export class SwarmMarketMCPServer {
           case 'delete_catalog': {
             const validArgs = deleteCatalogSchema.parse(args);
             return deleteCatalog(validArgs as DeleteCatalogArgs, this.bee);
+          }
+
+          case 'purchase_catalog_item': {
+            const validArgs = purchaseCatalogItemSchema.parse(args);
+            return purchaseCatalogItem(validArgs as PurchaseCatalogItemArgs, this.bee);
           }
 
           default:

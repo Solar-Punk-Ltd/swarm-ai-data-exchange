@@ -18,9 +18,20 @@ export interface ChainConfig {
   chain: string;
 }
 
+// Buyer-side settlement config for purchase_catalog_item. The wallet key signs the
+// EIP-712 PurchaseIntent + ERC-3009 authorization; rpcUrl reads the token EIP-712 domain.
+export interface PaymentConfig {
+  walletPrivateKey?: string;
+  rpcUrl?: string;
+  // Fallback x402 base endpoint when a purchase call omits x402Endpoint (the seller's
+  // Agent Card is the primary source).
+  x402Endpoint?: string;
+}
+
 export interface Config {
   bee: BeeConfig;
   chain: ChainConfig;
+  payment: PaymentConfig;
 }
 
 const config: Config = {
@@ -33,6 +44,11 @@ const config: Config = {
   chain: {
     rpcUrl: process.env.RPC_URL || DEFAULT_RPC_URL,
     chain: process.env.ERC8004_CHAIN || DEFAULT_CHAIN,
+  },
+  payment: {
+    walletPrivateKey: process.env.BUYER_WALLET_PK,
+    rpcUrl: process.env.PAYMENT_RPC_URL,
+    x402Endpoint: process.env.X402_ENDPOINT,
   },
 };
 

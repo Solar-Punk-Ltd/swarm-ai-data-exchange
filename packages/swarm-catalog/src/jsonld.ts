@@ -13,6 +13,8 @@ import {
   SWARM_CAT_CONTEXT,
   SWARM_CAT_PROTOCOL_VERSION,
   SWARM_CAT_CATALOG_ITEM,
+  SWARM_CAT_SWARM_STORAGE,
+  SWARM_CAT_PAYMENT_REQUIREMENTS,
   SWARM_CAT_SAMPLE_SPEC,
   SWARM_CAT_CATALOG,
   SWARM_CAT_COLOR_SPACE,
@@ -105,9 +107,10 @@ export function serializeItem(item: CatalogItem): Record<string, unknown> {
   }
 
   // Protocol fields (aliased in @context, use bare names matching spec examples)
-  doc.storage = { reference: item.storage.reference };
+  doc.storage = { '@type': SWARM_CAT_SWARM_STORAGE, reference: item.storage.reference };
   doc.payment = item.payment.map((p) => {
     const entry: Record<string, unknown> = {
+      '@type': SWARM_CAT_PAYMENT_REQUIREMENTS,
       scheme: p.scheme,
       chainId: p.chainId,
       asset: p.asset,
