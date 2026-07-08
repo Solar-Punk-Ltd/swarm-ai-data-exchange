@@ -16,6 +16,9 @@ export interface ServerConfig {
   // address this owner (the topic stays bound to catalogFeedOwner).
   itemStateFeedOwner: string;
   dbPath: string;
+  // State-feed write retry (§14.1: the publisher MUST retry until the on-Swarm record converges).
+  // Bounded in-memory exponential backoff; durable retry across restarts is out of prototype scope.
+  stateFeedRetry: { attempts: number; baseDelayMs: number; maxDelayMs: number };
 }
 
 function required(name: string): string {
@@ -51,5 +54,10 @@ export function loadConfig(): ServerConfig {
     itemStateFeedPk,
     itemStateFeedOwner: '0x' + new PrivateKey(itemStateFeedPk).publicKey().address().toHex(),
     dbPath: process.env.DB_PATH ?? './data/store.db',
+    stateFeedRetry: {
+      attempts: Number(process.env.STATE_FEED_RETRY_ATTEMPTS ?? 8),
+      baseDelayMs: Number(process.env.STATE_FEED_RETRY_BASE_MS ?? 500),
+      maxDelayMs: Number(process.env.STATE_FEED_RETRY_MAX_MS ?? 30_000),
+    },
   };
 }
