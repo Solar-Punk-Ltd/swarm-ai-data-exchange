@@ -74,6 +74,8 @@ function summarize(itemId: string, doc: Record<string, unknown>): CatalogItemSum
     tags: Array.isArray(doc.tags) ? doc.tags.map(String) : [],
     payment: Array.isArray(doc.payment) ? (doc.payment as PaymentRequirements[]) : [],
     hasSample: typeof doc.sample === 'object' && doc.sample !== null,
+    dateModified: typeof doc.dateModified === 'string' ? doc.dateModified : undefined,
+    dateAdded: typeof doc.dateAdded === 'string' ? doc.dateAdded : undefined,
   };
 }
 

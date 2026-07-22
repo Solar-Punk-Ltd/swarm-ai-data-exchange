@@ -90,8 +90,8 @@ export const SwarmMarketToolsSchema = [
       'catalog.jsonld, builds/updates the catalog Mantaray, pushes the catalog feed, and ' +
       'initializes each per-item state feed. ' +
       "ACT wrapping is NOT done here: upload + ACT-wrap content first (e.g. via swarm-mcp's " +
-      'upload_data_act / create_grantees), then pass the captured actHistoryRef + granteeRef ' +
-      "in each item's actSeed.",
+      'upload_data with act: true, optionally combined with create_grantees / patch_grantees), ' +
+      "then pass the captured actHistoryRef + granteeRef in each item's actSeed.",
     inputSchema: {
       type: 'object',
       properties: {

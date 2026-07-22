@@ -84,7 +84,7 @@ export interface GetAgentArgs {
 Two §12.2 steps are the caller's, exactly as in `swarm-catalog`:
 
 1. **Upload the priced content to Swarm first** (ACT-protected), then pass its reference as both `item.id` and `item.storage.reference`.
-2. **ACT-wrap the content** (e.g. via `swarm-mcp`'s `upload_data_act` / `create_grantees`), capture the initial `actHistoryRef` + `granteeRef`, and pass them in `actSeed`.
+2. **ACT-wrap the content** (e.g. via `swarm-mcp`'s `upload_data` with `act: true`, optionally combined with `create_grantees` / `patch_grantees`), capture the initial `actHistoryRef` + `granteeRef`, and pass them in `actSeed`.
 
 The tool throws if any priced item is missing its `actSeed` (the builder enforces this).
 

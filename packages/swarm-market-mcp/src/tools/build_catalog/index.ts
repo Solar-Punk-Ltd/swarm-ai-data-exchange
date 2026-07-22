@@ -7,8 +7,9 @@
  * (copy-on-write), pushes the catalog feed, and initializes each per-item state feed.
  *
  * ACT wrapping is NOT done here. The caller uploads + ACT-wraps content first (e.g.
- * via swarm-mcp's upload_data_act / create_grantees) and passes the captured
- * { actHistoryRef, granteeRef } in each item's actSeed.
+ * via swarm-mcp's upload_data with act: true, optionally combined with create_grantees
+ * / patch_grantees) and passes the captured { actHistoryRef, granteeRef } in each
+ * item's actSeed.
  */
 import { Bee } from '@ethersphere/bee-js';
 import { SwarmCatalogBuilder } from '@solarpunk/swarm-catalog';

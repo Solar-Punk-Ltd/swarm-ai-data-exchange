@@ -17,6 +17,8 @@ export interface CatalogItemSummary {
   tags: string[];
   payment: PaymentRequirements[];
   hasSample: boolean;
+  dateModified?: string;
+  dateAdded?: string;
 }
 
 export interface AgentCatalog {
