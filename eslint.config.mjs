@@ -27,6 +27,18 @@ export default [
     },
   },
   {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        module: 'readonly',
+        require: 'readonly',
+        __dirname: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
+  {
     files: ['**/public/**/*.js'],
     languageOptions: {
       globals: {

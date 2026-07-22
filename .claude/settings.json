@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm run *)",
       "Bash(npx tsx *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(pnpm --filter swarm-catalog exec tsc --noEmit)",
+      "Bash(pnpm --filter swarm-catalog test)"
     ]
   },
   "enabledPlugins": {
