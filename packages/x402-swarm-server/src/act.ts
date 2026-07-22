@@ -1,25 +1,25 @@
-import { bee } from './bee';
-import { fetchCatalogue, findDataItem } from './catalogue';
-import type { ActGrantResult } from './types';
+import { Bee } from '@ethersphere/bee-js';
 
-const POSTAGE_BATCH_ID = process.env.POSTAGE_BATCH_ID ?? '';
-const PUBLISHER_PUBLIC_KEY = process.env.PUBLISHER_PUBLIC_KEY ?? '';
+export interface GrantResult {
+  actHistoryRef: string; // new ACT history head
+  granteeRef: string; // new grantee-list reference
+}
 
+// Step 10: add the consumer's Bee-node public key to the item's ACT grantee list.
+// Advances both the ACT history and the grantee-list reference; the new values seed the
+// state-feed write at step 11.
 export async function grantActAccess(
-  swarmHash: string,
-  buyerPublicKey: string,
-): Promise<ActGrantResult> {
-  const catalogue = await fetchCatalogue();
-  const item = findDataItem(catalogue, swarmHash);
-
-  const result = await bee.patchGrantees(POSTAGE_BATCH_ID, item.granteeRef, item.actHistoryRef, {
-    add: [buyerPublicKey],
+  bee: Bee,
+  postageBatchId: string,
+  currentGranteeRef: string,
+  currentActHistoryRef: string,
+  granteePublicKey: string,
+): Promise<GrantResult> {
+  const result = await bee.patchGrantees(postageBatchId, currentGranteeRef, currentActHistoryRef, {
+    add: [granteePublicKey],
   });
-
   return {
-    swarmHash,
-    actHistoryAddress: result.historyref.toString(),
+    actHistoryRef: result.historyref.toString(),
     granteeRef: result.ref.toString(),
-    publisherPublickey: item.publisherPublicKey ?? PUBLISHER_PUBLIC_KEY,
   };
 }

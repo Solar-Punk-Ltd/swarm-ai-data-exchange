@@ -116,6 +116,7 @@ Public API (signatures from Appendix A.4 are normative — keep them exact):
 **Prototype-only extension** (not in Appendix A):
 
 - `seedActState(itemId: string, state: { actHistoryRef: string, granteeRef: string }): void` — provide the initial ACT history and grantee refs for a staged item, so `publish()` can write the initial state feed at step 7.
+- `setCatalogMeta(meta: { name?: string; description?: string; license?: string }): void` — set collection-level metadata for `/catalog.jsonld` (§5.2). Merges across calls; only provided keys are written, and each field is emitted only when non-empty. A URL-shaped `license` that is not a valid IRI is rejected (same rule as item-level `license`). `serializeCatalog(items, meta)` performs the emission; the `CatalogMeta` type is exported from the package barrel for reader-side parsing. This is a prototype convenience: the spec's §5.2 lists `name`/`description`/`license` as a "suggested shape", so they are optional and carry no agent-identity (agent attribution stays in the Agent Card, §3.4).
 
 This extra method exists because the spec's §12.2 step 2 (ACT wrapping) is the caller's responsibility in this prototype, not the builder's. The caller wraps the content with ACT, captures the initial `actHistoryRef` and `granteeRef`, and passes them in via `seedActState` before calling `publish()`. In a production implementation aligned with the full spec, the builder would handle ACT wrapping itself and `seedActState` would not exist.
 
@@ -158,8 +159,10 @@ The builder SHOULD warn (log, do not throw) on:
 Helpers used by both the builder and `x402-swarm-server`:
 
 ```typescript
-// Read current state from per-item state feed
-readItemState(bee: Bee, catalogFeedOwner: string, itemId: string): Promise<CatalogItemState>
+// Read current state from per-item state feed.
+// `catalogFeedOwner` computes the topic; `stateFeedOwner` (the hot state-feed signer's EOA)
+// owns the feed and is what the reader actually addresses.
+readItemState(bee: Bee, catalogFeedOwner: string, itemId: string, stateFeedOwner: string): Promise<CatalogItemState>
 
 // Write updated state after a grant
 // `signer` is a bee-js FeedSigner; the helper constructs the FeedWriter internally using stateFeedTopic(catalogFeedOwner, state.itemId)

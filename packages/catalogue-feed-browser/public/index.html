@@ -21,23 +21,20 @@
         <button id="load-btn" class="btn-primary">Load Catalog</button>
       </div>
       <div id="settings-panel" class="settings-panel">
-        <div class="field" style="flex: 1.5">
-          <label for="feed-owner">Feed Owner</label>
-          <input id="feed-owner" type="text" placeholder="Swarm address (hex)" spellcheck="false" />
+        <div class="field" style="flex: 2">
+          <label for="feed-owner">Catalog Feed Owner</label>
+          <input id="feed-owner" type="text" placeholder="EOA address (hex)" spellcheck="false" />
         </div>
         <div class="field" style="flex: 2.2">
-          <label for="feed-topic">Feed Topic</label>
-          <input id="feed-topic" type="text" placeholder="Topic hash (hex)" spellcheck="false" />
-        </div>
-        <div class="field" style="flex: 2.2">
-          <label for="server-url">x402 Server URL</label>
-          <input id="server-url" type="text" placeholder="http://localhost:3000" />
+          <label for="publisher-url">Publisher (x402) URL</label>
+          <input id="publisher-url" type="text" placeholder="http://localhost:3000" />
         </div>
       </div>
     </div>
 
     <main>
       <div id="status" class="status">Enter feed details above and click Load Catalog.</div>
+      <div id="catalog-meta" class="catalog-meta" hidden></div>
       <div id="grid" class="grid" hidden></div>
     </main>
 

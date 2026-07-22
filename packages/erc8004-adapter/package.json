@@ -11,7 +11,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest --passWithNoTests",
-    "test:sepolia": "tsx scripts/test-sepolia.ts",
+    "test:sepolia": "tsx src/scripts/test-sepolia.ts",
     "create-agent": "tsx tools/create-agent/index.ts",
     "discover-agents": "tsx tools/discover-agents/index.ts",
     "get-agent": "tsx tools/get-agent/index.ts",
@@ -19,7 +19,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@ethersphere/bee-js": "^11.2.0",
+    "@ethersphere/bee-js": "12.0.0",
+    "@solarpunk/swarm-catalog": "workspace:*",
     "dotenv": "^16.0.0",
     "ethers": "^6.13.0"
   },

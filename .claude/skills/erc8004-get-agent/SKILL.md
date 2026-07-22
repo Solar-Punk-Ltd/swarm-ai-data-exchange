@@ -27,11 +27,10 @@ This is a **read-only** command: no transactions are sent and no Swarm uploads o
 | # | Item | Source |
 |---|------|--------|
 | 1 | **`--agentId`** — NFT token ID of the agent to look up | `--agentId` flag (required) |
-| 2 | **`--privateKey`** — wallet key for provider/signer initialization | `--privateKey` flag OR `PRIVATE_KEY` env var |
+| 2 | **`RPC_URL`** — JSON-RPC endpoint for contract queries | `RPC_URL` env var (defaults to the Base Sepolia public RPC) |
 
-`--agentId` is always required. `--privateKey` (or `PRIVATE_KEY` env var) is required in
-practice even though no transaction is sent — it is used to initialize the provider/signer
-for contract queries.
+`--agentId` is the only required input. No private key and no testnet ETH are needed — the
+lookup is read-only and uses a provider-only client.
 
 ---
 
@@ -40,17 +39,13 @@ for contract queries.
 ### Running from within the package directory
 
 ```sh
-pnpm get-agent \
-  --agentId <token-id> \
-  [--privateKey "<0x… wallet private key>"]
+pnpm get-agent --agentId <token-id>
 ```
 
 ### Running from the monorepo root (use `--filter`)
 
 ```sh
-pnpm --filter @solarpunk/erc8004-adapter get-agent \
-  --agentId <token-id> \
-  [--privateKey "<0x… wallet private key>"]
+pnpm --filter @solarpunk/erc8004-adapter get-agent --agentId <token-id>
 ```
 
 ---
@@ -60,9 +55,9 @@ pnpm --filter @solarpunk/erc8004-adapter get-agent \
 | Flag | Required | Default | Notes |
 |------|----------|---------|-------|
 | `--agentId` | **Yes** | — | NFT token ID to look up (e.g. `5102`) |
-| `--privateKey` | No* | `PRIVATE_KEY` env | Wallet key for provider/signer initialization |
 
-\* Required in practice — can come from `PRIVATE_KEY` env var instead.
+The RPC endpoint comes from `RPC_URL` in the environment (falling back to the Base Sepolia
+public RPC); there are no other flags.
 
 ---
 
@@ -99,7 +94,7 @@ A successful run prints a single JSON object:
     "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
     "services": [
       { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
-      { "name": "swarm",  "endpoint": "https://swarm.solarpunk.buzz/trading" }
+      { "name": "swarm-ai-catalog", "endpoint": "0x5468Fb0537098aB63A8848dfC30f283894B37179" }
     ],
     "x402Support": true,
     "active": true,
@@ -120,13 +115,14 @@ All registered agents are also browsable at [8004scan.io](https://8004scan.io).
 
 ## Environment variable setup (`.env`)
 
-If `PRIVATE_KEY` is already set, only `--agentId` is needed:
+Only the RPC endpoint is read, and it defaults to the Base Sepolia public RPC. Set it
+explicitly only to use a different/faster provider:
 
 ```env
-PRIVATE_KEY=0x<on-chain wallet private key>
+RPC_URL=https://sepolia.base.org
 ```
 
-Then the command simplifies to:
+The only required input is the `--agentId` flag:
 
 ```sh
 pnpm get-agent --agentId 5102
@@ -140,7 +136,6 @@ pnpm get-agent --agentId 5102
 |---------|-------------|-----|
 | `missing required flag --agentId` | `--agentId` not supplied | Add `--agentId <id>` |
 | `ERC721: invalid token ID` | Agent with that ID does not exist | Verify the ID with `pnpm discover-agents` |
-| `No private key` / wallet error | Neither `--privateKey` nor `PRIVATE_KEY` set | Set the flag or env var |
 | `agentCard: null` | Swarm fetch failed (node temporarily unreachable) | Retry; check Bee node or gateway availability |
 
 ---
@@ -148,20 +143,15 @@ pnpm get-agent --agentId 5102
 ## Full worked example
 
 ```sh
-# With --privateKey flag
-pnpm get-agent \
-  --agentId 5102 \
-  --privateKey "0xac0974bec29a17e37ba4a6b4d238ff947bacb478cbed5efcae784d7bf4f2ff80"
-
-# With PRIVATE_KEY already in .env
+# From within the package directory
 pnpm get-agent --agentId 5102
+
+# With a custom RPC endpoint
+RPC_URL=https://sepolia.base.org pnpm get-agent --agentId 5102
 
 # From monorepo root
 pnpm --filter @solarpunk/erc8004-adapter get-agent --agentId 5102
 ```
-
-> **Note:** The private key above is the standard Hardhat/Anvil dev account and is safe to
-> use as an example. Never use it with real funds.
 
 ---
 
@@ -182,8 +172,9 @@ Once you have the agent's card and URI, suggest these follow-up actions based on
    // Uint8Array(1) [ 1 ]
    ```
 
-3. **Initiate a data exchange** — use the `x402` or `swarm` endpoint from the agent's
-   `services` array to start a purchase flow.
+3. **Initiate a data exchange** — use the `x402` endpoint to start a purchase flow, or the
+   `swarm-ai-catalog` entry's `endpoint` (the catalog feed owner address) to browse the
+   agent's catalog.
 
 4. **Discover more agents** — use `pnpm discover-agents` to list all `swarm_ai_capable`
    agents if you don't have a specific ID yet.

@@ -1,5 +1,9 @@
-const GRANT_KEY = (swarmHash) => `cfb_grant_${swarmHash}`;
+const GRANT_KEY = (itemId) => `cfb_grant_${itemId}`;
 const TEXT_PREVIEW_BYTES = 2000;
+
+// Resolved at load time from the settings form.
+let _owner = '';
+let _publisherUrl = '';
 
 // ── Config & init ─────────────────────────────────────────────────────────────
 
@@ -9,10 +13,8 @@ async function loadConfig() {
     const config = await res.json();
     if (config.defaultFeedOwner)
       document.getElementById('feed-owner').value = config.defaultFeedOwner;
-    if (config.defaultFeedTopic)
-      document.getElementById('feed-topic').value = config.defaultFeedTopic;
-    if (config.defaultServerUrl)
-      document.getElementById('server-url').value = config.defaultServerUrl;
+    if (config.defaultPublisherUrl)
+      document.getElementById('publisher-url').value = config.defaultPublisherUrl;
   } catch {
     // non-fatal
   }
@@ -34,62 +36,35 @@ function setStatus(msg, isError = false) {
   el.hidden = false;
   document.getElementById('grid').hidden = true;
   document.getElementById('count-badge').hidden = true;
+  const meta = document.getElementById('catalog-meta');
+  if (meta) meta.hidden = true;
 }
 
-function truncate(str, len = 20) {
+function truncate(str, len = 16) {
   if (!str) return '';
   return str.length > len * 2 + 3 ? str.slice(0, len) + '…' + str.slice(-len) : str;
 }
 
 function escHtml(str) {
-  return str
+  return String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
 
-/**
- * Extracts `mime_type` from a DataItem metadata array.
- * Handles entries that are objects with a `mime_type` key.
- */
-function getMimeType(metadata) {
-  if (!Array.isArray(metadata)) return '';
-  for (const m of metadata) {
-    if (m && typeof m === 'object' && 'mime_type' in m) return String(m.mime_type);
-  }
-  return '';
+// CAIP-19 "eip155:84532/erc20:0x833…" → short "erc20:0x833…2913" label.
+function shortAsset(caip19) {
+  if (!caip19) return '';
+  const slash = caip19.lastIndexOf('/');
+  const tail = slash === -1 ? caip19 : caip19.slice(slash + 1);
+  return tail.replace(/(0x[0-9a-fA-F]{4})[0-9a-fA-F]+([0-9a-fA-F]{4})/, '$1…$2');
 }
 
-/**
- * Detects MIME type from the leading magic bytes of an ArrayBuffer.
- * Returns null if no known signature is found.
- */
-function detectMimeType(buffer) {
-  const b = new Uint8Array(buffer, 0, Math.min(12, buffer.byteLength));
-  // PNG  89 50 4E 47 0D 0A 1A 0A
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
-  // JPEG  FF D8 FF
-  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
-  // GIF   47 49 46 38
-  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return 'image/gif';
-  // WebP  RIFF….WEBP
-  if (
-    b[0] === 0x52 &&
-    b[1] === 0x49 &&
-    b[2] === 0x46 &&
-    b[3] === 0x46 &&
-    b[8] === 0x57 &&
-    b[9] === 0x45 &&
-    b[10] === 0x42 &&
-    b[11] === 0x50
-  )
-    return 'image/webp';
-  // BMP   42 4D
-  if (b[0] === 0x42 && b[1] === 0x4d) return 'image/bmp';
-  // AVIF/HEIC  …ftyp at offset 4
-  if (b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) return 'image/avif';
-  return null;
+function formatPrice(payment) {
+  if (!Array.isArray(payment) || payment.length === 0) return 'free';
+  const p = payment[0];
+  return `${escHtml(p.amount)} ${escHtml(shortAsset(p.asset))}`;
 }
 
 function _copyToClipboard(text, btn) {
@@ -102,154 +77,204 @@ function _copyToClipboard(text, btn) {
   });
 }
 
-// ── Rendering helpers ─────────────────────────────────────────────────────────
+// ── Rendering ───────────────────────────────────────────────────────────────
 
 function renderTags(tags) {
   if (!tags || tags.length === 0) return '<span class="tag empty">no tags</span>';
   return tags.map((t) => `<span class="tag">${escHtml(String(t))}</span>`).join('');
 }
 
-function renderDetailRows(item) {
-  const rows = [
-    { label: 'ACT History Ref', value: item.actHistoryRef },
-    { label: 'Grantee Ref', value: item.granteeRef },
-    { label: 'Scheme Version', value: window._catalogueVersion ?? '' },
-  ];
-
-  const metaRows =
-    item.metadata && item.metadata.length > 0
-      ? item.metadata.map((m, i) => ({ label: `Metadata [${i}]`, value: JSON.stringify(m) }))
-      : [{ label: 'Metadata', value: 'none' }];
-
-  return [...rows, ...metaRows]
-    .filter((r) => r.value)
-    .map(
-      (r) => `
-      <div class="detail-row">
-        <span class="detail-label">${escHtml(r.label)}</span>
-        <span class="detail-value">${escHtml(r.value)}</span>
-      </div>`,
-    )
-    .join('');
+function lifecycleBadge(lifecycle) {
+  const cls =
+    lifecycle === 'retired'
+      ? 'lc-retired'
+      : lifecycle === 'deprecated'
+        ? 'lc-deprecated'
+        : 'lc-active';
+  return `<span class="lifecycle-badge ${cls}">${escHtml(lifecycle)}</span>`;
 }
 
-/**
- * Renders the "Access Granted" block.
- * grant = ActGrantResult + displayName + mimeType.
- */
 function renderGrantBlock(grant) {
   const a = (v) => escHtml(v ?? '');
-  const dataAttrs = `
-    data-swarm-hash="${a(grant.swarmHash)}"
-    data-act-history-address="${a(grant.actHistoryAddress)}"
-    data-publisher-publickey="${a(grant.publisherPublickey)}"
-    data-display-name="${a(grant.displayName)}"
-    data-mime-type="${a(grant.mimeType)}"
-  `;
+  const rows = [
+    ['Item ID', grant.itemId],
+    ['ACT History Ref', grant.actHistoryRef],
+    ['Granted To', grant.grantTo],
+    ['Tx Hash', grant.txHash],
+    ['Granted At', grant.grantedAt],
+  ];
   return `
     <div class="buy-result success">
       <div class="buy-result-title">✓ Access Granted</div>
-      ${[
-        ['ACT History Address', grant.actHistoryAddress],
-        ['Grantee Ref', grant.granteeRef],
-        ['Publisher Public Key', grant.publisherPublickey],
-      ]
+      ${rows
+        .filter(([, v]) => v)
         .map(
           ([label, value]) => `
         <div class="detail-row">
-          <span class="detail-label">${label}</span>
+          <span class="detail-label">${a(label)}</span>
           <span class="detail-value">${a(value)}</span>
         </div>`,
         )
         .join('')}
-      <div class="view-download-row">
-        <button class="btn-view" ${dataAttrs} onclick="_viewContent(this)">👁 View</button>
-        <button class="btn-download" ${dataAttrs} onclick="_downloadContent(this)">↓ Download</button>
-      </div>
-      <div class="content-preview"></div>
     </div>`;
 }
 
-function renderCard(item, serverUrl) {
-  const id = `card-${item.swarmHash}`;
-  const mimeType = getMimeType(item.metadata);
+function renderCard(item) {
+  const id = `card-${item.itemId}`;
+  const isRetired = item.lifecycle === 'retired';
+  const stored = localStorage.getItem(GRANT_KEY(item.itemId));
 
-  // Restore persisted grant from localStorage if present
-  const stored = localStorage.getItem(GRANT_KEY(item.swarmHash));
-  const grantHtml = stored
-    ? renderGrantBlock({
-        ...JSON.parse(stored),
-        displayName: item.displayName,
-        mimeType: mimeType || JSON.parse(stored).mimeType || '',
-      })
-    : '';
+  const grantHtml = stored ? renderGrantBlock(JSON.parse(stored)) : '';
+
+  let buyBtn = '';
+  if (!isRetired) {
+    buyBtn = `<button class="btn-buy" onclick="_buyItem('${escHtml(item.itemId)}', this)"
+      ${stored ? 'disabled title="Already purchased"' : ''}>${stored ? 'Purchased' : 'Buy'}</button>`;
+  }
 
   return `
-    <div class="card" id="${escHtml(id)}"
-      data-display-name="${escHtml(item.displayName || '')}"
-      data-mime-type="${escHtml(mimeType)}">
+    <div class="card${isRetired ? ' card-retired' : ''}" id="${escHtml(id)}">
       <div class="card-header">
-        <div class="card-name">${escHtml(item.displayName || 'Untitled')}</div>
+        <div class="card-name">${escHtml(item.name || 'Untitled')}</div>
+        <div class="card-badges">
+          ${lifecycleBadge(item.lifecycle)}
+          <span class="type-badge">${escHtml(item.contentType)}</span>
+          <span class="price-badge">${formatPrice(item.payment)}</span>
+        </div>
+        <div class="card-desc">${escHtml(item.description)}</div>
         <div class="card-hash">
-          <code title="${escHtml(item.swarmHash)}">${escHtml(truncate(item.swarmHash, 16))}</code>
-          <button class="copy-btn" onclick="_copyToClipboard('${escHtml(item.swarmHash)}', this)">Copy</button>
+          <code title="${escHtml(item.itemId)}">${escHtml(truncate(item.itemId))}</code>
+          <button class="copy-btn" onclick="_copyToClipboard('${escHtml(item.itemId)}', this)">Copy</button>
         </div>
         <div class="tags">${renderTags(item.tags)}</div>
       </div>
 
       <div class="card-actions">
-        <button class="btn-details" onclick="_toggleDetails('${escHtml(item.swarmHash)}')">▼ Details</button>
-        <button class="btn-buy" onclick="_buyItem('${escHtml(item.swarmHash)}', '${escHtml(serverUrl)}', this)"
-          ${stored ? 'disabled title="Already purchased"' : ''}>${stored ? 'Purchased' : 'Buy'}</button>
+        <button class="btn-details" onclick="_toggleDetails('${escHtml(item.itemId)}', this)">▼ Details</button>
+        ${buyBtn}
       </div>
 
-      <div class="details-panel" id="details-${escHtml(item.swarmHash)}">
-        ${renderDetailRows(item)}
-      </div>
+      <div class="details-panel" id="details-${escHtml(item.itemId)}" data-loaded="0"
+        data-has-sample="${item.hasSample ? '1' : '0'}" data-content-type="${escHtml(item.contentType)}"></div>
 
       ${grantHtml}
     </div>`;
 }
 
-// ── Card interactions ─────────────────────────────────────────────────────────
+// ── Detail view (full item.jsonld + sample preview) ─────────────────────────────
 
-function _toggleDetails(swarmHash) {
-  const panel = document.getElementById(`details-${swarmHash}`);
-  const btn = panel.previousElementSibling.querySelector('.btn-details');
+async function _toggleDetails(itemId, btn) {
+  const panel = document.getElementById(`details-${itemId}`);
   const isOpen = panel.classList.toggle('open');
   btn.textContent = isOpen ? '▲ Details' : '▼ Details';
+  if (isOpen && panel.dataset.loaded === '0') {
+    await loadDetails(itemId, panel);
+  }
 }
 
-async function _buyItem(swarmHash, serverUrl, btn) {
+function renderItemDoc(doc) {
+  // Render the item.jsonld document as flat key/value rows, skipping JSON-LD machinery.
+  const skip = new Set(['@context', '@type']);
+  return Object.entries(doc)
+    .filter(([k]) => !skip.has(k))
+    .map(([k, v]) => {
+      const value = typeof v === 'string' || typeof v === 'number' ? String(v) : JSON.stringify(v);
+      return `
+        <div class="detail-row">
+          <span class="detail-label">${escHtml(k)}</span>
+          <span class="detail-value">${escHtml(value)}</span>
+        </div>`;
+    })
+    .join('');
+}
+
+async function loadDetails(itemId, panel) {
+  panel.innerHTML = '<div class="status" style="padding:16px 0">Loading…</div>';
+  try {
+    const res = await fetch(
+      `/api/catalog/${encodeURIComponent(_owner)}/items/${encodeURIComponent(itemId)}`,
+    );
+    const doc = await res.json();
+    if (!res.ok) {
+      panel.innerHTML = `<span class="preview-error">${escHtml(doc.error ?? 'Failed to load item')}</span>`;
+      return;
+    }
+
+    let html = renderItemDoc(doc);
+    if (panel.dataset.hasSample === '1') {
+      html += renderSample(itemId, panel.dataset.contentType);
+    }
+    panel.innerHTML = html;
+    panel.dataset.loaded = '1';
+  } catch (err) {
+    panel.innerHTML = `<span class="preview-error">${escHtml(err.message ?? 'Error')}</span>`;
+  }
+}
+
+function renderSample(itemId, contentType) {
+  const url = `/api/catalog/${encodeURIComponent(_owner)}/items/${encodeURIComponent(itemId)}/sample`;
+  const body =
+    contentType === 'image'
+      ? `<img class="content-image" src="${url}" alt="sample preview" />`
+      : `<pre class="preview-text" id="sample-${escHtml(itemId)}">Loading sample…</pre>`;
+  const out = `
+    <div class="sample-block">
+      <div class="sample-label">Sample / Preview — not the full asset</div>
+      ${body}
+    </div>`;
+  if (contentType !== 'image') {
+    // Defer text fetch until after the element is in the DOM.
+    setTimeout(() => loadTextSample(itemId, url), 0);
+  }
+  return out;
+}
+
+async function loadTextSample(itemId, url) {
+  const el = document.getElementById(`sample-${itemId}`);
+  if (!el) return;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      el.textContent = `Sample unavailable (${res.status})`;
+      return;
+    }
+    const buf = await res.arrayBuffer();
+    const slice = buf.slice(0, TEXT_PREVIEW_BYTES);
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(slice);
+    el.textContent =
+      text +
+      (buf.byteLength > TEXT_PREVIEW_BYTES ? `\n\n…[first ${TEXT_PREVIEW_BYTES} bytes]` : '');
+  } catch (err) {
+    el.textContent = err.message ?? 'Error loading sample';
+  }
+}
+
+// ── Purchase ────────────────────────────────────────────────────────────────
+
+async function _buyItem(itemId, btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Buying…';
 
-  const card = document.getElementById(`card-${swarmHash}`);
+  const card = document.getElementById(`card-${itemId}`);
   const existing = card.querySelector('.buy-result');
   if (existing) existing.remove();
 
-  const displayName = card.dataset.displayName || swarmHash;
-  const mimeType = card.dataset.mimeType || '';
-
   try {
-    const res = await fetch('/api/buy', {
+    const res = await fetch('/api/purchase', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ swarmHash, serverUrl }),
+      body: JSON.stringify({ publisherUrl: _publisherUrl, itemId }),
     });
     const data = await res.json();
 
     if (res.ok) {
-      const grant = { ...data, displayName, mimeType };
-      localStorage.setItem(GRANT_KEY(swarmHash), JSON.stringify(grant));
+      localStorage.setItem(GRANT_KEY(itemId), JSON.stringify(data));
       const wrapper = document.createElement('div');
-      wrapper.innerHTML = renderGrantBlock(grant);
+      wrapper.innerHTML = renderGrantBlock(data);
       card.appendChild(wrapper.firstElementChild);
-      // Explicitly disable and re-label the Buy button (access already granted)
       btn.disabled = true;
       btn.textContent = 'Purchased';
       btn.title = 'Already purchased';
-      return;
     } else {
       const resultEl = document.createElement('div');
       resultEl.className = 'buy-result error';
@@ -268,153 +293,59 @@ async function _buyItem(swarmHash, serverUrl, btn) {
   }
 }
 
-// ── Download helpers ──────────────────────────────────────────────────────────
+// ── Collection-level catalog metadata (catalog.jsonld) ──────────────────────────
 
-function _downloadParams(btn) {
-  return new URLSearchParams({
-    swarmHash: btn.dataset.swarmHash,
-    actHistoryAddress: btn.dataset.actHistoryAddress,
-    publisherPublickey: btn.dataset.publisherPublickey,
-  });
+function renderCatalogMeta(meta) {
+  const el = document.getElementById('catalog-meta');
+  if (!el) return;
+  const hasContent = meta && (meta.name || meta.description || meta.license);
+  if (!hasContent) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+
+  const parts = [];
+  if (meta.name) parts.push(`<h2 class="catalog-meta-name">${escHtml(meta.name)}</h2>`);
+  if (meta.description) parts.push(`<p class="catalog-meta-desc">${escHtml(meta.description)}</p>`);
+  if (meta.license) {
+    const lic = String(meta.license);
+    const licHtml = /^https?:\/\//.test(lic)
+      ? `<a href="${escHtml(lic)}" target="_blank" rel="noopener noreferrer">${escHtml(lic)}</a>`
+      : escHtml(lic);
+    parts.push(`<div class="catalog-meta-license">License: ${licHtml}</div>`);
+  }
+  el.innerHTML = parts.join('');
+  el.hidden = false;
 }
 
-function _previewEl(btn) {
-  return btn.closest('.buy-result').querySelector('.content-preview');
-}
-
-/**
- * View button — fetches content and renders it inline.
- * Images are displayed as <img>; everything else shows the first TEXT_PREVIEW_BYTES
- * decoded as UTF-8 in a <pre>.
- */
-async function _viewContent(btn) {
-  const displayName = btn.dataset.displayName || btn.dataset.swarmHash;
-  const metaMime = btn.dataset.mimeType || '';
-
-  btn.disabled = true;
-  btn.innerHTML =
-    '<span class="spinner" style="border-color:rgba(255,255,255,.3);border-top-color:#fff"></span>Loading…';
-
-  const preview = _previewEl(btn);
-  preview.innerHTML = '';
-
+async function loadCatalogMeta(owner) {
   try {
-    const res = await fetch(`/api/download?${_downloadParams(btn)}`);
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      preview.innerHTML = `<span class="preview-error">${escHtml(err.error ?? `HTTP ${res.status}`)}</span>`;
-      btn.disabled = false;
-      btn.textContent = '👁 View';
-      return;
-    }
-
-    // Read body once; we need bytes for both magic-number detection and rendering
-    const buffer = await res.arrayBuffer();
-    const headerType = res.headers.get('content-type') || 'application/octet-stream';
-
-    // Priority: metadata mime_type → magic bytes → Content-Type header
-    const contentType = metaMime || detectMimeType(buffer) || headerType;
-
-    if (contentType.startsWith('image/')) {
-      const blob = new Blob([buffer], { type: contentType });
-      const objectUrl = URL.createObjectURL(blob);
-      const img = document.createElement('img');
-      img.src = objectUrl;
-      img.className = 'content-image';
-      img.alt = displayName;
-      img.onload = () => URL.revokeObjectURL(objectUrl);
-      preview.appendChild(img);
-      btn.remove(); // image is self-explanatory; hide the View button
-    } else {
-      // Show first TEXT_PREVIEW_BYTES bytes decoded as UTF-8
-      const slice = buffer.slice(0, TEXT_PREVIEW_BYTES);
-      const text = new TextDecoder('utf-8', { fatal: false }).decode(slice);
-      const truncated = buffer.byteLength > TEXT_PREVIEW_BYTES;
-
-      const pre = document.createElement('pre');
-      pre.className = 'preview-text';
-      pre.textContent =
-        text + (truncated ? `\n\n…[showing first ${TEXT_PREVIEW_BYTES} bytes]` : '');
-      preview.innerHTML = '';
-      preview.appendChild(pre);
-
-      btn.disabled = false;
-      btn.textContent = '👁 View';
-    }
-  } catch (err) {
-    preview.innerHTML = `<span class="preview-error">${escHtml(err.message ?? 'Error')}</span>`;
-    btn.disabled = false;
-    btn.textContent = '👁 View';
+    const res = await fetch(`/api/catalog/${encodeURIComponent(owner)}/meta`);
+    renderCatalogMeta(res.ok ? await res.json() : null);
+  } catch {
+    renderCatalogMeta(null);
   }
 }
 
-/**
- * Download button — fetches content and triggers a browser file download
- * using displayName as the filename.
- */
-async function _downloadContent(btn) {
-  const displayName = btn.dataset.displayName || btn.dataset.swarmHash;
-
-  btn.disabled = true;
-  btn.innerHTML =
-    '<span class="spinner" style="border-color:rgba(0,0,0,.3);border-top-color:#000"></span>Downloading…';
-
-  const preview = _previewEl(btn);
-
-  try {
-    const res = await fetch(`/api/download?${_downloadParams(btn)}`);
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      preview.innerHTML = `<span class="preview-error">${escHtml(err.error ?? `HTTP ${res.status}`)}</span>`;
-      btn.disabled = false;
-      btn.textContent = '↓ Download';
-      return;
-    }
-
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = displayName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
-
-    btn.disabled = false;
-    btn.textContent = '✓ Downloaded';
-    setTimeout(() => {
-      btn.textContent = '↓ Download';
-    }, 3000);
-  } catch (err) {
-    preview.innerHTML = `<span class="preview-error">${escHtml(err.message ?? 'Error')}</span>`;
-    btn.disabled = false;
-    btn.textContent = '↓ Download';
-  }
-}
-
-// ── Catalogue loading ─────────────────────────────────────────────────────────
+// ── Catalog loading ───────────────────────────────────────────────────────────
 
 async function loadCatalogue() {
-  const feedOwner = document.getElementById('feed-owner').value.trim();
-  const feedTopic = document.getElementById('feed-topic').value.trim();
-  const serverUrl = document.getElementById('server-url').value.trim() || 'http://localhost:3000';
+  _owner = document.getElementById('feed-owner').value.trim();
+  _publisherUrl = document.getElementById('publisher-url').value.trim() || 'http://localhost:3000';
   const btn = document.getElementById('load-btn');
 
-  if (!feedOwner || !feedTopic) {
-    setStatus('Please enter both Feed Owner and Feed Topic.', true);
+  if (!_owner) {
+    setStatus('Please enter the Catalog Feed Owner.', true);
     return;
   }
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Loading…';
-  setStatus('Fetching catalogue from Swarm feed…');
+  setStatus('Resolving catalog feed → Mantaray → items…');
 
   try {
-    const params = new URLSearchParams({ feedOwner, feedTopic });
-    const res = await fetch(`/api/catalogue?${params}`);
+    const res = await fetch(`/api/catalog/${encodeURIComponent(_owner)}/items`);
     const data = await res.json();
 
     if (!res.ok) {
@@ -422,19 +353,18 @@ async function loadCatalogue() {
       return;
     }
 
-    window._catalogueVersion = data.schemeVersion;
-    const items = data.dataItems ?? [];
-
+    const items = Array.isArray(data) ? data : [];
     if (items.length === 0) {
-      setStatus('Catalogue is empty — no items found.');
+      setStatus('Catalog is empty — no items found.');
       return;
     }
 
     const grid = document.getElementById('grid');
-    grid.innerHTML = items.map((item) => renderCard(item, serverUrl)).join('');
+    grid.innerHTML = items.map((item) => renderCard(item)).join('');
     grid.hidden = false;
-
     document.getElementById('status').hidden = true;
+
+    loadCatalogMeta(_owner);
 
     const badge = document.getElementById('count-badge');
     badge.textContent = `${items.length} item${items.length !== 1 ? 's' : ''}`;
@@ -448,26 +378,23 @@ async function loadCatalogue() {
 }
 
 document.getElementById('load-btn').addEventListener('click', loadCatalogue);
-document.getElementById('feed-topic').addEventListener('keydown', (e) => {
+document.getElementById('feed-owner').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loadCatalogue();
 });
 
 async function init() {
-  await loadConfig(); // apply .env defaults first
+  await loadConfig();
 
-  // URL params override defaults: ?owner=...&x402=...
   const params = new URLSearchParams(window.location.search);
   const ownerParam = params.get('owner');
-  const x402Param = params.get('x402');
+  const publisherParam = params.get('publisher') ?? params.get('x402');
 
   if (ownerParam) document.getElementById('feed-owner').value = ownerParam;
-  if (x402Param) document.getElementById('server-url').value = x402Param;
+  if (publisherParam) document.getElementById('publisher-url').value = publisherParam;
 
-  if (ownerParam || x402Param) {
-    // Params supplied via URL — keep settings collapsed and load immediately
+  if (ownerParam) {
     loadCatalogue();
   } else {
-    // No URL params — show settings so the user can fill them in
     document.getElementById('settings-panel').classList.add('open');
     document.getElementById('settings-toggle').textContent = '▲ Settings';
   }

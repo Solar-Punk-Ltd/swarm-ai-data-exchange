@@ -253,7 +253,8 @@ stateFeedTopic(catalogFeedOwner, itemId);
 await readCatalogFeedRoot(bee, catalogFeedOwner);
 
 // Read / write the per-item state. readItemState throws NoStateFeedError if uninitialized.
-await readItemState(bee, catalogFeedOwner, itemId);
+// stateFeedOwner is the hot state-feed signer's EOA — it owns the feed; catalogFeedOwner only computes the topic.
+await readItemState(bee, catalogFeedOwner, itemId, stateFeedOwner);
 await writeItemState(bee, itemStateFeedSigner, catalogFeedOwner, state, postageBatchId);
 ```
 

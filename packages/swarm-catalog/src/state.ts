@@ -1,6 +1,6 @@
 import { Bee, PrivateKey } from '@ethersphere/bee-js';
-import { stateFeedTopic } from './feeds.js';
-import type { CatalogItemState } from './types.js';
+import { stateFeedTopic } from './feeds';
+import type { CatalogItemState } from './types';
 
 type FeedSigner = PrivateKey | Uint8Array | string;
 
@@ -13,13 +13,18 @@ export class NoStateFeedError extends Error {
 
 // Read the current CatalogItemState from a per-item state feed.
 // Throws NoStateFeedError if the feed has never been initialized (item not yet published).
+//
+// The topic is bound to `catalogFeedOwner` (the cold catalog key), but the feed itself is
+// owned by the hot state-feed signer — so the reader must address `stateFeedOwner`, the EOA
+// of ITEM_STATE_FEED_PK, not the catalog owner.
 export async function readItemState(
   bee: Bee,
   catalogFeedOwner: string,
   itemId: string,
+  stateFeedOwner: string,
 ): Promise<CatalogItemState> {
   const topic = stateFeedTopic(catalogFeedOwner, itemId);
-  const reader = bee.makeFeedReader(topic, catalogFeedOwner);
+  const reader = bee.makeFeedReader(topic, stateFeedOwner);
   let stateRef: string;
   try {
     const result = await reader.downloadPayload();

@@ -1,5 +1,5 @@
-import { serializeItem, serializeCatalog } from '../src/jsonld.js';
-import type { CatalogItem, ContentSpec } from '../src/types.js';
+import { serializeItem, serializeCatalog } from '../src/jsonld';
+import type { CatalogItem, ContentSpec } from '../src/types';
 
 const REF = 'a'.repeat(64);
 
@@ -279,14 +279,7 @@ describe('serializeItem — optional top-level fields', () => {
 
 describe('serializeCatalog', () => {
   it('produces a DataCatalog document with item count and protocol version', () => {
-    const items = [
-      baseItem({ type: 'text', encodingFormat: 'text/plain' }),
-      baseItem(
-        { type: 'text', encodingFormat: 'text/plain' },
-        { id: 'z'.repeat(64), storage: { reference: 'z'.repeat(64) } },
-      ),
-    ];
-    const doc = serializeCatalog(items);
+    const doc = serializeCatalog(2);
     expect(doc['@context']).toBe('https://swarm-ai-catalog.eth/v1');
     expect(doc['@type']).toEqual(['sc:DataCatalog', 'swarm-cat:Catalog']);
     expect(doc['swarm-cat:itemCount']).toBe(2);
@@ -294,7 +287,32 @@ describe('serializeCatalog', () => {
     expect(typeof doc.dateModified).toBe('string');
   });
 
-  it('reports zero items for an empty catalog', () => {
-    expect(serializeCatalog([])['swarm-cat:itemCount']).toBe(0);
+  it('reports the item count it is given (zero for an empty catalog)', () => {
+    expect(serializeCatalog(0)['swarm-cat:itemCount']).toBe(0);
+  });
+
+  it('emits name/description/license when collection meta is provided', () => {
+    const doc = serializeCatalog(0, {
+      name: 'Acme AI Vision Datasets',
+      description: 'Curated training data.',
+      license: 'https://example.com/licenses/acme-data-v1',
+    });
+    expect(doc.name).toBe('Acme AI Vision Datasets');
+    expect(doc.description).toBe('Curated training data.');
+    expect(doc.license).toBe('https://example.com/licenses/acme-data-v1');
+  });
+
+  it('omits name/description/license when meta is absent or empty', () => {
+    const doc = serializeCatalog(0);
+    expect(doc).not.toHaveProperty('name');
+    expect(doc).not.toHaveProperty('description');
+    expect(doc).not.toHaveProperty('license');
+  });
+
+  it('omits individual meta fields left empty', () => {
+    const doc = serializeCatalog(0, { name: 'Only a name' });
+    expect(doc.name).toBe('Only a name');
+    expect(doc).not.toHaveProperty('description');
+    expect(doc).not.toHaveProperty('license');
   });
 });

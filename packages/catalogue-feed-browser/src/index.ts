@@ -1,13 +1,15 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
-import { Readable } from 'stream';
-import { fetchCatalogue } from './catalogue.js';
-import { executeBuy } from './buyer.js';
+import { Bee } from '@ethersphere/bee-js';
+import { privateKeyToAccount } from 'viem/accounts';
+import { listItems, getItem, getSample, readCatalogMeta } from './reader.js';
+import { purchase } from './buyer.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const BEE_API_URL = process.env.BEE_API_URL ?? 'http://localhost:1633';
 
+const bee = new Bee(BEE_API_URL);
 const app = express();
 app.use(express.json());
 app.use(
@@ -17,90 +19,87 @@ app.use(
   }),
 );
 
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+// The consumer's Bee-node public key is the ACT grantee identity (added to the grantee list).
+async function getBeePublicKey(beeUrl: string): Promise<string> {
+  const res = await fetch(`${beeUrl}/addresses`);
+  if (!res.ok) throw new Error(`Failed to fetch Bee addresses (${res.status})`);
+  const data = (await res.json()) as { publicKey?: string };
+  if (!data.publicKey) throw new Error('Bee /addresses response missing publicKey');
+  return data.publicKey.startsWith('0x') ? data.publicKey : `0x${data.publicKey}`;
+}
+
 app.get('/api/config', (_req, res) => {
   res.json({
     defaultFeedOwner: process.env.DEFAULT_FEED_OWNER ?? '',
-    defaultFeedTopic: process.env.DEFAULT_FEED_TOPIC ?? '',
-    defaultServerUrl: process.env.DEFAULT_SERVER_URL ?? 'http://localhost:3000',
+    defaultPublisherUrl: process.env.DEFAULT_PUBLISHER_URL ?? 'http://localhost:3000',
   });
 });
 
-app.get('/api/catalogue', async (req, res) => {
-  const feedOwner = String(req.query.feedOwner ?? '');
-  const feedTopic = String(req.query.feedTopic ?? '');
-  const beeUrl = String(req.query.beeUrl ?? BEE_API_URL);
-
-  if (!feedOwner || !feedTopic) {
-    res.status(400).json({ error: 'feedOwner and feedTopic are required' });
-    return;
-  }
-
+// Collection-level metadata (name/description/license) from /catalog.jsonld. 404s (not 500)
+// when absent — the UI treats the header as optional.
+app.get('/api/catalog/:owner/meta', async (req, res) => {
   try {
-    const catalogue = await fetchCatalogue(beeUrl, feedTopic, feedOwner);
-    res.json(catalogue);
+    res.json(await readCatalogMeta(bee, req.params.owner));
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: message });
+    res.status(404).json({ error: errMessage(err) });
   }
 });
 
-app.post('/api/buy', async (req, res) => {
-  const { swarmHash, serverUrl } = req.body as { swarmHash?: string; serverUrl?: string };
+// List view (§13.2).
+app.get('/api/catalog/:owner/items', async (req, res) => {
+  try {
+    res.json(await listItems(req.params.owner, bee));
+  } catch (err) {
+    res.status(500).json({ error: errMessage(err) });
+  }
+});
 
-  if (!swarmHash || !serverUrl) {
-    res.status(400).json({ error: 'swarmHash and serverUrl are required' });
+// Detail view (§13.2) — full item.jsonld.
+app.get('/api/catalog/:owner/items/:itemId', async (req, res) => {
+  try {
+    res.json(await getItem(req.params.owner, req.params.itemId, bee));
+  } catch (err) {
+    res.status(404).json({ error: errMessage(err) });
+  }
+});
+
+// Sample proxy (§13.3) — open-access preview bytes with the declared Content-Type.
+app.get('/api/catalog/:owner/items/:itemId/sample', async (req, res) => {
+  try {
+    const { data, encodingFormat } = await getSample(req.params.owner, req.params.itemId, bee);
+    res.setHeader('Content-Type', encodingFormat);
+    res.setHeader('X-Swarm-Sample', 'true');
+    res.send(Buffer.from(data));
+  } catch (err) {
+    res.status(404).json({ error: errMessage(err) });
+  }
+});
+
+// Trigger the consumer purchase flow (§10.1 / §11.4).
+app.post('/api/purchase', async (req, res) => {
+  const { publisherUrl, itemId } = req.body as { publisherUrl?: string; itemId?: string };
+  if (!publisherUrl || !itemId) {
+    res.status(400).json({ error: 'publisherUrl and itemId are required' });
     return;
   }
 
   try {
-    const result = await executeBuy(swarmHash, serverUrl, BEE_API_URL);
+    let pk = process.env.EVM_PRIVATE_KEY;
+    if (!pk) throw new Error('EVM_PRIVATE_KEY environment variable is required');
+    if (!pk.startsWith('0x')) pk = `0x${pk}`;
+
+    const walletSigner = privateKeyToAccount(pk as `0x${string}`);
+    const granteePublicKey = await getBeePublicKey(BEE_API_URL);
+    const publisherEndpoint = `${publisherUrl.replace(/\/$/, '')}/v1/items/${itemId}/purchase`;
+
+    const result = await purchase({ publisherEndpoint, itemId, granteePublicKey, walletSigner });
     res.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: message });
-  }
-});
-
-app.get('/api/download', async (req, res) => {
-  const swarmHash = String(req.query.swarmHash ?? '');
-  const actHistoryAddress = String(req.query.actHistoryAddress ?? '');
-  const publisherPublickey = String(req.query.publisherPublickey ?? '');
-
-  if (!swarmHash || !actHistoryAddress || !publisherPublickey) {
-    res
-      .status(400)
-      .json({ error: 'swarmHash, actHistoryAddress, and publisherPublickey are required' });
-    return;
-  }
-
-  try {
-    const beeRes = await fetch(`${BEE_API_URL}/bzz/${swarmHash}/`, {
-      headers: {
-        'swarm-act': 'true',
-        'swarm-act-publisher': publisherPublickey,
-        'swarm-act-history-address': actHistoryAddress,
-      },
-    });
-
-    if (!beeRes.ok) {
-      const text = await beeRes.text();
-      res.status(beeRes.status).json({ error: `Bee error ${beeRes.status}: ${text}` });
-      return;
-    }
-
-    res.setHeader('Content-Type', beeRes.headers.get('content-type') ?? 'application/octet-stream');
-    const disposition = beeRes.headers.get('content-disposition');
-    if (disposition) res.setHeader('Content-Disposition', disposition);
-
-    if (beeRes.body) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      Readable.fromWeb(beeRes.body as any).pipe(res);
-    } else {
-      res.end();
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (!res.headersSent) res.status(500).json({ error: message });
+    res.status(500).json({ error: errMessage(err) });
   }
 });
 

@@ -1,4 +1,4 @@
-import { PURCHASE_INTENT_TYPES } from '../src/types.js';
+import { PURCHASE_INTENT_TYPES } from '../src/types';
 
 describe('PURCHASE_INTENT_TYPES (EIP-712 descriptor)', () => {
   it('declares the PurchaseIntent fields in the spec order with correct ABI types', () => {

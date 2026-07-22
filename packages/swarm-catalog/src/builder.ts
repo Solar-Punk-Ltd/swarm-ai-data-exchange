@@ -1,16 +1,16 @@
 import { Bee, MantarayNode, PrivateKey } from '@ethersphere/bee-js';
-import { CATALOG_FEED_TOPIC, readCatalogFeedRoot } from './feeds.js';
-import { itemManifestPath, itemSamplePath, CATALOG_MANIFEST_PATH } from './paths.js';
-import { serializeItem, serializeCatalog } from './jsonld.js';
-import { writeItemState } from './state.js';
-import { LIFECYCLE_VALUES } from './types.js';
+import { CATALOG_FEED_TOPIC, readCatalogFeedRoot } from './feeds';
+import { itemManifestPath, itemSamplePath, CATALOG_MANIFEST_PATH } from './paths';
+import { serializeItem, serializeCatalog, type CatalogMeta } from './jsonld';
+import { writeItemState } from './state';
+import { LIFECYCLE_VALUES } from './types';
 import type {
   CatalogItem,
   CatalogItemState,
   ContentSpec,
   Lifecycle,
   PaymentRequirements,
-} from './types.js';
+} from './types';
 
 type FeedSigner = PrivateKey | Uint8Array | string;
 
@@ -47,18 +47,26 @@ export class SwarmCatalogBuilder {
   private actSeeds = new Map<string, ActSeed>();
   // Prototype extension: sample bytes to upload during publish().
   private sampleData = new Map<string, Uint8Array | string>();
+  // Collection-level metadata (name/description/license) for catalog.jsonld (§5.2).
+  private catalogMeta: CatalogMeta = {};
 
   constructor(opts: BuilderOpts) {
     this.bee = opts.bee;
     this.catalogFeedSigner = opts.catalogFeedSigner;
     this.itemStateFeedSigner = opts.itemStateFeedSigner;
     this.postageBatchId = opts.postageBatchId;
-    // Derive the catalog feed owner EOA address from the signer key.
-    const pk =
-      opts.catalogFeedSigner instanceof PrivateKey
-        ? opts.catalogFeedSigner
-        : new PrivateKey(opts.catalogFeedSigner);
-    this.catalogFeedOwner = '0x' + pk.publicKey().address().toHex();
+
+    // Validate both signers up front (fail fast at construction, not mid-publish) and enforce the
+    // load-bearing invariant that the catalog feed signer (cold key) and the per-item state feed
+    // signer (hot key) are different keys.
+    this.catalogFeedOwner = feedSignerAddress(opts.catalogFeedSigner, 'catalogFeedSigner');
+    const stateFeedOwner = feedSignerAddress(opts.itemStateFeedSigner, 'itemStateFeedSigner');
+    if (this.catalogFeedOwner.toLowerCase() === stateFeedOwner.toLowerCase()) {
+      throw new Error(
+        'catalogFeedSigner and itemStateFeedSigner must be different keys ' +
+          '(the catalog feed uses a cold key; the per-item state feed uses a hot key).',
+      );
+    }
   }
 
   // Queue an item for the next publish. Validates immediately; throws on invalid input.
@@ -92,14 +100,38 @@ export class SwarmCatalogBuilder {
     this.sampleData.set(itemId, data);
   }
 
-  // Compute the new Mantaray structure locally without uploading (§12.4 dry-run mode).
-  // Returns an empty root string because no Swarm uploads are performed.
-  // The manifest can be inspected to verify paths and structure.
-  async dryRun(): Promise<{ root: string; manifest: MantarayNode }> {
-    const node = new MantarayNode();
-    for (const [itemId] of this.staged) {
-      node.addFork(itemManifestPath(itemId), new Uint8Array(32), null);
+  // Set collection-level metadata (name/description/license) for catalog.jsonld (§5.2).
+  // Merges with any previously-set fields; only provided keys are written.
+  setCatalogMeta(meta: CatalogMeta): void {
+    if (meta.license && isUrlShaped(meta.license) && !isValidIri(meta.license)) {
+      throw new Error(`setCatalogMeta: license is not a valid IRI "${meta.license}"`);
     }
+    this.catalogMeta = { ...this.catalogMeta, ...meta };
+  }
+
+  // Compute the new Mantaray structure locally without uploading (§12.4 dry-run mode).
+  // Returns an empty root string because no Swarm uploads are performed; every leaf points at a
+  // 32-byte placeholder address rather than a real content reference. The manifest can be
+  // inspected to verify the path layout (item.jsonld, sample, catalog.jsonld) and removals.
+  //
+  // NOTE: this does NOT load the previously-published catalog Mantaray — it reflects only the
+  // currently staged changes. The real publish() does a copy-on-write merge against the prior
+  // root, so a dry-run manifest is not a faithful preview of the final on-chain structure when
+  // building on top of an existing catalog.
+  async dryRun(): Promise<{ root: string; manifest: MantarayNode }> {
+    const placeholder = new Uint8Array(32);
+    const node = new MantarayNode();
+    for (const [itemId, item] of this.staged) {
+      if (item.sample && this.sampleData.has(itemId)) {
+        node.addFork(itemSamplePath(itemId, item.sample.path), placeholder, null);
+      }
+      node.addFork(itemManifestPath(itemId), placeholder, null);
+    }
+    for (const itemId of this.removals) {
+      if (this.staged.has(itemId)) continue;
+      node.removeFork(itemManifestPath(itemId));
+    }
+    node.addFork(CATALOG_MANIFEST_PATH, placeholder, null);
     return { root: '', manifest: node };
   }
 
@@ -114,9 +146,10 @@ export class SwarmCatalogBuilder {
       }
     }
 
-    // All priced staged items must have an ACT seed before we can write state feeds.
-    for (const [itemId, item] of this.staged) {
-      if (item.payment.length > 0 && !this.actSeeds.has(itemId)) {
+    // All staged items are priced (validateItem rejects empty payment) and must have an ACT seed
+    // before we can write state feeds.
+    for (const [itemId] of this.staged) {
+      if (!this.actSeeds.has(itemId)) {
         throw new Error(
           `Missing ACT seed for priced item "${itemId}". Call seedActState() before publish().`,
         );
@@ -142,14 +175,24 @@ export class SwarmCatalogBuilder {
       if (item.sample && sampleBytes != null) {
         const sampleResult = await this.bee.uploadData(this.postageBatchId, sampleBytes);
         const sampleManifestPath = itemSamplePath(itemId, item.sample.path);
-        manifest.addFork(sampleManifestPath, sampleResult.reference.toString(), null);
+        upsertFork(
+          manifest,
+          sampleManifestPath,
+          sampleResult.reference.toString(),
+          forkMetadata(item.sample.encodingFormat, basename(item.sample.path)),
+        );
       }
 
       // Step 4: Serialize and upload item.jsonld. Inline fork metadata (§5.5) is empty for prototype.
       const itemJsonLd = serializeItem(item);
       const itemJsonLdBytes = JSON.stringify(itemJsonLd, null, 2);
       const itemResult = await this.bee.uploadData(this.postageBatchId, itemJsonLdBytes);
-      manifest.addFork(itemManifestPath(itemId), itemResult.reference.toString(), null);
+      upsertFork(
+        manifest,
+        itemManifestPath(itemId),
+        itemResult.reference.toString(),
+        forkMetadata(JSONLD_CONTENT_TYPE, 'item.jsonld'),
+      );
     }
 
     // Process removals: remove item.jsonld fork from Mantaray.
@@ -172,17 +215,29 @@ export class SwarmCatalogBuilder {
         parsed['lifecycle'] = lifecycle;
         const updated = JSON.stringify(parsed, null, 2);
         const updatedResult = await this.bee.uploadData(this.postageBatchId, updated);
-        manifest.addFork(itemManifestPath(itemId), updatedResult.reference.toString(), null);
+        upsertFork(
+          manifest,
+          itemManifestPath(itemId),
+          updatedResult.reference.toString(),
+          forkMetadata(JSONLD_CONTENT_TYPE, 'item.jsonld'),
+        );
       } catch (err) {
         console.warn(`[swarm-catalog] Failed to update lifecycle for ${itemId}, skipping:`, err);
       }
     }
 
-    // Upload catalog.jsonld (collection-level metadata).
-    const catalogJsonLd = serializeCatalog(Array.from(this.staged.values()));
+    // Upload catalog.jsonld (collection-level metadata). itemCount is the catalog-wide total,
+    // derived from the final Mantaray AFTER adds/removals/lifecycle changes — not from the
+    // staged set — so it stays correct under copy-on-write publishes and removals.
+    const catalogJsonLd = serializeCatalog(countCatalogItems(manifest), this.catalogMeta);
     const catalogJsonLdBytes = JSON.stringify(catalogJsonLd, null, 2);
     const catalogDataResult = await this.bee.uploadData(this.postageBatchId, catalogJsonLdBytes);
-    manifest.addFork(CATALOG_MANIFEST_PATH, catalogDataResult.reference.toString(), null);
+    upsertFork(
+      manifest,
+      CATALOG_MANIFEST_PATH,
+      catalogDataResult.reference.toString(),
+      forkMetadata(JSONLD_CONTENT_TYPE, 'catalog.jsonld'),
+    );
 
     // Step 6 (§12.2): Upload new Mantaray and capture root reference.
     const saveResult = await manifest.saveRecursively(this.bee, this.postageBatchId);
@@ -196,8 +251,8 @@ export class SwarmCatalogBuilder {
     // Step 8 (§12.2): Initialize per-item state feeds for staged items.
     const stateFeedResults: Array<{ itemId: string; reference: string }> = [];
     for (const [itemId, item] of this.staged) {
-      const actSeed = this.actSeeds.get(itemId);
-      if (!actSeed) continue; // free items have no state feed
+      // Guaranteed present: the seed gate above throws for any staged item without a seed.
+      const actSeed = this.actSeeds.get(itemId)!;
       const state: CatalogItemState = {
         itemId,
         actHistoryRef: actSeed.actHistoryRef,
@@ -217,8 +272,60 @@ export class SwarmCatalogBuilder {
       stateFeedResults.push({ itemId, reference: stateRef });
     }
 
+    // The builder is single-use per publish. Clear staged work so a reused instance cannot
+    // re-seed stale ACT refs on a later publish() — re-publishing an item with its original
+    // (pre-purchase) ACT seed would clobber the history ref advanced by grants and revoke
+    // buyer access. catalogMeta is intentionally retained (collection-level, not per-publish).
+    this.staged.clear();
+    this.removals.clear();
+    this.lifecycleChanges.clear();
+    this.actSeeds.clear();
+    this.sampleData.clear();
+
     return { catalogRoot, feedUpdateTxId, stateFeeds: stateFeedResults };
   }
+}
+
+// JSON-LD documents are served as application/ld+json so the bzz endpoint returns the
+// correct Content-Type when a leaf is fetched directly by URL.
+const JSONLD_CONTENT_TYPE = 'application/ld+json';
+
+// Build Mantaray fork metadata so the bzz endpoint serves a leaf with the right MIME type
+// (and a filename for downloads). Returns null when no content type is known, leaving the
+// fork metadata empty rather than guessing.
+function forkMetadata(
+  contentType: string | undefined,
+  filename: string,
+): Record<string, string> | null {
+  if (!contentType) return null;
+  return { 'Content-Type': contentType, Filename: filename };
+}
+
+function basename(path: string): string {
+  return path.split('/').pop() ?? path;
+}
+
+// Add or replace a fork at `path`. bee-js MantarayNode.addFork is a silent no-op when the
+// exact path already exists (it never updates the leaf's targetAddress/metadata), so a
+// copy-on-write republish would carry the stale leaf forward. Remove any existing fork first.
+function upsertFork(
+  manifest: MantarayNode,
+  path: string,
+  reference: string,
+  metadata: Record<string, string> | null,
+): void {
+  if (manifest.find(path)) {
+    manifest.removeFork(path);
+  }
+  manifest.addFork(path, reference, metadata);
+}
+
+// Count the /items/{itemId}/item.jsonld leaves in the catalog Mantaray — the catalog-wide
+// item total written to catalog.jsonld (swarm-cat:itemCount). Sample leaves
+// (/items/{itemId}/sample/...) and /catalog.jsonld are excluded by the path shape.
+const ITEM_JSONLD_PATH_RE = /^\/?items\/[^/]+\/item\.jsonld$/;
+function countCatalogItems(manifest: MantarayNode): number {
+  return manifest.collect().filter((node) => ITEM_JSONLD_PATH_RE.test(node.fullPathString)).length;
 }
 
 // --- Validation (§12.3) ---
@@ -286,6 +393,18 @@ function warnItem(input: CatalogItem): void {
       );
     }
   }
+}
+
+// Derive the EOA address (0x-prefixed, lowercase hex) for a feed signer, validating the key.
+// Throws a labelled error if the key is malformed so construction fails fast.
+function feedSignerAddress(signer: FeedSigner, label: string): string {
+  let pk: PrivateKey;
+  try {
+    pk = new PrivateKey(signer);
+  } catch (err) {
+    throw new Error(`${label} is not a valid private key: ${(err as Error).message}`);
+  }
+  return '0x' + pk.publicKey().address().toHex();
 }
 
 function isUrlShaped(s: string): boolean {

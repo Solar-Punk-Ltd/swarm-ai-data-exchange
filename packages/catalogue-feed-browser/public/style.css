@@ -48,6 +48,34 @@ header span { color: var(--text-muted); font-size: 13px; }
   gap: 12px;
 }
 
+.catalog-meta {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.catalog-meta-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+.catalog-meta-desc {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.catalog-meta-license {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 10px;
+}
+.catalog-meta-license a { color: var(--accent); text-decoration: none; }
+.catalog-meta-license a:hover { text-decoration: underline; }
+
 .config-bar-top {
   display: flex;
   gap: 10px;
@@ -176,6 +204,54 @@ main { padding: 24px; }
   font-weight: 700;
   color: var(--text);
   line-height: 1.3;
+}
+
+.card-retired { opacity: 0.7; }
+.card-retired .card-name { text-decoration: line-through; }
+
+.card-desc {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.lifecycle-badge,
+.type-badge,
+.price-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.lc-active { background: rgba(52, 211, 153, 0.15); color: var(--success); }
+.lc-deprecated { background: rgba(246, 166, 35, 0.15); color: var(--accent); }
+.lc-retired { background: rgba(248, 113, 113, 0.15); color: var(--error); }
+
+.type-badge { background: #2a2d3a; color: var(--text-muted); }
+.price-badge { background: rgba(99, 179, 237, 0.15); color: #63b3ed; text-transform: none; }
+
+.sample-block {
+  margin-top: 6px;
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+.sample-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  margin-bottom: 8px;
 }
 
 .card-hash {
