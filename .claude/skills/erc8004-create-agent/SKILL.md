@@ -5,8 +5,8 @@ description: >
   using the @solarpunk/erc8004-adapter CLI. Triggers include: any mention of "create-agent",
   "register agent", "mint agent NFT", "ERC-8004 registration", "agent card", "Swarm agent
   registration", or requests to set up a new provider agent on Base Sepolia. Also trigger
-  when the user supplies agent metadata (name, description, x402 endpoint, Swarm endpoint,
-  capabilities) and wants to register it on-chain. Use this skill proactively — if someone
+  when the user supplies agent metadata (name, description, x402 endpoint, catalog feed
+  owner address, capabilities) and wants to register it on-chain. Use this skill proactively — if someone
   describes an agent they want to deploy, assume they want to run the full registration flow.
 ---
 
@@ -45,7 +45,7 @@ pnpm create-agent \
   [--image "<avatar URL>"] \
   [--version "<semver, default 1.0.0>"] \
   [--x402 "<x402 service endpoint URL>"] \
-  [--swarm "<Swarm service endpoint URL>"] \
+  [--catalogFeedOwner "<catalog feed owner address, 0x-prefixed EOA>"] \
   [--capabilities "<comma-separated tags>"] \
   [--privateKey "<0x… wallet private key>"] \
   [--feedPrivateKey "<0x… feed signing key>"] \
@@ -73,7 +73,7 @@ pnpm --filter @solarpunk/erc8004-adapter create-agent \
 | `--image` | No | Swarm placeholder avatar | URL of an avatar image |
 | `--version` | No | `1.0.0` | SemVer or date string for the Agent Card revision |
 | `--x402` | No | — | x402 service endpoint URL; sets `x402Support: true` on the card |
-| `--swarm` | No | — | Swarm service endpoint URL |
+| `--catalogFeedOwner` | No | — | Catalog feed owner address (0x-prefixed EOA). Published as the `swarm-ai-catalog` service entry — the discovery entry point for the agent's catalog |
 | `--capabilities` | No | — | Comma-separated tags, e.g. `trading,price-feeds,image_generation` |
 | `--privateKey` | No* | `PRIVATE_KEY` env | On-chain wallet key for the NFT mint transaction |
 | `--feedPrivateKey` | No* | `BEE_FEED_PK` env | Swarm feed signing key for Agent Card upload |
@@ -87,14 +87,20 @@ pnpm --filter @solarpunk/erc8004-adapter create-agent \
 ## Step-by-step behaviour (what the command does internally)
 
 ```
-[1/3] Agent Card — builds AgentCard JSON from flags
-[2/3] Uploading to Swarm — uploads card to a Swarm feed; returns a feedUrl
+[1/4] Agent Card — builds AgentCard JSON from flags
+[2/4] Uploading to Swarm — uploads card to a Swarm feed; returns a feedUrl
          (immutable per-version bzz:// URL + mutable feed URL)
-[3/3] Registering on-chain — mints ERC-8004 NFT on Base Sepolia with feedUrl as URI
+[3/4] Registering on-chain — mints ERC-8004 NFT on Base Sepolia with feedUrl as URI
+[4/4] Updating Agent Card — writes a registrations[] entry (agentId + CAIP-10
+         agentRegistry) back into the card and re-uploads it to the same feed (overwrites)
 ```
 
 If `BEE_FEED_PK` / `--feedPrivateKey` is absent, step 2 is **skipped** and a placeholder
 `bzz://` URI is registered instead. The agent is still minted; only the Swarm upload is skipped.
+
+Step 4 makes the persisted Agent Card the single source of truth for on-chain identity:
+`registrations` ends up as `[{ agentId, agentRegistry: "eip155:<chainId>:<contractAddress>" }]`,
+re-signed with the same feed key and written to the same topic.
 
 ---
 
@@ -160,7 +166,7 @@ pnpm create-agent \
 
 ## Full worked example
 
-Registering a trading data provider with both x402 and Swarm endpoints:
+Registering a trading data provider with an x402 endpoint and a catalog feed owner address:
 
 ```sh
 pnpm create-agent \
@@ -169,7 +175,7 @@ pnpm create-agent \
   --image "https://cdn.solarpunk.buzz/agents/trading-avatar.png" \
   --version "1.2.0" \
   --x402 "https://data.solarpunk.buzz/trading/v1" \
-  --swarm "https://swarm.solarpunk.buzz/trading" \
+  --catalogFeedOwner "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" \
   --capabilities "trading,historical-data,price-feeds" \
   --privateKey "0xac0974bec29a17e37ba4a6b4d238ff947bacb478cbed5efcae784d7bf4f2ff80" \
   --feedPrivateKey "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" \

@@ -79,7 +79,7 @@ const card = generateAgentCard({
   version: '1.0.0',
   services: [
     { name: 'x402', endpoint: 'https://provider.example.com/data' },
-    { name: 'swarm', endpoint: 'https://swarmURL' },
+    { name: 'swarm-ai-catalog', endpoint: '0xCatalogFeedOwnerAddress' },
   ],
   x402Support: true,
   active: true,
@@ -203,25 +203,25 @@ pnpm create-agent [flags]
 
 ### Flags
 
-| Flag               | Required | Description                                                                                                                         |
-| ------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `--name`           | Yes      | Human-readable agent name                                                                                                           |
-| `--description`    | Yes      | Short description of what the agent does                                                                                            |
-| `--image`          | No       | URL of the agent avatar image                                                                                                       |
-| `--version`        | No       | Agent Card version string (default: `1.0.0`)                                                                                        |
-| `--x402`           | No       | x402 service endpoint URL                                                                                                           |
-| `--swarm`          | No       | Swarm service endpoint URL                                                                                                          |
-| `--capabilities`   | No       | Comma-separated capability tags, e.g. `trading,price-feeds`                                                                         |
-| `--privateKey`     | No       | On-chain wallet private key — falls back to `PRIVATE_KEY` env var                                                                   |
-| `--feedPrivateKey` | No       | Swarm feed signing key — falls back to `BEE_FEED_PK` env var                                                                        |
-| `--postageBatchId` | No       | Postage stamp batch ID (64-char hex) — falls back to `BEE_POSTAGE_STAMP` env var; auto-selected from the Bee node if neither is set |
-| `--beeApiUrl`      | No       | Bee node base URL — falls back to `BEE_API_URL` env var (default: `http://localhost:1633`)                                          |
+| Flag                 | Required | Description                                                                                                                                          |
+| -------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--name`             | Yes      | Human-readable agent name                                                                                                                            |
+| `--description`      | Yes      | Short description of what the agent does                                                                                                             |
+| `--image`            | No       | URL of the agent avatar image                                                                                                                        |
+| `--version`          | No       | Agent Card version string (default: `1.0.0`)                                                                                                         |
+| `--x402`             | No       | x402 service endpoint URL                                                                                                                            |
+| `--catalogFeedOwner` | No       | Catalog feed owner address (0x-prefixed EOA). Published as the `swarm-ai-catalog` service entry — the discovery entry point for the agent's catalog. |
+| `--capabilities`     | No       | Comma-separated capability tags, e.g. `trading,price-feeds`                                                                                          |
+| `--privateKey`       | No       | On-chain wallet private key — falls back to `PRIVATE_KEY` env var                                                                                    |
+| `--feedPrivateKey`   | No       | Swarm feed signing key — falls back to `BEE_FEED_PK` env var                                                                                         |
+| `--postageBatchId`   | No       | Postage stamp batch ID (64-char hex) — falls back to `BEE_POSTAGE_STAMP` env var; auto-selected from the Bee node if neither is set                  |
+| `--beeApiUrl`        | No       | Bee node base URL — falls back to `BEE_API_URL` env var (default: `http://localhost:1633`)                                                           |
 
 `--privateKey` and `--feedPrivateKey` (or their env var equivalents) are the only values that are always required — everything else has a sensible default or is optional.
 
 ### Example
 
-The following registers a trading data provider with both an x402 and an Swarm endpoint:
+The following registers a trading data provider with an x402 endpoint and a catalog feed owner address:
 
 ```sh
 pnpm create-agent \
@@ -230,7 +230,7 @@ pnpm create-agent \
   --image "https://cdn.solarpunk.buzz/agents/trading-avatar.png" \
   --version "1.2.0" \
   --x402 "https://data.solarpunk.buzz/trading/v1" \
-  --swarm "https://swarm.solarpunk.buzz/trading" \
+  --catalogFeedOwner "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" \
   --capabilities "trading,historical-data,price-feeds" \
   --privateKey "0xac0974bec29a17e37ba4a6b4d238ff947bacb478cbed5efcae784d7bf4f2ff80" \
   --feedPrivateKey "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" \
@@ -244,7 +244,7 @@ pnpm create-agent \
 The script logs each step and exits with a JSON result:
 
 ```
-[1/3] Agent Card
+[1/4] Agent Card
 {
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Solarpunk Trading Data Agent",
@@ -253,17 +253,19 @@ The script logs each step and exits with a JSON result:
   "image": "https://cdn.solarpunk.buzz/agents/trading-avatar.png",
   "services": [
     { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
-    { "name": "swarm",  "endpoint": "https://swarm.solarpunk.buzz/trading" }
+    { "name": "swarm-ai-catalog", "endpoint": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" }
   ],
   "x402Support": true,
   "active": true,
   "capabilities": ["trading", "historical-data", "price-feeds"]
 }
 
-[2/3] Uploading to Swarm…
+[2/4] Uploading to Swarm…
   AgentURI:  https://api.gateway.ethswarm.org/feeds/f39fd6e51aad88f6f4ce6ab8827279cfffb92266/6167656e742d63617264...
 
-[3/3] Registering on-chain…
+[3/4] Registering on-chain…
+
+[4/4] Updating Agent Card with registration…
 
 ✓ Agent registered successfully
 {
@@ -272,6 +274,16 @@ The script logs each step and exits with a JSON result:
   "agentURI": "https://api.gateway.ethswarm.org/feeds/f39fd6e51aad88f6f4ce6ab8827279cfffb92266/6167656e742d63617264..."
 }
 ```
+
+After step 3 returns the on-chain `agentId`, step 4 writes a `registrations[]` entry back into the Agent Card and re-uploads it to the same feed (same topic, so it overwrites). The persisted card therefore includes:
+
+```json
+"registrations": [
+  { "agentId": "42", "agentRegistry": "eip155:84532:0x8004A818BFB912233c491871b3d84c89A494BD9e" }
+]
+```
+
+`agentRegistry` is a CAIP-10 reference (`eip155:<chainId>:<contractAddress>`) derived from the live client — not hardcoded — making the Agent Card the single source of truth for the agent's on-chain identity.
 
 - **`agentId`** — the NFT token ID assigned by the Identity Registry. Use this for reputation queries and metadata lookups.
 - **`txHash`** — the Base Sepolia transaction hash. Verify at `https://sepolia.basescan.org/tx/<txHash>`.
@@ -288,7 +300,7 @@ pnpm --filter @solarpunk/erc8004-adapter create-agent \
   --image "https://cdn.solarpunk.buzz/agents/trading-avatar.png" \
   --version "1.2.0" \
   --x402 "https://data.solarpunk.buzz/trading/v1" \
-  --swarm "https://swarm.solarpunk.buzz/trading" \
+  --catalogFeedOwner "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" \
   --capabilities "trading,historical-data,price-feeds" \
   --privateKey "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" \
   --feedPrivateKey "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
@@ -363,7 +375,7 @@ Found 2 capable agent(s). Fetching agent cards…
       "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
       "services": [
         { "name": "x402", "endpoint": "https://data.solarpunk.buzz/weather/v1" },
-        { "name": "swarm",  "endpoint": "https://swarm.solarpunk.buzz/weather" }
+        { "name": "swarm-ai-catalog", "endpoint": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" }
       ],
       "x402Support": true,
       "active": true,
@@ -381,7 +393,7 @@ Found 2 capable agent(s). Fetching agent cards…
       "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
       "services": [
         { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
-        { "name": "swarm",  "endpoint": "https://swarm.solarpunk.buzz/trading" }
+        { "name": "swarm-ai-catalog", "endpoint": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" }
       ],
       "x402Support": true,
       "active": true,
@@ -463,7 +475,7 @@ pnpm get-agent --agentId 5102
     "image": "https://api.gateway.ethswarm.org/bzz/1edce577.../img/avatar.jpg",
     "services": [
       { "name": "x402", "endpoint": "https://data.solarpunk.buzz/trading/v1" },
-      { "name": "swarm", "endpoint": "https://swarm.solarpunk.buzz/trading" }
+      { "name": "swarm-ai-catalog", "endpoint": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" }
     ],
     "x402Support": true,
     "active": true,
@@ -610,7 +622,7 @@ import {
 | Function                        | Description                                                                                                                                                                                                                                                |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `generateAgentCard(params)`     | Creates an `AgentCard` object. `name`, `description`, `version`, and `services` are required. `type`, `active` and `x402Support` are optional and default when omitted. `capabilities` and `supportedTrust` are optional string arrays.                    |
-| `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation. Use this as the content to upload to Swarm.                                                                                                                                                                     |
+| `serializeAgentCard(card)`      | JSON-stringifies with 2-space indentation, encoding any `bigint` (e.g. `registrations[].agentId`) as a string. Use this as the content to upload to Swarm. `parseAgentCard` re-hydrates those strings back to `bigint` on read.                            |
 | `parseAgentCard(json)`          | Parses and validates a JSON string. Throws if `type` is not the ERC-8004 registration type string, or if `name`, `description`, `services`, `x402Support`, or `active` are missing or invalid. `registrations` is optional and may be absent or undefined. |
 | `uploadAgentCard(card, topic?)` | Uploads the card to a Swarm feed and returns `{ reference, url, feedUrl }`. Reads `BEE_FEED_PK`, `BEE_API_URL` and `BEE_POSTAGE_STAMP` from the environment. `feedUrl` always uses the public Swarm gateway.                                               |
 | `downloadAgentCard(agentURI)`   | Fetches and parses an Agent Card from a Swarm feed URL (the `agentURI` stored on-chain). Always resolves to the latest version of the card. Throws if the fetch fails or the response is not a valid Agent Card.                                           |
@@ -697,7 +709,6 @@ Edit `.env`:
 
 ```env
 PRIVATE_KEY=0x<provider-private-key>
-CONSUMER_PRIVATE_KEY=0x<consumer-private-key>   # must be a different funded wallet
 RPC_URL=https://sepolia.base.org                 # optional, this is the default
 CHAIN=base-sepolia                               # optional, this is the default
 BEE_FEED_PK=0x<hex-private-key>                 # required to upload Agent Card to Swarm
@@ -705,9 +716,7 @@ BEE_API_URL=http://localhost:1633                # optional, this is the default
 BEE_POSTAGE_STAMP=<64-char-hex-stamp-id>         # optional, auto-discovered from Bee node if not set
 ```
 
-Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) for both wallets.
-
-> **Why two wallets?** The ERC-8004 contract rejects feedback submitted by the agent owner — self-feedback is not allowed at the contract level. `CONSUMER_PRIVATE_KEY` is optional: if omitted, steps 1–4 still run and the FeedbackAuth signing is verified off-chain, but the on-chain feedback transaction (step 5) is skipped.
+Get testnet ETH from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) for your wallet.
 
 > **Swarm upload:** `BEE_FEED_PK` is required to upload the Agent Card to Swarm. If not set, step 2 is skipped and a placeholder `bzz://` URI is registered on-chain instead. `BEE_POSTAGE_STAMP` is optional — if omitted, the Bee node is queried automatically for a usable batch. To buy a stamp, run `bee stamp buy --depth 20 --amount 100` on your Bee node.
 
@@ -730,12 +739,6 @@ Expected output:
 [Provider wallet] 0xProviderAddress
 [Balance] 0.05 ETH
 
-  Note: CONSUMER_PRIVATE_KEY not set. Using an ephemeral wallet for step 3.
-  Step 4 (post feedback on-chain) will be skipped.
-  Set CONSUMER_PRIVATE_KEY to a different funded wallet to run the full flow.
-
-[Consumer wallet] 0xEphemeralAddress
-
 [Step 1: Generate Agent Card]
 [Agent Card] { name: 'Test Data Provider', ... }
 [Agent Card round-trip] OK
@@ -757,7 +760,7 @@ Expected output:
 [FeedbackAuth verify] OK
 
 [Step 5: Post feedback (Reputation Registry)]
-  Skipped — set CONSUMER_PRIVATE_KEY to a different funded wallet to run this step.
+  Skipped — feedback must come from a different funded wallet than the agent owner.
   The contract does not allow the agent owner to submit feedback on their own agent.
 
 ✓ Steps completed successfully
@@ -765,7 +768,7 @@ Expected output:
   View on BaseScan: https://sepolia.basescan.org/tx/0x...
 ```
 
-With both `BEE_FEED_PK` and `CONSUMER_PRIVATE_KEY` set, the full flow runs:
+With `BEE_FEED_PK` set, the full flow runs:
 
 ```
 [Step 2: Upload Agent Card to Swarm]

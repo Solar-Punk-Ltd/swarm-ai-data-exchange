@@ -23,6 +23,17 @@ interface Deps {
   config: ServerConfig;
 }
 
+// The grantor public key is this publisher Bee node's own key (the ACT grantor returned to the
+// consumer so it can decrypt). It never changes for a running node, so cache after the first read.
+let grantorPublicKeyCache: string | undefined;
+async function getGrantorPublicKey(bee: Bee): Promise<string> {
+  if (grantorPublicKeyCache) return grantorPublicKeyCache;
+  const addresses = await bee.getNodeAddresses();
+  const hex = addresses.publicKey.toHex();
+  grantorPublicKeyCache = hex.startsWith('0x') ? hex : `0x${hex}`;
+  return grantorPublicKeyCache;
+}
+
 // Phase 1 body: x402 v1 challenge with the EIP-712 domain in extra.purchaseIntentDomain (§10.2).
 function buildChallenge(lookup: CatalogLookup, resource: string, config: ServerConfig) {
   return {
@@ -60,7 +71,12 @@ export function purchaseHandler(deps: Deps) {
     const itemId = req.params.itemId;
     try {
       // Catalog lookup prerequisite — runs before the X-Payment branch; early return on any miss.
-      const lookup = await lookupItem(bee, config.catalogFeedOwner, itemId);
+      const lookup = await lookupItem(
+        bee,
+        config.catalogFeedOwner,
+        itemId,
+        config.itemStateFeedOwner,
+      );
       const resource = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
 
       const xPayment = req.header('X-Payment');
@@ -158,6 +174,7 @@ export function purchaseHandler(deps: Deps) {
         itemId,
         actHistoryRef: grant.actHistoryRef,
         grantTo: granteePublicKey,
+        grantorPublicKey: await getGrantorPublicKey(bee),
         reference: itemId,
         txHash,
         grantedAt,

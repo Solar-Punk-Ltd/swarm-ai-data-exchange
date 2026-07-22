@@ -1,9 +1,12 @@
 import { MantarayNode } from '@ethersphere/bee-js';
 import { SwarmCatalogBuilder } from '../src/builder';
+import { itemManifestPath } from '../src/paths';
 import type { CatalogItem, ContentSpec } from '../src/types';
 
 // Well-known test private key (Hardhat account #0). Real bee-js PrivateKey accepts it.
 const SIGNER = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+// Distinct key for the hot (state feed) signer — the builder enforces the two differ.
+const SIGNER2 = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const BATCH = 'f'.repeat(64);
 const REF = 'a'.repeat(64);
 
@@ -11,7 +14,7 @@ function makeBuilder(bee: unknown = {}): SwarmCatalogBuilder {
   return new SwarmCatalogBuilder({
     bee: bee as never,
     catalogFeedSigner: SIGNER,
-    itemStateFeedSigner: SIGNER,
+    itemStateFeedSigner: SIGNER2,
     postageBatchId: BATCH,
   });
 }
@@ -186,8 +189,8 @@ describe('dryRun', () => {
     const { root, manifest } = await builder.dryRun();
     expect(root).toBe('');
     expect(manifest).toBeInstanceOf(MantarayNode);
-    expect(manifest.find(`/items/${REF}/item.jsonld`)).toBeTruthy();
-    expect(manifest.find(`/items/${'b'.repeat(64)}/item.jsonld`)).toBeTruthy();
+    expect(manifest.find(itemManifestPath(REF))).toBeTruthy();
+    expect(manifest.find(itemManifestPath('b'.repeat(64)))).toBeTruthy();
   });
 
   it('performs no Bee I/O', async () => {

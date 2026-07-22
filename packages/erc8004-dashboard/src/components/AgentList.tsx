@@ -34,17 +34,6 @@ const MONO = 'ui-monospace, "SF Mono", Menlo, monospace';
 // ────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────
-function extractOwner(swarmEndpoint: string): string {
-  try {
-    const { pathname } = new URL(swarmEndpoint);
-    const parts = pathname.split('/').filter(Boolean);
-    const idx = parts.indexOf('feeds');
-    return idx !== -1 ? (parts[idx + 1] ?? '') : '';
-  } catch {
-    return '';
-  }
-}
-
 /** Pull the feed identifier (hash-like) out of a Swarm endpoint URL for display. */
 function extractFeedId(swarmEndpoint: string): string {
   try {
@@ -278,12 +267,11 @@ function AgentCardView({ agent }: { agent: Agent }) {
   const isDraft = agentId.startsWith('local-');
 
   const x402Endpoint = card?.services.find((s) => s.name === 'x402')?.endpoint ?? '';
-  const swarmEndpoint = card?.services.find((s) => s.name === 'swarm')?.endpoint ?? '';
-  const ownerVar = extractOwner(swarmEndpoint);
-  const feedId = extractFeedId(swarmEndpoint);
+  // The swarm-ai-catalog service carries the catalog feed owner address directly in `endpoint`.
+  const catalogOwner = card?.services.find((s) => s.name === 'swarm-ai-catalog')?.endpoint ?? '';
   const browseUrl =
-    x402Endpoint && ownerVar
-      ? `${CATALOGUE_FEED_BROWSER_URL}?owner=${ownerVar}&x402=${encodeURIComponent(x402Endpoint)}`
+    x402Endpoint && catalogOwner
+      ? `${CATALOGUE_FEED_BROWSER_URL}?owner=${catalogOwner}&x402=${encodeURIComponent(x402Endpoint)}`
       : null;
 
   return (
@@ -399,9 +387,12 @@ function AgentCardView({ agent }: { agent: Agent }) {
           <p style={{ fontSize: 13, color: C.text3, fontStyle: 'italic' }}>Fetching card data…</p>
         )}
 
-        {/* Swarm feed pill */}
-        {(uri || swarmEndpoint) && (
-          <FeedPill hash={feedId || extractFeedId(uri)} href={uri || swarmEndpoint} />
+        {/* Swarm feed pill — feed identity is the catalog owner address (new schema). */}
+        {(catalogOwner || uri) && (
+          <FeedPill
+            hash={catalogOwner || extractFeedId(uri)}
+            href={catalogOwner ? `${CATALOGUE_FEED_BROWSER_URL}?owner=${catalogOwner}` : uri}
+          />
         )}
 
         {/* Meta strip: services / capabilities / trust */}

@@ -1,9 +1,9 @@
 import 'dotenv/config';
+import { PrivateKey } from '@ethersphere/bee-js';
 
 // Server configuration loaded from the environment. Fail fast on missing required values.
 export interface ServerConfig {
   port: number;
-  paymentAddress: string;
   network: string; // CAIP-2, e.g. "eip155:84532"
   chainId: number; // numeric chain id parsed from network
   facilitatorUrl: string;
@@ -12,6 +12,9 @@ export interface ServerConfig {
   postageBatchId: string;
   catalogFeedOwner: string;
   itemStateFeedPk: string;
+  // EOA of itemStateFeedPk — the per-item state feed is owned by the hot key, so reads must
+  // address this owner (the topic stays bound to catalogFeedOwner).
+  itemStateFeedOwner: string;
   dbPath: string;
 }
 
@@ -35,9 +38,9 @@ export function parseChainId(caip2: string): number {
 
 export function loadConfig(): ServerConfig {
   const network = process.env.NETWORK ?? 'eip155:84532';
+  const itemStateFeedPk = required('ITEM_STATE_FEED_PK');
   return {
     port: Number(process.env.PORT ?? 3000),
-    paymentAddress: required('PAYMENT_ADDRESS'),
     network,
     chainId: parseChainId(network),
     facilitatorUrl: process.env.FACILITATOR_URL ?? 'https://x402.org/facilitator',
@@ -45,7 +48,8 @@ export function loadConfig(): ServerConfig {
     beeApiUrl: process.env.BEE_API_URL ?? 'http://localhost:1633',
     postageBatchId: required('POSTAGE_BATCH_ID'),
     catalogFeedOwner: required('CATALOG_FEED_OWNER'),
-    itemStateFeedPk: required('ITEM_STATE_FEED_PK'),
+    itemStateFeedPk,
+    itemStateFeedOwner: '0x' + new PrivateKey(itemStateFeedPk).publicKey().address().toHex(),
     dbPath: process.env.DB_PATH ?? './data/store.db',
   };
 }

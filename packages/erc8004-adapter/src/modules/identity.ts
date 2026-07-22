@@ -1,6 +1,7 @@
 import { Contract, getBytes, type Signer, type Provider, type Log, type EventLog } from 'ethers';
 import { IDENTITY_REGISTRY_ABI } from '../abis/IdentityRegistry';
 import type { RegisterResult, WalletAuth, MetadataEntry } from '../types';
+import { RECENT_BLOCK_COUNT } from '../constants';
 
 const WALLET_AUTH_TYPES = {
   WalletAuth: [
@@ -29,6 +30,14 @@ export class IdentityModule {
         : (signerOrProvider as Provider);
     this.chainId = chainId;
     this.deployBlock = deployBlock;
+  }
+
+  get contractAddress(): string {
+    return this.contract.target as string;
+  }
+
+  get networkChainId(): bigint {
+    return this.chainId;
   }
 
   async register(agentURI?: string, metadata?: MetadataEntry[]): Promise<RegisterResult> {
@@ -133,7 +142,7 @@ export class IdentityModule {
     filter: ReturnType<Contract['filters'][string]>,
     fromBlock: number,
     toBlock: number,
-    chunkSize = 9_999,
+    chunkSize = 2_000,
   ): Promise<(Log | EventLog)[]> {
     const results: (Log | EventLog)[] = [];
 
@@ -146,11 +155,11 @@ export class IdentityModule {
   }
 
   async getRegisteredAgents(
-    fromBlock: number | 'earliest' = 'earliest',
+    fromBlock: number | 'recent' = 'recent',
     toBlock?: number,
   ): Promise<{ agentId: bigint; agentURI: string; owner: string }[]> {
     const latest = await this.provider.getBlockNumber();
-    const from = fromBlock === 'earliest' ? this.deployBlock : fromBlock;
+    const from = fromBlock === 'recent' ? latest - RECENT_BLOCK_COUNT : fromBlock;
     const to = toBlock ?? latest;
 
     const filter = this.contract.filters.Registered();
@@ -171,11 +180,11 @@ export class IdentityModule {
 
   async getAgentsByMetadata(
     metadataKey: string,
-    fromBlock: number | 'earliest' = 'earliest',
+    fromBlock: number | 'recent' = 'recent',
     toBlock?: number,
   ): Promise<{ agentId: bigint; rawValue: Uint8Array }[]> {
     const latest = await this.provider.getBlockNumber();
-    const from = fromBlock === 'earliest' ? this.deployBlock : fromBlock;
+    const from = fromBlock === 'recent' ? latest - RECENT_BLOCK_COUNT : fromBlock;
     const to = toBlock ?? latest;
 
     const filter = this.contract.filters.MetadataSet(null, metadataKey);

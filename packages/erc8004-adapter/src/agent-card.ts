@@ -30,7 +30,7 @@ export function generateAgentCard(params: AgentCardParams): AgentCard {
 export const generateRegistrationFile = generateAgentCard;
 
 export function serializeAgentCard(card: AgentCard): string {
-  return JSON.stringify(card, null, 2);
+  return JSON.stringify(card, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
 }
 
 export function parseAgentCard(json: string): AgentCard {

@@ -1,9 +1,72 @@
 import type { PurchasePayload } from '@solarpunk/swarm-catalog';
+import { createPublicClient, http, type Address } from 'viem';
+import { base, baseSepolia } from 'viem/chains';
 
 // CAIP-19 "eip155:8453/erc20:0x8335..." → "0x8335..."
 export function assetAddressFromCaip19(asset: string): string {
   const idx = asset.lastIndexOf(':');
   return idx === -1 ? asset : asset.slice(idx + 1);
+}
+
+// The x402 facilitator registers schemes by network NAME, not CAIP-2. Translate
+// "eip155:84532" → "base-sepolia" before calling /verify and /settle, otherwise the
+// facilitator returns "No facilitator registered for scheme: exact and network: eip155:84532".
+const CAIP2_TO_X402_NETWORK: Record<string, string> = {
+  'eip155:84532': 'base-sepolia',
+  'eip155:8453': 'base',
+};
+export function x402NetworkName(caip2: string): string {
+  const name = CAIP2_TO_X402_NETWORK[caip2];
+  if (!name) {
+    throw new Error(`No x402 network name mapping for CAIP-2 network "${caip2}"`);
+  }
+  return name;
+}
+
+const ERC20_NAME_ABI = [
+  {
+    name: 'name',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+] as const;
+const ERC20_VERSION_ABI = [
+  {
+    name: 'version',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+] as const;
+
+// Read the token's EIP-712 domain (name/version) for the ERC-3009 authorization, mirroring the
+// consumer (catalogue-feed-browser buyer.ts) exactly so the facilitator reconstructs the same
+// domain the buyer signed. version() is optional on ERC-20s; default to "2" (USDC) when absent.
+// Cached per token — verify() and settle() both need it within one purchase.
+const tokenDomainCache = new Map<string, { name: string; version: string }>();
+async function tokenDomainMeta(
+  caip2Network: string,
+  token: Address,
+): Promise<{ name: string; version: string }> {
+  const cacheKey = `${caip2Network}:${token.toLowerCase()}`;
+  const cached = tokenDomainCache.get(cacheKey);
+  if (cached) return cached;
+
+  const chainId = Number(caip2Network.split(':').pop());
+  const chain = chainId === base.id ? base : baseSepolia;
+  const client = createPublicClient({ chain, transport: http() });
+  const [name, version] = await Promise.all([
+    client.readContract({ address: token, abi: ERC20_NAME_ABI, functionName: 'name' }),
+    client
+      .readContract({ address: token, abi: ERC20_VERSION_ABI, functionName: 'version' })
+      .catch(() => '2'),
+  ]);
+  const meta = { name, version };
+  tokenDomainCache.set(cacheKey, meta);
+  return meta;
 }
 
 // Standard x402 ExactEvm payment payload built from the consumer's ERC-3009 authorization.
@@ -35,6 +98,7 @@ interface PaymentRequirementsWire {
   payTo: string;
   maxTimeoutSeconds: number;
   asset: string;
+  extra: { name: string; version: string };
 }
 
 export interface VerifyResult {
@@ -67,7 +131,7 @@ export class FacilitatorClient {
     return {
       x402Version: 1,
       scheme: 'exact',
-      network,
+      network: x402NetworkName(network),
       payload: {
         signature: auth.signature,
         authorization: {
@@ -82,17 +146,24 @@ export class FacilitatorClient {
     };
   }
 
-  private toRequirements(matched: MatchedPayment, resource: string): PaymentRequirementsWire {
+  private async toRequirements(
+    matched: MatchedPayment,
+    resource: string,
+  ): Promise<PaymentRequirementsWire> {
+    const asset = assetAddressFromCaip19(matched.asset) as Address;
+    const extra = await tokenDomainMeta(matched.network, asset);
     return {
       scheme: 'exact',
-      network: matched.network,
+      network: x402NetworkName(matched.network),
       maxAmountRequired: matched.amount,
       resource,
       description: '',
       mimeType: 'application/json',
       payTo: matched.payTo,
       maxTimeoutSeconds: 600,
-      asset: assetAddressFromCaip19(matched.asset),
+      asset,
+      // The facilitator's exact-EVM verifier reconstructs the ERC-3009 EIP-712 domain from this.
+      extra,
     };
   }
 
@@ -116,7 +187,7 @@ export class FacilitatorClient {
     return this.post<VerifyResult>('/verify', {
       x402Version: 1,
       paymentPayload: this.toPaymentPayload(envelope, matched.network),
-      paymentRequirements: this.toRequirements(matched, resource),
+      paymentRequirements: await this.toRequirements(matched, resource),
     });
   }
 
@@ -128,7 +199,7 @@ export class FacilitatorClient {
     return this.post<SettleResult>('/settle', {
       x402Version: 1,
       paymentPayload: this.toPaymentPayload(envelope, matched.network),
-      paymentRequirements: this.toRequirements(matched, resource),
+      paymentRequirements: await this.toRequirements(matched, resource),
     });
   }
 }

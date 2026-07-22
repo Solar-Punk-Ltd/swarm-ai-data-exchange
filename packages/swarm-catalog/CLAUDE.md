@@ -159,8 +159,10 @@ The builder SHOULD warn (log, do not throw) on:
 Helpers used by both the builder and `x402-swarm-server`:
 
 ```typescript
-// Read current state from per-item state feed
-readItemState(bee: Bee, catalogFeedOwner: string, itemId: string): Promise<CatalogItemState>
+// Read current state from per-item state feed.
+// `catalogFeedOwner` computes the topic; `stateFeedOwner` (the hot state-feed signer's EOA)
+// owns the feed and is what the reader actually addresses.
+readItemState(bee: Bee, catalogFeedOwner: string, itemId: string, stateFeedOwner: string): Promise<CatalogItemState>
 
 // Write updated state after a grant
 // `signer` is a bee-js FeedSigner; the helper constructs the FeedWriter internally using stateFeedTopic(catalogFeedOwner, state.itemId)
