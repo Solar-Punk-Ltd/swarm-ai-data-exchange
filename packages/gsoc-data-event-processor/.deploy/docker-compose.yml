@@ -4,7 +4,7 @@ services:
   gsoc-data-event-processor:
     build:
       context: ..
-      dockerfile: .deploy/Dockerfile
+      dockerfile: deploy/Dockerfile
     container_name: gsoc-data-event-processor
     restart: unless-stopped
     network_mode: host

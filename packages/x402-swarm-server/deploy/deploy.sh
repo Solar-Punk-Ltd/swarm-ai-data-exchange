@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REMOTE_HOST="${REMOTE_HOST:-dev}"
-REMOTE_DIR="${REMOTE_DIR:-swamr-ai-data-exchange/x402-swarm-server}"
+REMOTE_DIR="${REMOTE_DIR:-swarm-ai-data-exchange/x402-swarm-server}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_DIR="$(dirname "$SCRIPT_DIR")"
@@ -26,11 +26,11 @@ rsync -az --delete \
   "$PKG_DIR/" "$REMOTE_HOST:$REMOTE_DIR/"
 
 echo "==> Stopping old container on $REMOTE_HOST (if running)"
-ssh "$REMOTE_HOST" "cd ~/$REMOTE_DIR/.deploy && docker compose --env-file ../.env.dev down --remove-orphans"
+ssh "$REMOTE_HOST" "cd ~/$REMOTE_DIR/deploy && docker compose --env-file ../.env.dev down --remove-orphans"
 
 echo "==> Building and starting on $REMOTE_HOST"
-ssh "$REMOTE_HOST" "cd ~/$REMOTE_DIR/.deploy && docker compose --env-file ../.env.dev up -d --build"
+ssh "$REMOTE_HOST" "cd ~/$REMOTE_DIR/deploy && docker compose --env-file ../.env.dev up -d --build"
 
 echo "==> Done."
-echo "    Logs:   ssh $REMOTE_HOST 'cd ~/$REMOTE_DIR/.deploy && docker compose logs -f'"
-echo "    Status: ssh $REMOTE_HOST 'cd ~/$REMOTE_DIR/.deploy && docker compose ps'"
+echo "    Logs:   ssh $REMOTE_HOST 'cd ~/$REMOTE_DIR/deploy && docker compose logs -f'"
+echo "    Status: ssh $REMOTE_HOST 'cd ~/$REMOTE_DIR/deploy && docker compose ps'"
