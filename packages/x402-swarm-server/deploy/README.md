@@ -23,13 +23,13 @@ It deploys the `x402-swarm-server` package to a remote host as a Docker containe
 From the package root:
 
 ```bash
-./.deploy/deploy.sh
+./deploy/deploy.sh
 ```
 
 Overrides (optional):
 
 ```bash
-REMOTE_HOST=my-host REMOTE_DIR=path/on/remote ./.deploy/deploy.sh
+REMOTE_HOST=my-host REMOTE_DIR=path/on/remote ./deploy/deploy.sh
 ```
 
 What it does:
@@ -41,8 +41,8 @@ What it does:
 Logs / status:
 
 ```bash
-ssh dev 'cd ~/swamr-ai-data-exchange/x402-swarm-server/.deploy && docker compose logs -f'
-ssh dev 'cd ~/swamr-ai-data-exchange/x402-swarm-server/.deploy && docker compose ps'
+ssh dev 'cd ~/swarm-ai-data-exchange/x402-swarm-server/deploy && docker compose logs -f'
+ssh dev 'cd ~/swarm-ai-data-exchange/x402-swarm-server/deploy && docker compose ps'
 ```
 
 ## Multi instance
@@ -50,13 +50,13 @@ ssh dev 'cd ~/swamr-ai-data-exchange/x402-swarm-server/.deploy && docker compose
 Each instance needs its own `.env.devN` file in the package root with distinct values (notably a distinct `PORT` since the container runs on the host network).
 
 ```bash
-./.deploy/deploy-multi.sh
+./deploy/deploy-multi.sh
 ```
 
-Defaults to instances `1 2 3 4 5`. Override:
+Defaults to instances `1 2 3`. Override:
 
 ```bash
-INSTANCES="1 2 3" ./.deploy/deploy-multi.sh
+INSTANCES="2 3" ./deploy/deploy-multi.sh
 ```
 
 Each instance becomes its own compose project (`x402-swarm-server-N`) with container name `x402-swarm-server-N`, labelled `app=x402-swarm-server instance=N`.
@@ -65,7 +65,7 @@ Logs / status:
 
 ```bash
 ssh dev 'docker ps --filter label=app=x402-swarm-server'
-ssh dev 'cd ~/swamr-ai-data-exchange/x402-swarm-server/.deploy && INSTANCE_NUM=1 docker compose -f docker-compose.multi.yml logs -f'
+ssh dev 'cd ~/swarm-ai-data-exchange/x402-swarm-server/deploy && INSTANCE_NUM=1 docker compose -f docker-compose.multi.yml logs -f'
 ```
 
 ## Notes
