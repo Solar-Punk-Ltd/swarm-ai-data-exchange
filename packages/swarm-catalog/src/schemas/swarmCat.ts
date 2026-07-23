@@ -11,6 +11,8 @@ export const SWARM_CAT_PROTOCOL_VERSION = '1.0';
 
 // JSON-LD @type values
 export const SWARM_CAT_CATALOG_ITEM = 'swarm-cat:CatalogItem';
+export const SWARM_CAT_SWARM_STORAGE = 'swarm-cat:SwarmStorage';
+export const SWARM_CAT_PAYMENT_REQUIREMENTS = 'swarm-cat:PaymentRequirements';
 export const SWARM_CAT_SAMPLE_SPEC = 'swarm-cat:SampleSpec';
 export const SWARM_CAT_CATALOG = 'swarm-cat:Catalog';
 

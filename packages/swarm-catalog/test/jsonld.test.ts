@@ -42,13 +42,14 @@ describe('serializeItem — common envelope', () => {
     expect(doc.encodingFormat).toBe('image/png');
   });
 
-  it('serializes storage as a bare { reference } object', () => {
-    expect(doc.storage).toEqual({ reference: REF });
+  it('serializes storage as a typed SwarmStorage node', () => {
+    expect(doc.storage).toEqual({ '@type': 'swarm-cat:SwarmStorage', reference: REF });
   });
 
   it('maps payment entries with all required fields', () => {
     expect(doc.payment).toEqual([
       {
+        '@type': 'swarm-cat:PaymentRequirements',
         scheme: 'exact',
         chainId: 'eip155:84532',
         asset: 'eip155:84532/erc20:0xUSDC',

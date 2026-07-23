@@ -85,8 +85,8 @@ function makeStore() {
   };
 }
 
-function deps(facilitator: unknown, store: unknown) {
-  return { bee: {}, store, facilitator, config: CONFIG } as never;
+function deps(facilitator: unknown, store: unknown, configOverride?: Record<string, unknown>) {
+  return { bee: {}, store, facilitator, config: { ...CONFIG, ...configOverride } } as never;
 }
 
 beforeEach(() => {
@@ -208,7 +208,7 @@ describe('purchaseHandler — phase 2 (with X-Payment)', () => {
     expect(store.recordNonce).not.toHaveBeenCalled();
   });
 
-  it('still returns 200 when the post-grant state-feed write fails (non-fatal step 11)', async () => {
+  it('still returns 200 when the post-grant state-feed write fails, and retries it (§14.1)', async () => {
     wireVerifiedFlow();
     jest.spyOn(console, 'error').mockImplementation(() => {});
     writeStateMock.mockRejectedValue(new Error('feed down'));
@@ -218,11 +218,40 @@ describe('purchaseHandler — phase 2 (with X-Payment)', () => {
       settle: jest.fn().mockResolvedValue({ success: true, transaction: '0xtx' }),
     };
     const { req, res } = fakeReqRes('base64header');
-    const handler = purchaseHandler(deps(facilitator, store));
+    const handler = purchaseHandler(
+      deps(facilitator, store, {
+        stateFeedRetry: { attempts: 3, baseDelayMs: 0, maxDelayMs: 0 },
+      }),
+    );
 
     await handler(req as never, res as never);
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ itemId: ITEM, txHash: '0xtx' });
+    // Exhausts the bounded retry budget before giving up (grant already issued).
+    expect(writeStateMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries the state-feed write until it succeeds (§14.1)', async () => {
+    wireVerifiedFlow();
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'info').mockImplementation(() => {});
+    writeStateMock.mockRejectedValueOnce(new Error('feed down')).mockResolvedValueOnce('stateref');
+    const store = makeStore();
+    const facilitator = {
+      verify: jest.fn().mockResolvedValue({ isValid: true }),
+      settle: jest.fn().mockResolvedValue({ success: true, transaction: '0xtx' }),
+    };
+    const { req, res } = fakeReqRes('base64header');
+    const handler = purchaseHandler(
+      deps(facilitator, store, {
+        stateFeedRetry: { attempts: 5, baseDelayMs: 0, maxDelayMs: 0 },
+      }),
+    );
+
+    await handler(req as never, res as never);
+
+    expect(res.statusCode).toBe(200);
+    expect(writeStateMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -406,6 +406,33 @@ main { padding: 24px; }
   margin-top: 10px;
 }
 
+.purchased-content {
+  border-left: 3px solid var(--accent);
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.purchased-content-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.purchased-content-body {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .content-image {
   max-width: 100%;
   border-radius: 6px;

@@ -30,14 +30,15 @@ The catalog architecture is fully specified in:
 
 ## Package Structure
 
-| Package                           | Status          | Purpose                                                                                                                                                                                                                        |
-| --------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/erc8004-adapter`        | Mostly complete | ERC-8004 identity, reputation, Agent Card lifecycle — SDK + CLI. Gap: `registrations[]` not written back after on-chain registration.                                                                                          |
-| `packages/erc8004-dashboard`      | Mostly complete | React UI for agent discovery. Gap: "Browse Catalog" button reads owner from wrong services entry — needs to read the owner address from the `"swarm-ai-catalog"` service's `endpoint` field instead of the parsed `swarm` URL. |
-| `packages/swarm-mcp`              | Complete        | MCP server exposing Swarm operations to LLM agents                                                                                                                                                                             |
-| `packages/swarm-catalog`          | **New**         | Publisher SDK: types, SwarmCatalogBuilder, catalog/state feed management                                                                                                                                                       |
-| `packages/x402-swarm-server`      | Refactor        | Publisher HTTP server: x402 purchase endpoint, ACT grant, state feed write                                                                                                                                                     |
-| `packages/catalogue-feed-browser` | Refactor        | Consumer UI/server: catalog reader, sample preview, purchase flow                                                                                                                                                              |
+| Package                              | Status          | Purpose                                                                                                                                                                                                                        |
+| ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/erc8004-adapter`           | Mostly complete | ERC-8004 identity, reputation, Agent Card lifecycle — SDK + CLI. Gap: `registrations[]` not written back after on-chain registration.                                                                                          |
+| `packages/erc8004-dashboard`         | Mostly complete | React UI for agent discovery. Gap: "Browse Catalog" button reads owner from wrong services entry — needs to read the owner address from the `"swarm-ai-catalog"` service's `endpoint` field instead of the parsed `swarm` URL. |
+| `packages/swarm-catalog`             | **New**         | Publisher SDK: types, SwarmCatalogBuilder, catalog/state feed management                                                                                                                                                       |
+| `packages/x402-swarm-server`         | Refactor        | Publisher HTTP server: x402 purchase endpoint, ACT grant, state feed write                                                                                                                                                     |
+| `packages/catalogue-feed-browser`    | Refactor        | Consumer UI/server: catalog reader, sample preview, purchase flow                                                                                                                                                              |
+| `packages/catalogue-job`             | Existing        | Background catalog indexing job                                                                                                                                                                                                |
+| `packages/gsoc-data-event-processor` | Existing        | GSoC data event processing                                                                                                                                                                                                     |
 
 ## Prototype Scope
 
@@ -55,7 +56,6 @@ The catalog architecture is fully specified in:
 - Bazaar indexer integration (§13.5)
 - ENS registration of `swarm-ai-catalog.eth` (§18 open item)
 - `GET /v1/catalog` and `GET /v1/state/:itemId` optional pass-through endpoints (§10.4, §10.5)
-- MCP catalog integration in `swarm-mcp` (§16.1)
 - Multi-publisher / federated catalogs (§18)
 - Croissant 1.1 validator (§18 open item)
 
@@ -73,7 +73,7 @@ Each layer depends on the previous:
 - **Node 22+**, **pnpm 9+** required (`engines` field enforced in root `package.json`)
 - Install from monorepo root: `pnpm install`
 - Local Bee node required at `http://localhost:1633` (light node is sufficient for testing)
-- Copy `.env.example` → `.env` in each package before running (exists in `erc8004-adapter`, `x402-swarm-server`, `catalogue-feed-browser`, `swarm-mcp`)
+- Copy `.env.example` → `.env` in each package before running (exists in `erc8004-adapter`, `x402-swarm-server`, `catalogue-feed-browser`)
 - Run a package without a build step during prototyping: `npx tsx src/index.ts` from the package directory
 - Run all packages in parallel: `pnpm dev` from root
 - Test a single package: `pnpm --filter <package-name> test` (e.g. `pnpm --filter swarm-catalog test`)

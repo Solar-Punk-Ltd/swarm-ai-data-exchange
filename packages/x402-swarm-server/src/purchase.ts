@@ -16,6 +16,51 @@ import { Store } from './db.js';
 const DOMAIN_NAME = 'Swarm AI Data Exchange';
 const DOMAIN_VERSION = '1';
 
+const DEFAULT_STATE_FEED_RETRY = { attempts: 8, baseDelayMs: 500, maxDelayMs: 30_000 };
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Advance the per-item state feed, retrying with exponential backoff until it converges (§14.1).
+// The ACT grant is already issued when this runs, so a failure never affects the consumer — but the
+// publisher's on-Swarm record MUST catch up, so we keep retrying. Never throws: on exhaustion it
+// logs `state_feed_failed` for operational follow-up. Durable retry across restarts is out of scope.
+async function persistStateWithRetry(
+  bee: Bee,
+  config: ServerConfig,
+  state: CatalogItemState,
+): Promise<void> {
+  const { attempts, baseDelayMs, maxDelayMs } = config.stateFeedRetry ?? DEFAULT_STATE_FEED_RETRY;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await writeItemState(
+        bee,
+        config.itemStateFeedPk,
+        config.catalogFeedOwner,
+        state,
+        config.postageBatchId,
+      );
+      if (attempt > 1) {
+        console.info(`[state_feed] item ${state.itemId}: converged after ${attempt} attempts`);
+      }
+      return;
+    } catch (err) {
+      if (attempt === attempts) {
+        console.error(
+          `[state_feed_failed] item ${state.itemId}: exhausted ${attempts} attempts; ` +
+            `grant already issued, manual reconciliation required:`,
+          err,
+        );
+        return;
+      }
+      console.error(
+        `[state_feed] item ${state.itemId}: write attempt ${attempt}/${attempts} failed, retrying:`,
+        err,
+      );
+      await sleep(Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs));
+    }
+  }
+}
+
 interface Deps {
   bee: Bee;
   store: Store;
@@ -149,27 +194,8 @@ export function purchaseHandler(deps: Deps) {
       }
       const grantedAt = new Date().toISOString();
 
-      // Step 11: state-feed write — non-fatal. Grant already issued; log and move on.
-      try {
-        const newState: CatalogItemState = {
-          ...lookup.state,
-          actHistoryRef: grant.actHistoryRef,
-          granteeRef: grant.granteeRef,
-          catalogRootAtUpdate: lookup.state.catalogRootAtUpdate,
-          dateModified: grantedAt,
-        };
-        await writeItemState(
-          bee,
-          config.itemStateFeedPk,
-          config.catalogFeedOwner,
-          newState,
-          config.postageBatchId,
-        );
-      } catch (err) {
-        console.error(`[state_feed_failed] item ${itemId}:`, err);
-      }
-
-      // Step 12: return ActGrantResult.
+      // Step 12: return the ActGrantResult. The grant is already issued, so the consumer has
+      // everything it needs; the state-feed write (step 11) MUST NOT delay or fail the response.
       const result: ActGrantResult = {
         itemId,
         actHistoryRef: grant.actHistoryRef,
@@ -180,6 +206,17 @@ export function purchaseHandler(deps: Deps) {
         grantedAt,
       };
       res.status(200).json(result);
+
+      // Step 11: advance the state feed after responding — non-fatal for the grant but MUST
+      // converge (§14.1), so retry with backoff. Runs post-response; retries never block the
+      // consumer. `...lookup.state` carries `catalogRootAtUpdate`/`version`/`lifecycle` forward.
+      const newState: CatalogItemState = {
+        ...lookup.state,
+        actHistoryRef: grant.actHistoryRef,
+        granteeRef: grant.granteeRef,
+        dateModified: grantedAt,
+      };
+      await persistStateWithRetry(bee, config, newState);
     } catch (err) {
       sendError(res, err);
     }

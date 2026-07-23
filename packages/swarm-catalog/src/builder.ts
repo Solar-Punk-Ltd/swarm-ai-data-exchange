@@ -56,15 +56,18 @@ export class SwarmCatalogBuilder {
     this.itemStateFeedSigner = opts.itemStateFeedSigner;
     this.postageBatchId = opts.postageBatchId;
 
-    // Validate both signers up front (fail fast at construction, not mid-publish) and enforce the
-    // load-bearing invariant that the catalog feed signer (cold key) and the per-item state feed
-    // signer (hot key) are different keys.
+    // Validate both signers up front (fail fast at construction, not mid-publish). The catalog feed
+    // (cold key) and per-item state feed (hot key) SHOULD use different keys so the cold key can
+    // stay offline while the hot key signs grants on the purchase server. The two feeds use
+    // different topics, so a shared key does not cause a Swarm collision — it only collapses that
+    // cold/hot security boundary. Allowed (warn, do not throw) for single-operator setups.
     this.catalogFeedOwner = feedSignerAddress(opts.catalogFeedSigner, 'catalogFeedSigner');
     const stateFeedOwner = feedSignerAddress(opts.itemStateFeedSigner, 'itemStateFeedSigner');
     if (this.catalogFeedOwner.toLowerCase() === stateFeedOwner.toLowerCase()) {
-      throw new Error(
-        'catalogFeedSigner and itemStateFeedSigner must be different keys ' +
-          '(the catalog feed uses a cold key; the per-item state feed uses a hot key).',
+      console.warn(
+        '[swarm-catalog] catalogFeedSigner and itemStateFeedSigner are the same key. The catalog ' +
+          '(cold) and state (hot) feeds will share one signer — acceptable for a single-operator ' +
+          'setup, but it exposes the cold catalog key wherever the hot state key runs.',
       );
     }
   }

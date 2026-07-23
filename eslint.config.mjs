@@ -3,13 +3,7 @@ import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 export default [
   {
-    ignores: [
-      '**/dist/**',
-      '**/node_modules/**',
-      '**/coverage/**',
-      '**/build/**',
-      'packages/swarm-mcp/**',
-    ],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/build/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

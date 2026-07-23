@@ -75,8 +75,14 @@ function assetAddress(caip19: string): Address {
 }
 
 function chainForId(chainId: number) {
-  if (chainId === base.id) return base;
-  return baseSepolia;
+  switch (chainId) {
+    case base.id:
+      return base;
+    case baseSepolia.id:
+      return baseSepolia;
+    default:
+      throw new Error(`Unsupported chainId ${chainId} for token domain lookup`);
+  }
 }
 
 // Read the token's EIP-712 domain fields (name/version) for the ERC-3009 authorization.
