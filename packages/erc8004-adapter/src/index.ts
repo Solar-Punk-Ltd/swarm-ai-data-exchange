@@ -23,6 +23,7 @@ export {
   DEFAULT_CHAIN,
   AGENT_CARD_TOPIC,
   SWARM_AI_CAPABLE,
+  SWARM_AGENT_ID,
 } from './constants';
 
 export { default as config } from './config';

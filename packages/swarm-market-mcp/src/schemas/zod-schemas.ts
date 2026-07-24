@@ -100,7 +100,14 @@ export const createAgentSchema = z.object({
   catalogFeedOwner: z.string().optional(),
   // Accept either a comma-separated string or an array; normalized inside the tool.
   capabilities: z.union([z.string(), z.array(z.string())]).optional(),
+  extraMetadata: z.record(z.string()).optional(),
   postageBatchId: z.string().optional(),
+});
+
+export const findAgentsByMetadataSchema = z.object({
+  metadataKey: z.string().min(1, { message: 'Missing required parameter: metadataKey.' }),
+  metadataValue: z.string().optional(),
+  fromBlock: z.number().int().nonnegative().optional(),
 });
 
 export const purchaseCatalogItemSchema = z.object({

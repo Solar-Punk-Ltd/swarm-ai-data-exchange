@@ -380,6 +380,14 @@ export const SwarmMarketToolsSchema = [
             { type: 'array', items: { type: 'string' } },
           ],
         },
+        extraMetadata: {
+          type: 'object',
+          description:
+            'Additional ERC-8004 metadata entries written atomically at register time. ' +
+            'Keys are metadata key strings (e.g. "swarm_agent_id"); values are utf-8 encoded ' +
+            'to bytes. Merged with the default swarm_ai_capable=0x01 entry.',
+          additionalProperties: { type: 'string' },
+        },
         postageBatchId: {
           type: 'string',
           description: 'Override the upload postage batch; falls back to POSTAGE_BATCH_ID env.',
@@ -399,6 +407,58 @@ export const SwarmMarketToolsSchema = [
         message: { type: 'string' },
       },
       required: ['agentId', 'txHash', 'agentURI'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
+    name: 'find_agents_by_metadata',
+    title: 'Find agents by metadata',
+    description:
+      'Scan ERC-8004 MetadataSet events for a given metadata key and return matching ' +
+      'agents (agentId, tokenURI, NFT owner, utf-8-decoded metadata value). Intended as a ' +
+      'fast index for "find my agent" lookups on startup. Callers MUST still verify feed ' +
+      'ownership and NFT ownership before trusting a match — metadata is spoofable.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        metadataKey: {
+          type: 'string',
+          description: 'Metadata key to scan (e.g. "swarm_agent_id", "swarm_ai_capable").',
+        },
+        metadataValue: {
+          type: 'string',
+          description:
+            'Optional utf-8 filter. When set, only agents whose stored value decodes to this ' +
+            'string are returned.',
+        },
+        fromBlock: {
+          type: 'number',
+          description: 'Optional starting block for the event scan. Defaults to a recent window.',
+        },
+      },
+      required: ['metadataKey'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        metadataKey: { type: 'string' },
+        agents: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              agentId: { type: 'string' },
+              agentURI: { type: 'string' },
+              owner: { type: 'string', description: 'On-chain NFT owner address.' },
+              metadataValue: { type: 'string' },
+            },
+            required: ['agentId', 'agentURI', 'owner', 'metadataValue'],
+          },
+        },
+      },
+      required: ['metadataKey', 'agents'],
     },
     execution: {
       taskSupport: 'forbidden',

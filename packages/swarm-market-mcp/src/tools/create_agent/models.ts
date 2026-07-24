@@ -14,6 +14,10 @@ export interface CreateAgentArgs {
   catalogFeedOwner?: string;
   // Comma-separated tags OR a string array. Tags are advertised on the Agent Card.
   capabilities?: string | string[];
+  // Extra ERC-8004 metadata entries written atomically at register time. Keys are the
+  // metadata key strings (e.g. "swarm_agent_id"); values are utf-8 encoded to bytes.
+  // Merged with the default SWARM_AI_CAPABLE=0x01 entry; do not include that key here.
+  extraMetadata?: Record<string, string>;
   // Override the upload postage batch; falls back to POSTAGE_BATCH_ID env.
   postageBatchId?: string;
 }

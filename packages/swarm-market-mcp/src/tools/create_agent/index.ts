@@ -87,9 +87,15 @@ export async function createAgent(args: CreateAgentArgs): Promise<ToolResponse> 
     const signer = new ethers.Wallet(privateKey, provider);
     const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
 
-    const result = await erc8004.identity.register(agentURI, [
-      { metadataKey: SWARM_AI_CAPABLE, metadataValue: new Uint8Array([1]) },
-    ]);
+    const metadata = [{ metadataKey: SWARM_AI_CAPABLE, metadataValue: new Uint8Array([1]) }];
+    if (args.extraMetadata) {
+      const encoder = new TextEncoder();
+      for (const [key, value] of Object.entries(args.extraMetadata)) {
+        if (key === SWARM_AI_CAPABLE) continue;
+        metadata.push({ metadataKey: key, metadataValue: encoder.encode(value) });
+      }
+    }
+    const result = await erc8004.identity.register(agentURI, metadata);
     agentId = result.agentId;
     txHash = result.txHash;
 

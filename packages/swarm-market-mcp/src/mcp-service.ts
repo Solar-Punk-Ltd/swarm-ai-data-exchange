@@ -25,11 +25,14 @@ import { purchaseCatalogItem } from './tools/purchase_catalog_item';
 import type { PurchaseCatalogItemArgs } from './tools/purchase_catalog_item/models';
 import { createAgent } from './tools/create_agent';
 import type { CreateAgentArgs } from './tools/create_agent/models';
+import { findAgentsByMetadata } from './tools/find_agents_by_metadata';
+import type { FindAgentsByMetadataArgs } from './tools/find_agents_by_metadata/models';
 import {
   buildCatalogSchema,
   createAgentSchema,
   deleteCatalogItemSchema,
   deleteCatalogSchema,
+  findAgentsByMetadataSchema,
   getAgentSchema,
   purchaseCatalogItemSchema,
 } from './schemas/zod-schemas';
@@ -92,6 +95,11 @@ export class SwarmMarketMCPServer {
           case 'create_agent': {
             const validArgs = createAgentSchema.parse(args);
             return createAgent(validArgs as CreateAgentArgs);
+          }
+
+          case 'find_agents_by_metadata': {
+            const validArgs = findAgentsByMetadataSchema.parse(args);
+            return findAgentsByMetadata(validArgs as FindAgentsByMetadataArgs);
           }
 
           default:
