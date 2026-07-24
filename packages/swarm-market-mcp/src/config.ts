@@ -12,10 +12,12 @@ export interface BeeConfig {
   postageBatchId?: string;
 }
 
-// Read-only ERC-8004 access for resolving an agent id → Agent Card (get_agent).
+// ERC-8004 access. rpcUrl + chain are used read-only by get_agent; walletPrivateKey is
+// required by create_agent to sign the NFT mint transaction.
 export interface ChainConfig {
   rpcUrl: string;
   chain: string;
+  walletPrivateKey?: string;
 }
 
 // Buyer-side settlement config for purchase_catalog_item. The wallet key signs the
@@ -44,6 +46,7 @@ const config: Config = {
   chain: {
     rpcUrl: process.env.RPC_URL || DEFAULT_RPC_URL,
     chain: process.env.ERC8004_CHAIN || DEFAULT_CHAIN,
+    walletPrivateKey: process.env.PRIVATE_KEY,
   },
   payment: {
     walletPrivateKey: process.env.BUYER_WALLET_PK,

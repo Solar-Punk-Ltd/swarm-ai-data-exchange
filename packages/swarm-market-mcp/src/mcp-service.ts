@@ -23,8 +23,11 @@ import { deleteCatalog } from './tools/delete_catalog';
 import type { DeleteCatalogArgs } from './tools/delete_catalog/models';
 import { purchaseCatalogItem } from './tools/purchase_catalog_item';
 import type { PurchaseCatalogItemArgs } from './tools/purchase_catalog_item/models';
+import { createAgent } from './tools/create_agent';
+import type { CreateAgentArgs } from './tools/create_agent/models';
 import {
   buildCatalogSchema,
+  createAgentSchema,
   deleteCatalogItemSchema,
   deleteCatalogSchema,
   getAgentSchema,
@@ -84,6 +87,11 @@ export class SwarmMarketMCPServer {
           case 'purchase_catalog_item': {
             const validArgs = purchaseCatalogItemSchema.parse(args);
             return purchaseCatalogItem(validArgs as PurchaseCatalogItemArgs, this.bee);
+          }
+
+          case 'create_agent': {
+            const validArgs = createAgentSchema.parse(args);
+            return createAgent(validArgs as CreateAgentArgs);
           }
 
           default:

@@ -345,6 +345,66 @@ export const SwarmMarketToolsSchema = [
     },
   },
   {
+    name: 'create_agent',
+    title: 'Create agent',
+    description:
+      'Register an ERC-8004 agent identity end-to-end: builds an Agent Card, uploads it to a ' +
+      'Swarm feed, mints the ERC-8004 NFT with the feed URL as tokenURI, and re-uploads the ' +
+      'card with a populated registrations[] entry. Uses PRIVATE_KEY (on-chain wallet), ' +
+      'BEE_FEED_PK (Swarm feed signer) and POSTAGE_BATCH_ID from env. Optional catalogFeedOwner ' +
+      'is published as the "swarm-ai-catalog" service entry so consumers can discover the ' +
+      "agent's catalog. Returns { agentId, txHash, agentURI }.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Human-readable agent name.' },
+        description: { type: 'string', description: 'Short description of what the agent does.' },
+        image: { type: 'string', description: 'Optional avatar image URL.' },
+        version: {
+          type: 'string',
+          description: 'SemVer or date string for the Agent Card revision. Defaults to 1.0.0.',
+        },
+        x402: {
+          type: 'string',
+          description: 'x402 service endpoint URL; sets x402Support: true on the card.',
+        },
+        catalogFeedOwner: {
+          type: 'string',
+          description:
+            'Catalog feed owner address (0x-prefixed EOA). Published as the "swarm-ai-catalog" ' +
+            "service entry — the discovery entry point for the agent's catalog.",
+        },
+        capabilities: {
+          oneOf: [
+            { type: 'string', description: 'Comma-separated tags, e.g. "trading,price-feeds".' },
+            { type: 'array', items: { type: 'string' } },
+          ],
+        },
+        postageBatchId: {
+          type: 'string',
+          description: 'Override the upload postage batch; falls back to POSTAGE_BATCH_ID env.',
+        },
+      },
+      required: ['name', 'description'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string', description: 'Minted ERC-8004 NFT token id.' },
+        txHash: { type: 'string', description: 'Base Sepolia transaction hash of the mint.' },
+        agentURI: {
+          type: 'string',
+          description: 'Swarm feed URL stored on-chain; resolves to the latest Agent Card version.',
+        },
+        message: { type: 'string' },
+      },
+      required: ['agentId', 'txHash', 'agentURI'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
     name: 'purchase_catalog_item',
     title: 'Purchase catalog item',
     description:
