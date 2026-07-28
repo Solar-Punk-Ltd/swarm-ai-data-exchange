@@ -19,6 +19,7 @@ import {
   uploadAgentCard,
   AGENT_CARD_TOPIC,
   SWARM_AI_CAPABLE,
+  SWARM_AGENT_ID,
 } from '@solarpunk/erc8004-adapter';
 import config from '../../config';
 import {
@@ -87,13 +88,15 @@ export async function createAgent(args: CreateAgentArgs): Promise<ToolResponse> 
     const signer = new ethers.Wallet(privateKey, provider);
     const erc8004 = createERC8004Client({ provider, signer, chain: config.chain.chain });
 
+    // Always seed SWARM_AI_CAPABLE. If catalogFeedOwner is provided, index the agent
+    // under SWARM_AGENT_ID = <lowercased owner> so find_agents_by_metadata can locate
+    // it later on startup without any client-side knowledge of this key.
     const metadata = [{ metadataKey: SWARM_AI_CAPABLE, metadataValue: new Uint8Array([1]) }];
-    if (args.extraMetadata) {
-      const encoder = new TextEncoder();
-      for (const [key, value] of Object.entries(args.extraMetadata)) {
-        if (key === SWARM_AI_CAPABLE) continue;
-        metadata.push({ metadataKey: key, metadataValue: encoder.encode(value) });
-      }
+    if (args.catalogFeedOwner) {
+      metadata.push({
+        metadataKey: SWARM_AGENT_ID,
+        metadataValue: new TextEncoder().encode(args.catalogFeedOwner.toLowerCase()),
+      });
     }
     const result = await erc8004.identity.register(agentURI, metadata);
     agentId = result.agentId;

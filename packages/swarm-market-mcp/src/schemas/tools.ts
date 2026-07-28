@@ -372,21 +372,15 @@ export const SwarmMarketToolsSchema = [
           type: 'string',
           description:
             'Catalog feed owner address (0x-prefixed EOA). Published as the "swarm-ai-catalog" ' +
-            "service entry — the discovery entry point for the agent's catalog.",
+            "service entry — the discovery entry point for the agent's catalog — and " +
+            'automatically indexed on-chain under the swarm_agent_id metadata key so future ' +
+            'startups can locate this agent via find_agents_by_metadata (catalogFeedOwner mode).',
         },
         capabilities: {
           oneOf: [
             { type: 'string', description: 'Comma-separated tags, e.g. "trading,price-feeds".' },
             { type: 'array', items: { type: 'string' } },
           ],
-        },
-        extraMetadata: {
-          type: 'object',
-          description:
-            'Additional ERC-8004 metadata entries written atomically at register time. ' +
-            'Keys are metadata key strings (e.g. "swarm_agent_id"); values are utf-8 encoded ' +
-            'to bytes. Merged with the default swarm_ai_capable=0x01 entry.',
-          additionalProperties: { type: 'string' },
         },
         postageBatchId: {
           type: 'string',
@@ -416,29 +410,36 @@ export const SwarmMarketToolsSchema = [
     name: 'find_agents_by_metadata',
     title: 'Find agents by metadata',
     description:
-      'Scan ERC-8004 MetadataSet events for a given metadata key and return matching ' +
-      'agents (agentId, tokenURI, NFT owner, utf-8-decoded metadata value). Intended as a ' +
-      'fast index for "find my agent" lookups on startup. Callers MUST still verify feed ' +
-      'ownership and NFT ownership before trusting a match — metadata is spoofable.',
+      'Scan ERC-8004 MetadataSet events and return matching agents (agentId, tokenURI, ' +
+      'NFT owner, utf-8-decoded metadata value). Intended as a fast index for "find my ' +
+      'agent" lookups on startup. Callers MUST still verify feed ownership and NFT ' +
+      'ownership before trusting a match — metadata is spoofable. Prefer the ' +
+      'catalogFeedOwner input over raw metadataKey when locating an agent by its catalog ' +
+      'feed identity.',
     inputSchema: {
       type: 'object',
       properties: {
+        catalogFeedOwner: {
+          type: 'string',
+          description:
+            'Semantic filter: catalog feed owner address (0x-prefixed EOA). Under the hood, ' +
+            'scans the swarm_agent_id metadata key for a case-insensitive match.',
+        },
         metadataKey: {
           type: 'string',
-          description: 'Metadata key to scan (e.g. "swarm_agent_id", "swarm_ai_capable").',
+          description:
+            'Raw metadata key to scan (e.g. "swarm_ai_capable"). Required when ' +
+            'catalogFeedOwner is not provided.',
         },
         metadataValue: {
           type: 'string',
-          description:
-            'Optional utf-8 filter. When set, only agents whose stored value decodes to this ' +
-            'string are returned.',
+          description: 'Optional utf-8 filter for raw mode. Ignored when catalogFeedOwner is set.',
         },
         fromBlock: {
           type: 'number',
           description: 'Optional starting block for the event scan. Defaults to a recent window.',
         },
       },
-      required: ['metadataKey'],
     },
     outputSchema: {
       type: 'object',

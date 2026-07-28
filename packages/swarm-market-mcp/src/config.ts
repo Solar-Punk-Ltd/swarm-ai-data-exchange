@@ -3,6 +3,11 @@ import { DEFAULT_BEE_API_URL, DEFAULT_CHAIN, DEFAULT_RPC_URL } from './constants
 
 dotenv.config({ quiet: true });
 
+function normalizeHexKey(key: string | undefined): string | undefined {
+  if (!key) return undefined;
+  return key.startsWith('0x') ? key : `0x${key}`;
+}
+
 export interface BeeConfig {
   endpoint: string;
   // Catalog feed signer (cold key).
@@ -39,14 +44,14 @@ export interface Config {
 const config: Config = {
   bee: {
     endpoint: process.env.BEE_API_URL || DEFAULT_BEE_API_URL,
-    catalogFeedPrivateKey: process.env.BEE_FEED_PK,
-    itemStateFeedPrivateKey: process.env.ITEM_STATE_FEED_PK,
+    catalogFeedPrivateKey: normalizeHexKey(process.env.BEE_FEED_PK),
+    itemStateFeedPrivateKey: normalizeHexKey(process.env.ITEM_STATE_FEED_PK),
     postageBatchId: process.env.POSTAGE_BATCH_ID,
   },
   chain: {
     rpcUrl: process.env.RPC_URL || DEFAULT_RPC_URL,
     chain: process.env.ERC8004_CHAIN || DEFAULT_CHAIN,
-    walletPrivateKey: process.env.PRIVATE_KEY,
+    walletPrivateKey: normalizeHexKey(process.env.PRIVATE_KEY),
   },
   payment: {
     walletPrivateKey: process.env.BUYER_WALLET_PK,

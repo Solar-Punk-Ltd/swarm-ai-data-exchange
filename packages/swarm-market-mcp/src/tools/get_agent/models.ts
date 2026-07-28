@@ -24,10 +24,15 @@ export interface CatalogItemSummary {
 export interface AgentCatalog {
   // Catalog feed owner address from the Agent Card's "swarm-ai-catalog" service entry.
   owner: string;
+  // Current Mantaray root the catalog feed resolves to. Absent on read errors.
+  root?: string;
   name?: string;
   description?: string;
   license?: string;
   items: CatalogItemSummary[];
+  // Every path present in the Mantaray. Diagnostic: lets a caller distinguish
+  // "empty catalog" from "items exist but at unexpected paths".
+  allPaths?: string[];
   // Set instead of items when the feed exists in the card but cannot be read.
   error?: string;
 }

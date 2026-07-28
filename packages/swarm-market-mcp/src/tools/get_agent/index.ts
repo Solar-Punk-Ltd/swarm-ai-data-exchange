@@ -84,6 +84,10 @@ async function readCatalog(bee: Bee, owner: string): Promise<AgentCatalog> {
   const root = await readCatalogFeedRoot(bee, owner);
   const manifest = await MantarayNode.unmarshal(bee, root);
   await manifest.loadRecursively(bee);
+  // Diagnostic: expose every path the Mantaray contains so callers can see whether the
+  // catalog feed is pointing at an empty/wrong root vs. a filter mismatch. Kept in the
+  // returned payload rather than logged so buyer-side telemetry can see it too.
+  const allPaths = manifest.collect().map((n) => n.fullPathString);
 
   let name: string | undefined;
   let description: string | undefined;
@@ -108,7 +112,7 @@ async function readCatalog(bee: Bee, owner: string): Promise<AgentCatalog> {
     )
   ).filter((s): s is CatalogItemSummary => s !== null);
 
-  return { owner, name, description, license, items };
+  return { owner, root, name, description, license, items, allPaths };
 }
 
 // registrations[].agentId is a bigint at runtime — stringify so the result serializes cleanly.
@@ -173,7 +177,15 @@ export async function getAgent(args: GetAgentArgs, bee: Bee): Promise<ToolRespon
         );
       } catch (err) {
         // Card advertises a catalog but the feed is unpublished/unreadable — report, don't fail.
-        result.catalog = { owner, items: [], error: getErrorMessage(err) } satisfies AgentCatalog;
+        // Guarantee a non-empty error string so downstream callers don't misread the failure
+        // as a "successful empty catalog" (some bee-js errors ship with an empty message).
+        const errorMessage =
+          getErrorMessage(err) || `Catalog read failed for owner ${owner} (${typeof err})`;
+        result.catalog = {
+          owner,
+          items: [],
+          error: errorMessage,
+        } satisfies AgentCatalog;
       }
     }
   }
