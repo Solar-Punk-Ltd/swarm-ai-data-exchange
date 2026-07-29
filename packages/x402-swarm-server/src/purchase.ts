@@ -74,8 +74,10 @@ let grantorPublicKeyCache: string | undefined;
 async function getGrantorPublicKey(bee: Bee): Promise<string> {
   if (grantorPublicKeyCache) return grantorPublicKeyCache;
   const addresses = await bee.getNodeAddresses();
-  const hex = addresses.publicKey.toHex();
-  grantorPublicKeyCache = hex.startsWith('0x') ? hex : `0x${hex}`;
+  // Return raw 64-byte X||Y (128 hex chars, no 0x prefix). swarm-mcp's download_files
+  // expects this form and prepends the 04 SEC1 prefix internally before setting the
+  // Swarm-Act-Publisher header.
+  grantorPublicKeyCache = addresses.publicKey.toHex().replace(/^0x/, '');
   return grantorPublicKeyCache;
 }
 

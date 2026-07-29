@@ -345,6 +345,127 @@ export const SwarmMarketToolsSchema = [
     },
   },
   {
+    name: 'create_agent',
+    title: 'Create agent',
+    description:
+      'Register an ERC-8004 agent identity end-to-end: builds an Agent Card, uploads it to a ' +
+      'Swarm feed, mints the ERC-8004 NFT with the feed URL as tokenURI, and re-uploads the ' +
+      'card with a populated registrations[] entry. Uses PRIVATE_KEY (on-chain wallet), ' +
+      'BEE_FEED_PK (Swarm feed signer) and POSTAGE_BATCH_ID from env. Optional catalogFeedOwner ' +
+      'is published as the "swarm-ai-catalog" service entry so consumers can discover the ' +
+      "agent's catalog. Returns { agentId, txHash, agentURI }.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Human-readable agent name.' },
+        description: { type: 'string', description: 'Short description of what the agent does.' },
+        image: { type: 'string', description: 'Optional avatar image URL.' },
+        version: {
+          type: 'string',
+          description: 'SemVer or date string for the Agent Card revision. Defaults to 1.0.0.',
+        },
+        x402: {
+          type: 'string',
+          description: 'x402 service endpoint URL; sets x402Support: true on the card.',
+        },
+        catalogFeedOwner: {
+          type: 'string',
+          description:
+            'Catalog feed owner address (0x-prefixed EOA). Published as the "swarm-ai-catalog" ' +
+            "service entry — the discovery entry point for the agent's catalog — and " +
+            'automatically indexed on-chain under the swarm_agent_id metadata key so future ' +
+            'startups can locate this agent via find_agents_by_metadata (catalogFeedOwner mode).',
+        },
+        capabilities: {
+          oneOf: [
+            { type: 'string', description: 'Comma-separated tags, e.g. "trading,price-feeds".' },
+            { type: 'array', items: { type: 'string' } },
+          ],
+        },
+        postageBatchId: {
+          type: 'string',
+          description: 'Override the upload postage batch; falls back to POSTAGE_BATCH_ID env.',
+        },
+      },
+      required: ['name', 'description'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string', description: 'Minted ERC-8004 NFT token id.' },
+        txHash: { type: 'string', description: 'Base Sepolia transaction hash of the mint.' },
+        agentURI: {
+          type: 'string',
+          description: 'Swarm feed URL stored on-chain; resolves to the latest Agent Card version.',
+        },
+        message: { type: 'string' },
+      },
+      required: ['agentId', 'txHash', 'agentURI'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
+    name: 'find_agents_by_metadata',
+    title: 'Find agents by metadata',
+    description:
+      'Scan ERC-8004 MetadataSet events and return matching agents (agentId, tokenURI, ' +
+      'NFT owner, utf-8-decoded metadata value). Intended as a fast index for "find my ' +
+      'agent" lookups on startup. Callers MUST still verify feed ownership and NFT ' +
+      'ownership before trusting a match — metadata is spoofable. Prefer the ' +
+      'catalogFeedOwner input over raw metadataKey when locating an agent by its catalog ' +
+      'feed identity.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        catalogFeedOwner: {
+          type: 'string',
+          description:
+            'Semantic filter: catalog feed owner address (0x-prefixed EOA). Under the hood, ' +
+            'scans the swarm_agent_id metadata key for a case-insensitive match.',
+        },
+        metadataKey: {
+          type: 'string',
+          description:
+            'Raw metadata key to scan (e.g. "swarm_ai_capable"). Required when ' +
+            'catalogFeedOwner is not provided.',
+        },
+        metadataValue: {
+          type: 'string',
+          description: 'Optional utf-8 filter for raw mode. Ignored when catalogFeedOwner is set.',
+        },
+        fromBlock: {
+          type: 'number',
+          description: 'Optional starting block for the event scan. Defaults to a recent window.',
+        },
+      },
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        metadataKey: { type: 'string' },
+        agents: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              agentId: { type: 'string' },
+              agentURI: { type: 'string' },
+              owner: { type: 'string', description: 'On-chain NFT owner address.' },
+              metadataValue: { type: 'string' },
+            },
+            required: ['agentId', 'agentURI', 'owner', 'metadataValue'],
+          },
+        },
+      },
+      required: ['metadataKey', 'agents'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
     name: 'purchase_catalog_item',
     title: 'Purchase catalog item',
     description:

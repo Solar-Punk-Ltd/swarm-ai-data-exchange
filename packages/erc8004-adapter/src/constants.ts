@@ -22,4 +22,11 @@ export const DEFAULT_AGENT_IMAGE =
 
 export const SWARM_AI_CAPABLE = 'swarm_ai_capable';
 
+/**
+ * Metadata key pointing at an agent's Swarm catalog feed owner address (0x-prefixed EOA).
+ * Used as a fast index for "find my agent" lookups on startup — consumers MUST still
+ * verify feed ownership + NFT ownership before trusting a match (metadata is spoofable).
+ */
+export const SWARM_AGENT_ID = 'swarm_agent_id';
+
 export const RECENT_BLOCK_COUNT = 550000;

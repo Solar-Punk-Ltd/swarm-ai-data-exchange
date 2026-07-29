@@ -91,6 +91,29 @@ export const deleteCatalogSchema = z.object({
   postageBatchId: z.string().optional(),
 });
 
+export const createAgentSchema = z.object({
+  name: z.string().min(1, { message: 'Missing required parameter: name.' }),
+  description: z.string().min(1, { message: 'Missing required parameter: description.' }),
+  image: z.string().optional(),
+  version: z.string().optional(),
+  x402: z.string().optional(),
+  catalogFeedOwner: z.string().optional(),
+  // Accept either a comma-separated string or an array; normalized inside the tool.
+  capabilities: z.union([z.string(), z.array(z.string())]).optional(),
+  postageBatchId: z.string().optional(),
+});
+
+export const findAgentsByMetadataSchema = z
+  .object({
+    catalogFeedOwner: z.string().optional(),
+    metadataKey: z.string().min(1).optional(),
+    metadataValue: z.string().optional(),
+    fromBlock: z.number().int().nonnegative().optional(),
+  })
+  .refine((v) => Boolean(v.catalogFeedOwner || v.metadataKey), {
+    message: 'Provide either catalogFeedOwner or metadataKey.',
+  });
+
 export const purchaseCatalogItemSchema = z.object({
   itemId: z.string().min(1, { message: 'Missing required parameter: itemId.' }),
   x402Endpoint: z.string().optional(),
