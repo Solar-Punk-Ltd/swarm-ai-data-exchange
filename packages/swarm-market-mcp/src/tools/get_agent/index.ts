@@ -33,7 +33,7 @@ const ITEM_JSONLD_PATH_RE = /^\/?items\/([^/]+)\/item\.jsonld$/;
 // client's tool timeout instead of hanging.
 const RPC_TIMEOUT_MS = 15_000;
 const CARD_TIMEOUT_MS = 15_000;
-const CATALOG_TIMEOUT_MS = 30_000;
+const CATALOG_TIMEOUT_MS = 300_000;
 
 // chainId per supported chain key — used to pin the provider's network so ethers skips
 // the eth_chainId auto-detection round-trip on first call.
