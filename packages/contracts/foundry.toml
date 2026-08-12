@@ -1,0 +1,21 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc_version = "0.8.28"
+optimizer = true
+optimizer_runs = 1000
+# Clones are deployed per seller, so the implementation's runtime size is irrelevant to
+# per-clone gas — optimize for call cost, not deploy cost.
+via_ir = false
+
+[fuzz]
+runs = 512
+
+[rpc_endpoints]
+base-sepolia = "${RPC_URL}"
+
+[etherscan]
+base-sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 84532 }

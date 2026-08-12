@@ -27,11 +27,14 @@ import { createAgent } from './tools/create_agent';
 import type { CreateAgentArgs } from './tools/create_agent/models';
 import { findAgentsByMetadata } from './tools/find_agents_by_metadata';
 import type { FindAgentsByMetadataArgs } from './tools/find_agents_by_metadata/models';
+import { ensureSplitContract } from './tools/ensure_split_contract';
+import type { EnsureSplitContractArgs } from './tools/ensure_split_contract/models';
 import {
   buildCatalogSchema,
   createAgentSchema,
   deleteCatalogItemSchema,
   deleteCatalogSchema,
+  ensureSplitContractSchema,
   findAgentsByMetadataSchema,
   getAgentSchema,
   purchaseCatalogItemSchema,
@@ -100,6 +103,11 @@ export class SwarmMarketMCPServer {
           case 'find_agents_by_metadata': {
             const validArgs = findAgentsByMetadataSchema.parse(args);
             return findAgentsByMetadata(validArgs as FindAgentsByMetadataArgs);
+          }
+
+          case 'ensure_split_contract': {
+            const validArgs = ensureSplitContractSchema.parse(args);
+            return ensureSplitContract(validArgs as EnsureSplitContractArgs);
           }
 
           default:

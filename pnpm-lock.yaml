@@ -67,6 +67,16 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/contracts:
+    dependencies:
+      viem:
+        specifier: ^2.21.0
+        version: 2.52.0(typescript@5.9.3)(zod@3.25.76)
+    devDependencies:
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+
   packages/erc8004-adapter:
     dependencies:
       '@ethersphere/bee-js':
@@ -162,6 +172,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.2
         version: 1.29.0(zod@3.25.76)
+      '@solarpunk/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@solarpunk/erc8004-adapter':
         specifier: workspace:*
         version: link:../erc8004-adapter
@@ -174,6 +187,9 @@ importers:
       ethers:
         specifier: ^6.13.0
         version: 6.16.0
+      viem:
+        specifier: ^2.21.0
+        version: 2.52.0(typescript@5.9.3)(zod@3.25.76)
       zod:
         specifier: ^3.24.1
         version: 3.25.76

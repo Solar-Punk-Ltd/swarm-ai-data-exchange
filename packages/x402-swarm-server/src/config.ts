@@ -16,6 +16,10 @@ export interface ServerConfig {
   // address this owner (the topic stays bound to catalogFeedOwner).
   itemStateFeedOwner: string;
   dbPath: string;
+  // This seller's RevenueSplitter clone — the only settlement destination that earns valid
+  // Proof-of-Purchase. When set, a purchase whose advertised payTo is anything else is
+  // rejected before /settle. Optional so dev setups without a deployed factory still run.
+  splitterAddress?: string;
   // State-feed write retry (§14.1: the publisher MUST retry until the on-Swarm record converges).
   // Bounded in-memory exponential backoff; durable retry across restarts is out of prototype scope.
   stateFeedRetry: { attempts: number; baseDelayMs: number; maxDelayMs: number };
@@ -54,6 +58,7 @@ export function loadConfig(): ServerConfig {
     itemStateFeedPk,
     itemStateFeedOwner: '0x' + new PrivateKey(itemStateFeedPk).publicKey().address().toHex(),
     dbPath: process.env.DB_PATH ?? './data/store.db',
+    splitterAddress: process.env.SPLITTER_ADDRESS,
     stateFeedRetry: {
       attempts: Number(process.env.STATE_FEED_RETRY_ATTEMPTS ?? 8),
       baseDelayMs: Number(process.env.STATE_FEED_RETRY_BASE_MS ?? 500),

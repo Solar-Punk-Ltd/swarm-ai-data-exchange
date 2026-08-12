@@ -35,10 +35,19 @@ export interface PaymentConfig {
   x402Endpoint?: string;
 }
 
+// Per-seller revenue splitter (@solarpunk/contracts). When both values are set, build_catalog
+// resolves payment[].payTo to this seller's splitter clone, so listings settle through the taxed
+// path that earns Proof-of-Purchase. Unset = legacy behaviour: payTo must be supplied explicitly.
+export interface SplitterConfig {
+  factoryAddress?: string;
+  sellerAddress?: string;
+}
+
 export interface Config {
   bee: BeeConfig;
   chain: ChainConfig;
   payment: PaymentConfig;
+  splitter: SplitterConfig;
 }
 
 const config: Config = {
@@ -57,6 +66,10 @@ const config: Config = {
     walletPrivateKey: process.env.BUYER_WALLET_PK,
     rpcUrl: process.env.PAYMENT_RPC_URL,
     x402Endpoint: process.env.X402_ENDPOINT,
+  },
+  splitter: {
+    factoryAddress: process.env.SPLITTER_FACTORY_ADDRESS,
+    sellerAddress: process.env.SELLER_ADDRESS,
   },
 };
 

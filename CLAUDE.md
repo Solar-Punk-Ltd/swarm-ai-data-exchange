@@ -37,6 +37,7 @@ The catalog architecture is fully specified in:
 | `packages/swarm-catalog`          | **New**         | Publisher SDK: types, SwarmCatalogBuilder, catalog/state feed management                                                                                                                                                       |
 | `packages/x402-swarm-server`      | Refactor        | Publisher HTTP server: x402 purchase endpoint, ACT grant, state feed write                                                                                                                                                     |
 | `packages/catalogue-feed-browser` | Refactor        | Consumer UI/server: catalog reader, sample preview, purchase flow                                                                                                                                                              |
+| `packages/contracts`              | **New**         | Foundry package: per-seller `RevenueSplitter` + `SplitterFactory` (the x402 `payTo` destination) and their viem SDK. Design source is `documents/data-enriched-marketplaces.md` Step 4b, not the v1 catalog spec.              |
 
 ## Prototype Scope
 
@@ -75,23 +76,27 @@ Each layer depends on the previous:
 - Run a package without a build step during prototyping: `npx tsx src/index.ts` from the package directory
 - Run all packages in parallel: `pnpm dev` from root
 - Test a single package: `pnpm --filter <package-name> test` (e.g. `pnpm --filter swarm-catalog test`)
+- **Foundry** (`forge`) is required only for `packages/contracts`, and is not a pnpm dependency — install from https://getfoundry.sh, then `forge install` in that package. Its scripts skip with a warning when `forge` is absent so root `pnpm test` / `pnpm build` still work; CI should set `REQUIRE_FOUNDRY=1` to make the skip a failure
 - Build all packages: `pnpm build`
 
 ## Key Environment Variables
 
-| Variable                          | Package(s)                                              | Purpose                                                                                                    |
-| --------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `BEE_API_URL`                     | all                                                     | Bee node endpoint, default `http://localhost:1633`                                                         |
-| `BEE_FEED_PK`                     | `swarm-catalog`, `x402-swarm-server`, `erc8004-adapter` | Catalog feed signer private key (cold key)                                                                 |
-| `ITEM_STATE_FEED_PK`              | `x402-swarm-server`                                     | Per-item state feed signer private key (hot key, new var in refactor)                                      |
-| `POSTAGE_BATCH_ID`                | `swarm-catalog`, `x402-swarm-server`                    | Postage stamp batch ID for uploads (note: `erc8004-adapter` uses `BEE_POSTAGE_STAMP` for the same concept) |
-| `CATALOG_FEED_OWNER`              | `x402-swarm-server`                                     | EOA address of the catalog feed signer — used to locate the catalog on Swarm (new var in refactor)         |
-| `PURCHASE_INTENT_DOMAIN_CONTRACT` | `x402-swarm-server`                                     | `verifyingContract` address for EIP-712 `PurchaseIntent` domain (new var in refactor)                      |
-| `FACILITATOR_URL`                 | `x402-swarm-server`                                     | x402 facilitator endpoint, default `https://x402.org/facilitator`                                          |
-| `EVM_PRIVATE_KEY`                 | `catalogue-feed-browser`                                | Consumer wallet private key for signing `PurchaseIntent` and ERC-3009 authorization                        |
-| `PRIVATE_KEY`                     | `erc8004-adapter`                                       | On-chain transaction signer for ERC-8004 registration                                                      |
-| `RPC_URL`                         | `erc8004-adapter`                                       | EVM RPC endpoint                                                                                           |
-| `DB_PATH`                         | `x402-swarm-server`                                     | SQLite file path for nonce store + purchase records, default `./data/store.db`                             |
+| Variable                          | Package(s)                                              | Purpose                                                                                                          |
+| --------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `BEE_API_URL`                     | all                                                     | Bee node endpoint, default `http://localhost:1633`                                                               |
+| `BEE_FEED_PK`                     | `swarm-catalog`, `x402-swarm-server`, `erc8004-adapter` | Catalog feed signer private key (cold key)                                                                       |
+| `ITEM_STATE_FEED_PK`              | `x402-swarm-server`                                     | Per-item state feed signer private key (hot key, new var in refactor)                                            |
+| `POSTAGE_BATCH_ID`                | `swarm-catalog`, `x402-swarm-server`                    | Postage stamp batch ID for uploads (note: `erc8004-adapter` uses `BEE_POSTAGE_STAMP` for the same concept)       |
+| `CATALOG_FEED_OWNER`              | `x402-swarm-server`                                     | EOA address of the catalog feed signer — used to locate the catalog on Swarm (new var in refactor)               |
+| `PURCHASE_INTENT_DOMAIN_CONTRACT` | `x402-swarm-server`                                     | `verifyingContract` address for EIP-712 `PurchaseIntent` domain (new var in refactor)                            |
+| `FACILITATOR_URL`                 | `x402-swarm-server`                                     | x402 facilitator endpoint, default `https://x402.org/facilitator`                                                |
+| `EVM_PRIVATE_KEY`                 | `catalogue-feed-browser`                                | Consumer wallet private key for signing `PurchaseIntent` and ERC-3009 authorization                              |
+| `PRIVATE_KEY`                     | `erc8004-adapter`                                       | On-chain transaction signer for ERC-8004 registration                                                            |
+| `RPC_URL`                         | `erc8004-adapter`                                       | EVM RPC endpoint                                                                                                 |
+| `DB_PATH`                         | `x402-swarm-server`                                     | SQLite file path for nonce store + purchase records, default `./data/store.db`                                   |
+| `SPLITTER_ADDRESS`                | `x402-swarm-server`                                     | This seller's splitter clone. When set, any other advertised `payTo` is rejected (`payment_destination_untaxed`) |
+| `SPLITTER_FACTORY_ADDRESS`        | `swarm-market-mcp`                                      | `SplitterFactory` address used to resolve a seller's clone                                                       |
+| `SELLER_ADDRESS`                  | `swarm-market-mcp`                                      | Seller whose splitter becomes `payment[].payTo` at catalog-build time                                            |
 
 ## Hackweek Code Note
 
@@ -109,6 +114,7 @@ Never violate these — they are load-bearing constraints from the spec:
 - **ACT history reference lives in `CatalogItemState`, not in `item.jsonld`.** It advances per grant; it must not be in the catalog.
 - **State feed is verification-only for consumers.** Never a discovery, notification, or popularity channel.
 - **Two separate feed signers:** catalog feed signer (low-frequency, cold key) ≠ per-item state feed signer (high-frequency, hot key on purchase server).
+- **A priced listing's `payTo` is the seller's splitter clone, never a bare EOA.** Only settlements into the split contract are taxed, and only taxed sales produce a valid Proof-of-Purchase. Clone terms are frozen at creation because the buyer signs an EIP-712 `PurchaseIntent` over the exact `payTo`.
 - **Purchase record must be written between steps 9 and 10** of the purchase flow — after `/settle`, before ACT grant. Never loses the record even if grant fails.
 
 ## Purchase Flow Summary (full detail in §10–§11 of spec and `x402-swarm-server/CLAUDE.md`)

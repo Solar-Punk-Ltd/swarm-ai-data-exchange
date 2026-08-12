@@ -20,6 +20,7 @@ import {
   getToolErrorResponse,
   ToolResponse,
 } from '../../utils';
+import { resolvePayTo } from '../../splitter';
 import { BuildCatalogArgs } from './models';
 
 export async function buildCatalog(args: BuildCatalogArgs, bee: Bee): Promise<ToolResponse> {
@@ -62,7 +63,10 @@ export async function buildCatalog(args: BuildCatalogArgs, bee: Bee): Promise<To
   // Stage each item. stageItem/seedActState throw on invalid input — surface as readable errors.
   try {
     for (const entry of args.items) {
-      builder.stageItem(entry.item);
+      // Resolve payTo to the seller's split contract before staging, so every published listing
+      // settles through the taxed path. Throws if a caller-supplied payTo points elsewhere.
+      const payment = await resolvePayTo(entry.item.payment, entry.item.id);
+      builder.stageItem({ ...entry.item, payment });
       builder.seedActState(entry.item.id, entry.actSeed);
       if (entry.sampleData != null) {
         const sampleBytes =

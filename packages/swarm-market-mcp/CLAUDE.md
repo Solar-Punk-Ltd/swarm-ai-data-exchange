@@ -62,6 +62,33 @@ export interface BuildCatalogItem {
 2. For each item: `stageItem(item)` → `seedActState(item.id, actSeed)` → optional `stageSampleData` / top-level `setCatalogMeta`.
 3. `await builder.publish()` and return its result as structured content.
 
+**payTo resolution.** Before staging, each payment entry's `payTo` is resolved to the seller's
+`RevenueSplitter` clone via `src/splitter.ts` (`resolvePayTo`). With `SPLITTER_FACTORY_ADDRESS` +
+`SELLER_ADDRESS` set, `payTo` may be omitted and is filled in; a supplied `payTo` that is not the
+seller's clone is a **hard error**, not a warning — publishing it would silently create an untaxed
+listing that earns the seller no Proof-of-Purchase, and the mistake would only surface much later
+at purchase time. Without the splitter configured, `payTo` must be supplied explicitly (the
+pre-splitter behaviour).
+
+### `ensure_split_contract`
+
+Resolves the seller's `RevenueSplitter` clone — the address that belongs in `payment[].payTo`.
+
+**Args** (`src/tools/ensure_split_contract/models.ts`):
+
+```typescript
+export interface EnsureSplitContractArgs {
+  seller?: string; // defaults to SELLER_ADDRESS
+  deploy?: boolean; // default false — predict only, no transaction
+}
+```
+
+**Return:** `{ splitter, seller, factory, deployed, txHash?, treasury?, taxBps? }`.
+
+Read-only by default. The clone address is CREATE2-deterministic, so it can be published before
+deployment — an x402 (ERC-3009) settlement credits the address whether or not code lives there.
+Deployment (`deploy: true`, requires `PRIVATE_KEY`) is only needed before the first `distribute()`.
+
 ### `get_agent`
 
 Resolves an ERC-8004 agent id to its on-chain Agent Card (read-only — RPC + Swarm fetch, no signer). Optionally enumerates the agent's catalog.
@@ -98,14 +125,16 @@ The tool throws if any priced item is missing its `actSeed` (the builder enforce
 
 ## Environment variables
 
-| Variable             | Purpose                                                                           |
-| -------------------- | --------------------------------------------------------------------------------- |
-| `BEE_API_URL`        | Bee node endpoint, default `http://localhost:1633`                                |
-| `BEE_FEED_PK`        | Catalog feed signer private key (cold key)                                        |
-| `ITEM_STATE_FEED_PK` | Per-item state feed signer private key (hot key) — MUST differ from `BEE_FEED_PK` |
-| `POSTAGE_BATCH_ID`   | Postage stamp batch ID for uploads                                                |
-| `RPC_URL`            | EVM RPC endpoint for `get_agent` reads (default `https://sepolia.base.org`)       |
-| `ERC8004_CHAIN`      | Chain key for the ERC-8004 client (default `base-sepolia`)                        |
+| Variable                   | Purpose                                                                           |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `BEE_API_URL`              | Bee node endpoint, default `http://localhost:1633`                                |
+| `BEE_FEED_PK`              | Catalog feed signer private key (cold key)                                        |
+| `ITEM_STATE_FEED_PK`       | Per-item state feed signer private key (hot key) — MUST differ from `BEE_FEED_PK` |
+| `POSTAGE_BATCH_ID`         | Postage stamp batch ID for uploads                                                |
+| `RPC_URL`                  | EVM RPC endpoint for `get_agent` reads (default `https://sepolia.base.org`)       |
+| `ERC8004_CHAIN`            | Chain key for the ERC-8004 client (default `base-sepolia`)                        |
+| `SPLITTER_FACTORY_ADDRESS` | `SplitterFactory` address used to resolve a seller's splitter clone               |
+| `SELLER_ADDRESS`           | Seller whose clone becomes `payment[].payTo` in `build_catalog`                   |
 
 ## Package skeleton (match `swarm-mcp`)
 

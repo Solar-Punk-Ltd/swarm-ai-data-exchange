@@ -180,3 +180,35 @@ describe('verifyPurchaseIntent — rejections (§11.5)', () => {
     ).rejects.toThrow(/already been used/);
   });
 });
+
+describe('verifyPurchaseIntent — settlement destination guard', () => {
+  it('accepts a payment whose payTo is the configured split contract', async () => {
+    const env = await signedEnvelope();
+    const { matched } = await verifyPurchaseIntent(env, { ...baseOpts, expectedPayTo: PAYTO });
+    expect(matched.payTo).toBe(PAYTO);
+  });
+
+  it('matches the split contract case-insensitively', async () => {
+    const env = await signedEnvelope();
+    await expect(
+      verifyPurchaseIntent(env, { ...baseOpts, expectedPayTo: PAYTO.toLowerCase() }),
+    ).resolves.toBeDefined();
+  });
+
+  // A stale catalog entry still advertising the publisher's EOA would settle untaxed and earn no
+  // Proof-of-Purchase — reject it before /settle, while the failure is still free.
+  it('payment_destination_untaxed when payTo is not the split contract', async () => {
+    const env = await signedEnvelope();
+    await expect(
+      verifyPurchaseIntent(env, {
+        ...baseOpts,
+        expectedPayTo: '0x0000000000000000000000000000000000000009',
+      }),
+    ).rejects.toThrow(/split contract/);
+  });
+
+  it('accepts any payTo when no split contract is configured', async () => {
+    const env = await signedEnvelope();
+    await expect(verifyPurchaseIntent(env, baseOpts)).resolves.toBeDefined();
+  });
+});

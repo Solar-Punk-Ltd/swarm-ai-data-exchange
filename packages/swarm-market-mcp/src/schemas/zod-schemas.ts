@@ -8,7 +8,9 @@ const paymentRequirementsSchema = z.object({
   chainId: z.string(),
   asset: z.string(),
   amount: z.string(),
-  payTo: z.string(),
+  // Optional: build_catalog fills it with the seller's split contract when the splitter is
+  // configured. Supplying a different address is rejected, not silently honoured.
+  payTo: z.string().optional(),
   facilitator: z.string().optional(),
   description: z.string().optional(),
 });
@@ -113,6 +115,11 @@ export const findAgentsByMetadataSchema = z
   .refine((v) => Boolean(v.catalogFeedOwner || v.metadataKey), {
     message: 'Provide either catalogFeedOwner or metadataKey.',
   });
+
+export const ensureSplitContractSchema = z.object({
+  seller: z.string().optional(),
+  deploy: z.boolean().optional(),
+});
 
 export const purchaseCatalogItemSchema = z.object({
   itemId: z.string().min(1, { message: 'Missing required parameter: itemId.' }),
