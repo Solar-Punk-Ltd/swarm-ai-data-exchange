@@ -11,6 +11,10 @@ optimizer_runs = 1000
 # per-clone gas — optimize for call cost, not deploy cost.
 via_ir = false
 
+# `Deploy.s.sol` records the factory and implementation addresses here. Foundry sandboxes script
+# filesystem access, so the one directory the script writes has to be granted explicitly.
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+
 [fuzz]
 runs = 512
 
