@@ -17,10 +17,10 @@ want credited.
 
 ## Contracts
 
-| Contract          | Role                                                                                                                                           |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RevenueSplitter` | Clone target. `(seller, treasury, taxBps)` frozen by a one-shot `initialize`. `distribute(token)` sweeps its own balance for that token.       |
-| `SplitterFactory` | Deploys one EIP-1167 clone per seller via CREATE2, `salt = keccak256(seller)`. Owns the treasury address and default rate for _future_ clones. |
+| Contract          | Role                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RevenueSplitter` | Clone target. `(seller, treasury, taxBps)` frozen by a one-shot `initialize`. `distribute(token)` sweeps its own balance for that token.                                                               |
+| `SplitterFactory` | Deploys one EIP-1167 clone per seller via CREATE2, `salt = keccak256(seller)`. Owns the treasury address and default rate for _future_ clones, keeps the clone registry, and batches sweeps across it. |
 
 Two properties the rest of the system depends on:
 
@@ -42,6 +42,40 @@ always sum to exactly the balance.
 
 `MAX_TAX_BPS` (2000 = 20%) is a hard ceiling enforced in `initialize`, so a misconfigured factory
 can never mint a clone that swallows a seller's proceeds.
+
+## Collecting
+
+Nothing is pushed. A settlement lands in the seller's clone in full and stays there until someone
+calls `distribute(token)` on it, which releases `taxBps` to the treasury and the rest to the
+seller. That call is permissionless by design: a sweep can only move funds to the two addresses
+frozen at clone creation, so the seller never depends on the marketplace to be paid, and the
+marketplace never depends on the seller.
+
+For the operator, `SplitterFactory` collects across every seller in one transaction:
+
+| Call                                   | Use                                                                                         |
+| -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `distributeAll(token, offset, limit)`  | Sweep a token out of every clone in the registry window. `limit = type(uint256).max` = all. |
+| `distributeFor(splitters[], token)`    | Sweep an explicit list — for a keeper that already knows which clones hold a balance.       |
+| `splitterCount()` / `splittersSlice()` | Read the registry to size or paginate a sweep, without replaying `SplitterCreated` logs.    |
+
+Both batch calls return `(swept, skipped)`. A clone that reverts — a token blacklisting the
+seller, say — is skipped and logged as `DistributeSkipped`, never allowed to abort the batch and
+hold everyone else's payout hostage. An idle clone is a no-op, not a failure, so a sweep does not
+have to pre-filter.
+
+The loop is one external call per clone with no gas ceiling, so `distributeAll` is a paginated
+call, not an unbounded one: once the registry grows past what fits in a block, sweep it in pages.
+
+`distributeAll` covers every clone that _exists_, which is not the same as every seller. A seller
+can be paid at their counterfactual `payTo` long before anyone deploys the clone, and until
+`createSplitter` runs they are not in the registry — the balance simply waits at the address. A
+codeless target passed to `distributeFor` is counted as skipped for the same reason. Run
+`createSplitter` (idempotent) for any seller you want a sweep to reach.
+
+One consequence of frozen terms worth planning for: `setTreasury` only redirects _future_ clones.
+Rotating the treasury leaves every existing clone paying the old address, which must stay live to
+collect from pre-rotation sellers.
 
 ## Toolchain
 
@@ -80,12 +114,19 @@ Writes `deployments/<DEPLOYMENT_NAME>.json` (default `base-sepolia`). Copy the f
 ## TypeScript SDK
 
 ```ts
-import { predictSplitter, ensureSplitter, splitterTerms, distribute } from '@solarpunk/contracts';
+import {
+  predictSplitter,
+  ensureSplitter,
+  splitterTerms,
+  distribute,
+  distributeAll,
+} from '@solarpunk/contracts';
 
 const payTo = await predictSplitter(publicClient, factory, seller); // no tx — safe to publish
 const { splitter, deployed } = await ensureSplitter(publicClient, walletClient, factory, seller);
 const { treasury, taxBps } = await splitterTerms(publicClient, splitter);
-await distribute(walletClient, splitter, usdcAddress); // permissionless
+await distribute(walletClient, splitter, usdcAddress); // one seller; permissionless
+await distributeAll(walletClient, factory, usdcAddress); // every seller, one tx
 ```
 
 viem-based, since `x402-swarm-server` and `catalogue-feed-browser` already use viem. The raw ABIs

@@ -18,6 +18,9 @@ export const BPS_DENOMINATOR = 10_000;
 /** Ceiling enforced on-chain — mirrors SPLITTER_MAX_TAX_BPS in RevenueSplitter.sol. */
 export const MAX_TAX_BPS = 2_000;
 
+/** "To the end of the registry" sentinel for the paginated factory calls, which clamp `limit`. */
+export const MAX_UINT256 = 2n ** 256n - 1n;
+
 export interface SplitterTerms {
   seller: Address;
   treasury: Address;
@@ -101,6 +104,84 @@ export async function splitterTerms(
     client.readContract({ address, abi: REVENUE_SPLITTER_ABI, functionName: 'taxBps' }),
   ]);
   return { seller, treasury, taxBps };
+}
+
+/** Total number of splitter clones the factory has created. */
+export async function splitterCount(client: PublicClient, factory: Address): Promise<bigint> {
+  return client.readContract({
+    address: getAddress(factory),
+    abi: SPLITTER_FACTORY_ABI,
+    functionName: 'splitterCount',
+  });
+}
+
+/**
+ * A page of the factory's clone registry, in creation order.
+ *
+ * `limit` is clamped on-chain, so `MAX_UINT256` reads from `offset` to the end. Prefer this over
+ * replaying `SplitterCreated` logs when you just need the current set — no log retention limits,
+ * no reorg bookkeeping.
+ */
+export async function splittersSlice(
+  client: PublicClient,
+  factory: Address,
+  offset: bigint,
+  limit: bigint,
+): Promise<readonly Address[]> {
+  return client.readContract({
+    address: getAddress(factory),
+    abi: SPLITTER_FACTORY_ABI,
+    functionName: 'splittersSlice',
+    args: [offset, limit],
+  });
+}
+
+/**
+ * Sweep `token` out of every clone in `[offset, offset + limit)` — the marketplace operator's
+ * collection call, one transaction for all sellers.
+ *
+ * Permissionless, like `distribute`: a sweep can only move funds to the seller and treasury
+ * addresses frozen at each clone's creation. Clones that revert (a blacklisted seller, say) are
+ * skipped rather than aborting the batch; the receipt's `DistributeSkipped` logs name them.
+ *
+ * The loop is one external call per clone with no gas ceiling — paginate once the registry is
+ * large enough that a full sweep approaches the block limit.
+ */
+export async function distributeAll(
+  walletClient: ReadyWalletClient,
+  factory: Address,
+  token: Address,
+  offset: bigint = 0n,
+  limit: bigint = MAX_UINT256,
+): Promise<Hash> {
+  return walletClient.writeContract({
+    address: getAddress(factory),
+    abi: SPLITTER_FACTORY_ABI,
+    functionName: 'distributeAll',
+    args: [getAddress(token), offset, limit],
+    account: walletClient.account,
+    chain: walletClient.chain,
+  });
+}
+
+/**
+ * Sweep `token` out of an explicit set of clones — for a keeper that has already used `pending`
+ * to find the ones actually holding a balance and would rather not pay to walk idle clones.
+ */
+export async function distributeForMany(
+  walletClient: ReadyWalletClient,
+  factory: Address,
+  splitters: Address[],
+  token: Address,
+): Promise<Hash> {
+  return walletClient.writeContract({
+    address: getAddress(factory),
+    abi: SPLITTER_FACTORY_ABI,
+    functionName: 'distributeFor',
+    args: [splitters.map((s) => getAddress(s)), getAddress(token)],
+    account: walletClient.account,
+    chain: walletClient.chain,
+  });
 }
 
 /** Amounts each party would receive if `distribute` were called right now. */

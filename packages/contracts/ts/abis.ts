@@ -162,6 +162,57 @@ export const SPLITTER_FACTORY_ABI = [
   },
   {
     type: 'function',
+    name: 'splitterCount',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'splitterAt',
+    inputs: [{ name: 'index', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'splittersSlice',
+    inputs: [
+      { name: 'offset', type: 'uint256', internalType: 'uint256' },
+      { name: 'limit', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [{ name: 'page', type: 'address[]', internalType: 'address[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'distributeAll',
+    inputs: [
+      { name: 'token', type: 'address', internalType: 'address' },
+      { name: 'offset', type: 'uint256', internalType: 'uint256' },
+      { name: 'limit', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [
+      { name: 'swept', type: 'uint256', internalType: 'uint256' },
+      { name: 'skipped', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'distributeFor',
+    inputs: [
+      { name: 'splitters', type: 'address[]', internalType: 'address[]' },
+      { name: 'token', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: 'swept', type: 'uint256', internalType: 'uint256' },
+      { name: 'skipped', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
     name: 'setTreasury',
     inputs: [{ name: 'treasury_', type: 'address', internalType: 'address' }],
     outputs: [],
@@ -224,6 +275,15 @@ export const SPLITTER_FACTORY_ABI = [
     ],
     anonymous: false,
   },
+  {
+    type: 'event',
+    name: 'DistributeSkipped',
+    inputs: [
+      { name: 'splitter', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'token', type: 'address', indexed: true, internalType: 'address' },
+    ],
+    anonymous: false,
+  },
   { type: 'error', name: 'ZeroAddress', inputs: [] },
   {
     type: 'error',
@@ -231,6 +291,14 @@ export const SPLITTER_FACTORY_ABI = [
     inputs: [
       { name: 'taxBps', type: 'uint16', internalType: 'uint16' },
       { name: 'maxTaxBps', type: 'uint16', internalType: 'uint16' },
+    ],
+  },
+  {
+    type: 'error',
+    name: 'OffsetOutOfRange',
+    inputs: [
+      { name: 'offset', type: 'uint256', internalType: 'uint256' },
+      { name: 'length', type: 'uint256', internalType: 'uint256' },
     ],
   },
   {
