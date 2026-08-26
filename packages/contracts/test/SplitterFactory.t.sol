@@ -27,12 +27,15 @@ contract SplitterFactoryTest is Test {
 
     // --- creation ---
 
-    function test_createSplitter_matchesPrediction() public {
-        address predicted = factory.predictSplitter(SELLER);
+    /// @dev `splitterOf` is the only way to find a seller's clone — the address cannot be
+    ///      derived off-chain — so recording it is part of creation, not bookkeeping.
+    function test_createSplitter_isRecordedInMapping() public {
+        assertEq(factory.splitterOf(SELLER), address(0));
+
         address created = factory.createSplitter(SELLER);
 
-        assertEq(created, predicted);
         assertEq(factory.splitterOf(SELLER), created);
+        assertTrue(created.code.length > 0);
     }
 
     function test_createSplitter_initializesTerms() public {
@@ -66,19 +69,14 @@ contract SplitterFactoryTest is Test {
         factory.createSplitter(address(0));
     }
 
-    /// @dev The property the whole publish flow leans on: a catalog can advertise `payTo`
-    ///      before the clone exists, because an ERC-3009 transfer to a codeless address still
-    ///      credits it. The clone only has to exist by distribution time.
-    function test_counterfactual_fundsSurviveDeployment() public {
-        address predicted = factory.predictSplitter(SELLER);
-        assertEq(predicted.code.length, 0);
-
-        usdc.mint(predicted, 1_000_000);
-
+    /// @dev The publish flow's shape: the seller deploys first, the clone address becomes the
+    ///      listing's `payTo`, and an x402 settlement into it splits on distribution.
+    function test_createSplitter_thenSettleAndDistribute() public {
         RevenueSplitter splitter = RevenueSplitter(factory.createSplitter(SELLER));
-        assertEq(address(splitter), predicted);
 
+        usdc.mint(address(splitter), 1_000_000);
         splitter.distribute(address(usdc));
+
         assertEq(usdc.balanceOf(SELLER), 950_000);
         assertEq(usdc.balanceOf(TREASURY), 50_000);
     }
@@ -234,25 +232,25 @@ contract SplitterFactoryTest is Test {
         assertEq(skipped, 1);
     }
 
-    /// @dev A seller can be paid at a counterfactual `payTo` long before the clone is deployed.
-    ///      Sweeping that address must skip it — and must not take the healthy clones down too.
-    function test_distributeFor_skipsCounterfactualSplitterWithoutAbortingBatch() public {
+    /// @dev `distributeFor` takes caller-supplied addresses, so a codeless one can always turn
+    ///      up. It must be skipped without taking the healthy clones in the batch down with it.
+    function test_distributeFor_skipsCodelessTargetWithoutAbortingBatch() public {
         address deployed = factory.createSplitter(SELLER);
-        address counterfactual = factory.predictSplitter(OTHER_SELLER);
-        assertEq(counterfactual.code.length, 0, "clone must still be undeployed");
+        address codeless = address(0xDEAD00);
+        assertEq(codeless.code.length, 0, "target must have no code");
 
         usdc.mint(deployed, 1_000_000);
-        usdc.mint(counterfactual, 1_000_000);
+        usdc.mint(codeless, 1_000_000);
 
         address[] memory targets = new address[](2);
-        targets[0] = counterfactual;
+        targets[0] = codeless;
         targets[1] = deployed;
 
         (uint256 swept, uint256 skipped) = factory.distributeFor(targets, address(usdc));
 
         assertEq(swept, 1);
         assertEq(skipped, 1);
-        assertEq(usdc.balanceOf(counterfactual), 1_000_000, "funds wait for createSplitter");
+        assertEq(usdc.balanceOf(codeless), 1_000_000, "codeless target is left alone");
         assertEq(usdc.balanceOf(TREASURY), 50_000, "the deployed clone still swept");
     }
 
@@ -323,9 +321,17 @@ contract SplitterFactoryTest is Test {
         RevenueSplitter(factory.implementation()).initialize(STRANGER, STRANGER, 0);
     }
 
-    function testFuzz_predictSplitter_isStableAcrossSellers(address seller) public view {
+    /// @dev With CREATE there is no address-level uniqueness, so the mapping has to hold the
+    ///      line for every seller, not just the ones a hand-written test picked.
+    function testFuzz_createSplitter_isOneClonePerSeller(address seller) public {
         vm.assume(seller != address(0));
-        assertEq(factory.predictSplitter(seller), factory.predictSplitter(seller));
+
+        address first = factory.createSplitter(seller);
+        address second = factory.createSplitter(seller);
+
+        assertEq(first, second);
+        assertEq(factory.splitterCount(), 1);
+        assertEq(factory.splitterOf(seller), first);
     }
 
     // --- helpers ---

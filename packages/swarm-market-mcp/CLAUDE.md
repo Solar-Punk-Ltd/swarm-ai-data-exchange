@@ -63,31 +63,56 @@ export interface BuildCatalogItem {
 3. `await builder.publish()` and return its result as structured content.
 
 **payTo resolution.** Before staging, each payment entry's `payTo` is resolved to the seller's
-`RevenueSplitter` clone via `src/splitter.ts` (`resolvePayTo`). With `SPLITTER_FACTORY_ADDRESS` +
-`SELLER_ADDRESS` set, `payTo` may be omitted and is filled in; a supplied `payTo` that is not the
-seller's clone is a **hard error**, not a warning — publishing it would silently create an untaxed
-listing that earns the seller no Proof-of-Purchase, and the mistake would only surface much later
-at purchase time. Without the splitter configured, `payTo` must be supplied explicitly (the
-pre-splitter behaviour).
+`RevenueSplitter` clone via `src/splitter.ts` (`resolvePayTo`), read from the factory's
+`splitterOf` mapping. With `SPLITTER_FACTORY_ADDRESS` + `SELLER_ADDRESS` set, `payTo` may be
+omitted and is filled in. Two **hard errors**, not warnings:
 
-### `ensure_split_contract`
+- the seller has no clone yet → run `create_split_contract` first. There is no address to publish;
+  clone addresses are ordinary CREATE addresses and cannot be derived off-chain.
+- a supplied `payTo` is not the seller's clone → publishing it would silently create an untaxed
+  listing that earns the seller no Proof-of-Purchase, and the mistake would only surface much
+  later at purchase time.
 
-Resolves the seller's `RevenueSplitter` clone — the address that belongs in `payment[].payTo`.
+`build_catalog` never sends a transaction. Without the splitter configured, `payTo` must be
+supplied explicitly (the pre-splitter behaviour).
 
-**Args** (`src/tools/ensure_split_contract/models.ts`):
+### `create_split_contract`
+
+Deploys the seller's `RevenueSplitter` clone — the address that belongs in `payment[].payTo`.
+
+**Args** (`src/tools/create_split_contract/models.ts`):
 
 ```typescript
-export interface EnsureSplitContractArgs {
+export interface CreateSplitContractArgs {
   seller?: string; // defaults to SELLER_ADDRESS
-  deploy?: boolean; // default false — predict only, no transaction
 }
 ```
 
-**Return:** `{ splitter, seller, factory, deployed, txHash?, treasury?, taxBps? }`.
+**Return:** `{ splitter, seller, factory, alreadyExisted, txHash?, treasury, taxBps }`.
 
-Read-only by default. The clone address is CREATE2-deterministic, so it can be published before
-deployment — an x402 (ERC-3009) settlement credits the address whether or not code lives there.
-Deployment (`deploy: true`, requires `PRIVATE_KEY`) is only needed before the first `distribute()`.
+Sends a transaction, so it requires `PRIVATE_KEY` — and that is the point. The seller deploys and
+pays for their own clone, rather than the marketplace operator absorbing the cost later when
+sweeping revenue. Idempotent: a seller who already has a clone gets it back with
+`alreadyExisted: true` and no transaction. Must be run once before the seller's first
+`build_catalog`.
+
+### `get_split_contract`
+
+Reads the seller's clone from the factory's `splitterOf` mapping. Pure RPC — no signer, no gas.
+
+**Args** (`src/tools/get_split_contract/models.ts`):
+
+```typescript
+export interface GetSplitContractArgs {
+  seller?: string; // defaults to SELLER_ADDRESS
+}
+```
+
+**Return:** `{ splitter, seller, factory, deployed, treasury?, taxBps?, note? }`.
+
+Returns `splitter: null` / `deployed: false` when the seller has no clone. It must never return a
+speculative address: the clone address cannot be derived off-chain, and a `payTo` nobody can
+collect from is worse than reporting nothing.
 
 ### `get_agent`
 

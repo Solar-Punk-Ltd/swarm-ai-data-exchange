@@ -6,13 +6,15 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {RevenueSplitter, SPLITTER_MAX_TAX_BPS} from "./RevenueSplitter.sol";
 
 /// @title SplitterFactory
-/// @notice Deploys one `RevenueSplitter` clone per seller at a deterministic (CREATE2) address.
-/// @dev The determinism is load-bearing, not a convenience: a publisher can compute a seller's
-///      `payTo` with `predictSplitter` and publish a catalog referencing it *before* the clone
-///      exists. An x402 `exact` settlement is an ERC-3009 `transferWithAuthorization`, i.e. a
-///      plain ERC-20 balance move with no callback, so funds land at the predicted address
-///      whether or not code is deployed there. The clone only has to exist by the time someone
-///      calls `distribute`.
+/// @notice Deploys one `RevenueSplitter` clone per seller and keeps the registry of them.
+/// @dev `splitterOf` is the single source of truth for a seller's `payTo`, and the only thing
+///      enforcing one clone per seller — clones are deployed at ordinary CREATE addresses, so
+///      nothing about the address itself prevents a duplicate. Every caller that needs a
+///      seller's splitter reads the mapping; there is no off-chain way to derive it.
+///
+///      That ordering is deliberate. A seller deploys their own clone before listing, so the
+///      seller pays for it rather than the operator who later runs a sweep, and a published
+///      `payTo` always has code behind it.
 contract SplitterFactory is Ownable {
     /// @notice The clone target. Deployed by this factory's constructor so implementation and
     ///         factory can never be mismatched.
@@ -56,21 +58,17 @@ contract SplitterFactory is Ownable {
         defaultTaxBps = defaultTaxBps_;
     }
 
-    /// @notice Deterministic address of `seller`'s splitter, deployed or not.
-    function predictSplitter(address seller) public view returns (address) {
-        return Clones.predictDeterministicAddress(implementation, _salt(seller), address(this));
-    }
-
-    /// @notice Deploy `seller`'s splitter clone. Idempotent — returns the existing clone if one
-    ///         has already been created, so a caller can always call this before distributing
-    ///         without checking first.
+    /// @notice Deploy `seller`'s splitter clone, or return the one they already have.
+    /// @dev The `splitterOf` early-return is load-bearing, not a convenience: it is the only
+    ///      thing keeping a seller's clone unique. Being idempotent also means a caller can run
+    ///      this before distributing without checking first, and a repeat call costs one read.
     function createSplitter(address seller) external returns (address splitter) {
         if (seller == address(0)) revert ZeroAddress();
 
         splitter = splitterOf[seller];
         if (splitter != address(0)) return splitter;
 
-        splitter = Clones.cloneDeterministic(implementation, _salt(seller));
+        splitter = Clones.clone(implementation);
         splitterOf[seller] = splitter;
         _splitters.push(splitter);
         RevenueSplitter(splitter).initialize(seller, treasury, defaultTaxBps);
@@ -133,8 +131,8 @@ contract SplitterFactory is Ownable {
     /// @notice Sweep `token` out of an explicit set of clones.
     /// @dev For keepers that already know which splitters have a non-zero `pending` balance and
     ///      would rather not pay for a walk over idle ones. Addresses are not checked against the
-    ///      registry, only for code — an EOA, or a splitter whose clone is still counterfactual,
-    ///      is counted as skipped.
+    ///      registry, only for code — an EOA, or any address without a splitter behind it, is
+    ///      counted as skipped.
     function distributeFor(address[] calldata splitters, address token)
         external
         returns (uint256 swept, uint256 skipped)
@@ -198,10 +196,5 @@ contract SplitterFactory is Ownable {
     ///      time instead of at the next `createSplitter`.
     function _requireTaxWithinCeiling(uint16 taxBps_) private pure {
         if (taxBps_ > SPLITTER_MAX_TAX_BPS) revert TaxTooHigh(taxBps_, SPLITTER_MAX_TAX_BPS);
-    }
-
-    /// @dev One clone per seller: the salt carries the seller and nothing else.
-    function _salt(address seller) private pure returns (bytes32) {
-        return keccak256(abi.encode(seller));
     }
 }

@@ -148,13 +148,6 @@ export const SPLITTER_FACTORY_ABI = [
   },
   {
     type: 'function',
-    name: 'predictSplitter',
-    inputs: [{ name: 'seller', type: 'address', internalType: 'address' }],
-    outputs: [{ name: '', type: 'address', internalType: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
     name: 'createSplitter',
     inputs: [{ name: 'seller', type: 'address', internalType: 'address' }],
     outputs: [{ name: 'splitter', type: 'address', internalType: 'address' }],

@@ -27,14 +27,17 @@ import { createAgent } from './tools/create_agent';
 import type { CreateAgentArgs } from './tools/create_agent/models';
 import { findAgentsByMetadata } from './tools/find_agents_by_metadata';
 import type { FindAgentsByMetadataArgs } from './tools/find_agents_by_metadata/models';
-import { ensureSplitContract } from './tools/ensure_split_contract';
-import type { EnsureSplitContractArgs } from './tools/ensure_split_contract/models';
+import { createSplitContract } from './tools/create_split_contract';
+import type { CreateSplitContractArgs } from './tools/create_split_contract/models';
+import { getSplitContract } from './tools/get_split_contract';
+import type { GetSplitContractArgs } from './tools/get_split_contract/models';
 import {
   buildCatalogSchema,
   createAgentSchema,
   deleteCatalogItemSchema,
   deleteCatalogSchema,
-  ensureSplitContractSchema,
+  createSplitContractSchema,
+  getSplitContractSchema,
   findAgentsByMetadataSchema,
   getAgentSchema,
   purchaseCatalogItemSchema,
@@ -105,9 +108,14 @@ export class SwarmMarketMCPServer {
             return findAgentsByMetadata(validArgs as FindAgentsByMetadataArgs);
           }
 
-          case 'ensure_split_contract': {
-            const validArgs = ensureSplitContractSchema.parse(args);
-            return ensureSplitContract(validArgs as EnsureSplitContractArgs);
+          case 'create_split_contract': {
+            const validArgs = createSplitContractSchema.parse(args);
+            return createSplitContract(validArgs as CreateSplitContractArgs);
+          }
+
+          case 'get_split_contract': {
+            const validArgs = getSplitContractSchema.parse(args);
+            return getSplitContract(validArgs as GetSplitContractArgs);
           }
 
           default:

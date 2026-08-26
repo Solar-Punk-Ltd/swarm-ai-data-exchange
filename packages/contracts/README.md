@@ -17,18 +17,18 @@ want credited.
 
 ## Contracts
 
-| Contract          | Role                                                                                                                                                                                                   |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RevenueSplitter` | Clone target. `(seller, treasury, taxBps)` frozen by a one-shot `initialize`. `distribute(token)` sweeps its own balance for that token.                                                               |
-| `SplitterFactory` | Deploys one EIP-1167 clone per seller via CREATE2, `salt = keccak256(seller)`. Owns the treasury address and default rate for _future_ clones, keeps the clone registry, and batches sweeps across it. |
+| Contract          | Role                                                                                                                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RevenueSplitter` | Clone target. `(seller, treasury, taxBps)` frozen by a one-shot `initialize`. `distribute(token)` sweeps its own balance for that token.                                                      |
+| `SplitterFactory` | Deploys one EIP-1167 clone per seller and records it in `splitterOf`. Owns the treasury address and default rate for _future_ clones, keeps the clone registry, and batches sweeps across it. |
 
 Two properties the rest of the system depends on:
 
-- **Counterfactual `payTo`.** Clone addresses are deterministic, so a publisher can compute a
-  seller's `payTo` with `predictSplitter` and publish a catalog before the clone is deployed. An
-  x402 `exact` settlement is an ERC-3009 `transferWithAuthorization` — a plain balance move with
-  no callback — so funds land at the address whether or not code is there. Deployment is only
-  needed before the first `distribute`.
+- **The clone exists before the listing does.** A seller deploys their own clone with
+  `createSplitter` and only then publishes a catalog against it, so the seller pays that gas
+  rather than the operator who later runs a sweep. `splitterOf[seller]` is the single source of
+  truth for `payTo` — the address is an ordinary CREATE address and cannot be derived off-chain,
+  which also makes the mapping the only thing keeping a seller's clone unique.
 - **Frozen terms.** A buyer signs an EIP-712 `PurchaseIntent` over the exact `payTo`. If a clone's
   seller or rate could change afterwards, that signature could be redirected. Changing terms means
   a new clone and a republished catalog entry — `setTreasury` / `setDefaultTaxBps` affect only
@@ -67,11 +67,10 @@ have to pre-filter.
 The loop is one external call per clone with no gas ceiling, so `distributeAll` is a paginated
 call, not an unbounded one: once the registry grows past what fits in a block, sweep it in pages.
 
-`distributeAll` covers every clone that _exists_, which is not the same as every seller. A seller
-can be paid at their counterfactual `payTo` long before anyone deploys the clone, and until
-`createSplitter` runs they are not in the registry — the balance simply waits at the address. A
-codeless target passed to `distributeFor` is counted as skipped for the same reason. Run
-`createSplitter` (idempotent) for any seller you want a sweep to reach.
+`distributeAll` covers every clone in the registry, and since a seller cannot list without one,
+that is every seller who has published. `distributeFor` takes caller-supplied addresses instead,
+so it also screens each target for code — an EOA or any non-splitter address is counted as
+skipped rather than aborting the batch.
 
 One consequence of frozen terms worth planning for: `setTreasury` only redirects _future_ clones.
 Rotating the treasury leaves every existing clone paying the old address, which must stay live to
@@ -115,14 +114,14 @@ Writes `deployments/<DEPLOYMENT_NAME>.json` (default `base-sepolia`). Copy the f
 
 ```ts
 import {
-  predictSplitter,
+  splitterOf,
   ensureSplitter,
   splitterTerms,
   distribute,
   distributeAll,
 } from '@solarpunk/contracts';
 
-const payTo = await predictSplitter(publicClient, factory, seller); // no tx — safe to publish
+const payTo = await splitterOf(publicClient, factory, seller); // undefined until deployed
 const { splitter, deployed } = await ensureSplitter(publicClient, walletClient, factory, seller);
 const { treasury, taxBps } = await splitterTerms(publicClient, splitter);
 await distribute(walletClient, splitter, usdcAddress); // one seller; permissionless
@@ -134,7 +133,8 @@ are exported too, for ethers consumers such as `erc8004-adapter`.
 
 ## Consumers
 
-- **`swarm-market-mcp`** — `ensure_split_contract` resolves the address; `build_catalog` fills
-  `payment[].payTo` with it and rejects a listing that names anything else.
+- **`swarm-market-mcp`** — `create_split_contract` deploys the seller's clone and
+  `get_split_contract` reads it back; `build_catalog` fills `payment[].payTo` with it, and fails
+  outright if the seller has no clone or names anything else.
 - **`x402-swarm-server`** — `SPLITTER_ADDRESS` pins the accepted settlement destination
   (`payment_destination_untaxed` otherwise), and each purchase record stores its `pay_to`.

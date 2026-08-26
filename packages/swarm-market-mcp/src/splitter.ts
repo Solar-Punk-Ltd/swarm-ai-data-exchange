@@ -6,11 +6,12 @@
  * through it is what makes a sale taxed, and only taxed sales produce a valid Proof-of-Purchase —
  * so a listing that advertises a bare EOA earns the seller no reputation.
  *
- * Addresses are CREATE2-deterministic, so `payTo` can be resolved and published before the clone
- * is deployed; an ERC-3009 settlement credits the address either way.
+ * The clone must exist before a listing can name it: its address is an ordinary CREATE address
+ * recorded in the factory's `splitterOf` mapping, with no way to derive it off-chain. The seller
+ * deploys their own clone (`create_split_contract`) and so pays that gas themselves.
  */
 import type { PaymentRequirements } from '@solarpunk/swarm-catalog';
-import { ensureSplitter, predictSplitter, splitterTerms } from '@solarpunk/contracts';
+import { ensureSplitter, splitterOf, splitterTerms } from '@solarpunk/contracts';
 import { createPublicClient, createWalletClient, getAddress, http } from 'viem';
 import type { Account, Address, Chain, PublicClient, WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -77,42 +78,61 @@ export function splitterContext(): SplitterContext | undefined {
   return { factory, seller };
 }
 
-export interface EnsureSplitterResult {
-  splitter: Address;
+export interface ReadSplitterResult {
+  /** Null until the seller has deployed their clone — never a speculative address. */
+  splitter: Address | null;
   seller: Address;
   factory: Address;
   deployed: boolean;
-  txHash?: string;
   treasury?: Address;
   taxBps?: number;
 }
 
-/**
- * Resolve — and optionally deploy — the seller's splitter.
- *
- * With `deploy: false` this is a pure read: it returns the deterministic address whether or not
- * code lives there yet, which is all a publisher needs to set `payTo`.
- */
-export async function resolveSplitter(
-  ctx: SplitterContext,
-  deploy: boolean,
-): Promise<EnsureSplitterResult> {
-  const client = publicClient();
+export interface CreateSplitterResult {
+  splitter: Address;
+  seller: Address;
+  factory: Address;
+  /** True when the seller already had a clone, so no transaction was sent. */
+  alreadyExisted: boolean;
+  txHash?: string;
+  treasury: Address;
+  taxBps: number;
+}
 
-  if (!deploy) {
-    const splitter = await predictSplitter(client, ctx.factory, ctx.seller);
-    const terms = await splitterTerms(client, splitter).catch(() => undefined);
-    return {
-      splitter,
-      seller: ctx.seller,
-      factory: ctx.factory,
-      // Terms only read back once the clone exists; a bare predicted address has no code.
-      deployed: terms !== undefined,
-      treasury: terms?.treasury,
-      taxBps: terms?.taxBps,
-    };
+/**
+ * Read the seller's splitter. Pure RPC, no signer.
+ *
+ * Returns `splitter: null` when the seller has not deployed one. It deliberately never invents an
+ * address: publishing a `payTo` that nobody can collect from is worse than failing here.
+ */
+export async function readSplitter(ctx: SplitterContext): Promise<ReadSplitterResult> {
+  const client = publicClient();
+  const splitter = await splitterOf(client, ctx.factory, ctx.seller);
+
+  if (!splitter) {
+    return { splitter: null, seller: ctx.seller, factory: ctx.factory, deployed: false };
   }
 
+  const terms = await splitterTerms(client, splitter);
+  return {
+    splitter,
+    seller: ctx.seller,
+    factory: ctx.factory,
+    deployed: true,
+    treasury: terms.treasury,
+    taxBps: terms.taxBps,
+  };
+}
+
+/**
+ * Deploy the seller's splitter clone, or return the one they already have.
+ *
+ * Sends a transaction from `PRIVATE_KEY`, so the seller pays for their own clone rather than the
+ * marketplace operator who would otherwise hit the cost during a sweep. Idempotent: a seller who
+ * already has a clone gets it back with `alreadyExisted: true` and no transaction.
+ */
+export async function createSplitter(ctx: SplitterContext): Promise<CreateSplitterResult> {
+  const client = publicClient();
   const { splitter, deployed, txHash } = await ensureSplitter(
     client,
     walletClient(),
@@ -124,7 +144,7 @@ export async function resolveSplitter(
     splitter,
     seller: ctx.seller,
     factory: ctx.factory,
-    deployed,
+    alreadyExisted: !deployed,
     txHash,
     treasury: terms.treasury,
     taxBps: terms.taxBps,
@@ -159,7 +179,15 @@ export async function resolvePayTo(
     });
   }
 
-  const splitter = await predictSplitter(publicClient(), ctx.factory, ctx.seller);
+  const splitter = await splitterOf(publicClient(), ctx.factory, ctx.seller);
+  if (!splitter) {
+    throw new Error(
+      `Item ${itemId}: seller ${ctx.seller} has no split contract on factory ${ctx.factory}. ` +
+        'Run create_split_contract first — a listing must point at a deployed splitter, or the ' +
+        'sale is untaxed and earns no Proof-of-Purchase.',
+    );
+  }
+
   return payments.map((payment) => {
     if (payment.payTo && getAddress(payment.payTo) !== splitter) {
       throw new Error(

@@ -31,26 +31,12 @@ export interface SplitterTerms {
 type ReadyWalletClient = WalletClient & { account: Account; chain: Chain };
 
 /**
- * Deterministic address of a seller's splitter — valid whether or not the clone is deployed.
+ * The seller's deployed splitter, or `undefined` if it has not been created yet.
  *
- * This is what a publisher writes into `payment[].payTo` at catalog-build time. An x402 `exact`
- * settlement is an ERC-3009 `transferWithAuthorization`, a plain balance move with no callback,
- * so payments credit this address even before the clone exists.
+ * This is the only way to resolve a seller's `payTo` — clone addresses are ordinary CREATE
+ * addresses and cannot be derived off-chain. `undefined` means the seller has not run
+ * `createSplitter` yet, and has nothing publishable.
  */
-export async function predictSplitter(
-  client: PublicClient,
-  factory: Address,
-  seller: Address,
-): Promise<Address> {
-  return client.readContract({
-    address: getAddress(factory),
-    abi: SPLITTER_FACTORY_ABI,
-    functionName: 'predictSplitter',
-    args: [getAddress(seller)],
-  });
-}
-
-/** The seller's deployed splitter, or `undefined` if it has not been created yet. */
 export async function splitterOf(
   client: PublicClient,
   factory: Address,
@@ -88,7 +74,11 @@ export async function ensureSplitter(
   });
   await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-  const splitter = await predictSplitter(publicClient, factory, seller);
+  // The address is only knowable after the fact, so read it back rather than deriving it.
+  const splitter = await splitterOf(publicClient, factory, seller);
+  if (!splitter) {
+    throw new Error(`createSplitter succeeded in ${txHash} but splitterOf(${seller}) is unset.`);
+  }
   return { splitter, deployed: true, txHash };
 }
 

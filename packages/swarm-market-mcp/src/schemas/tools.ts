@@ -521,27 +521,21 @@ export const SwarmMarketToolsSchema = [
     },
   },
   {
-    name: 'ensure_split_contract',
-    title: 'Ensure seller split contract',
+    name: 'create_split_contract',
+    title: 'Create seller split contract',
     description:
-      "Resolve the seller's RevenueSplitter clone — the address that belongs in a listing's " +
-      'payment[].payTo. The clone address is CREATE2-deterministic, so it can be published ' +
-      'before it is deployed and an x402 (ERC-3009) settlement credits it either way; deployment ' +
-      'is only needed before the first distribute() call. A purchase settled into the splitter is ' +
-      'taxed at the treasury rate and is the only kind that earns Proof-of-Purchase. Read-only ' +
-      'unless deploy is true.',
+      "Deploy the seller's RevenueSplitter clone — the address that belongs in a listing's " +
+      'payment[].payTo. Sends a transaction (requires PRIVATE_KEY), so the seller pays for their ' +
+      'own clone. Run this once before publishing: build_catalog fails for a seller with no ' +
+      'clone, because a purchase settled anywhere but the splitter is untaxed and earns no ' +
+      'Proof-of-Purchase. Idempotent — a seller who already has a clone gets it back with ' +
+      'alreadyExisted true and no transaction.',
     inputSchema: {
       type: 'object',
       properties: {
         seller: {
           type: 'string',
           description: '0x seller address. Defaults to SELLER_ADDRESS.',
-        },
-        deploy: {
-          type: 'boolean',
-          description:
-            'Send createSplitter if the clone does not exist yet (requires PRIVATE_KEY). ' +
-            'Default false — predict the address only.',
         },
       },
       required: [],
@@ -552,14 +546,51 @@ export const SwarmMarketToolsSchema = [
         splitter: { type: 'string', description: 'Clone address to use as payTo.' },
         seller: { type: 'string' },
         factory: { type: 'string' },
-        deployed: {
+        alreadyExisted: {
           type: 'boolean',
-          description:
-            'Whether the clone has code on-chain (deploy mode: whether this call created it).',
+          description: 'True when the seller already had a clone and no transaction was sent.',
         },
         txHash: { type: 'string', description: 'Deployment transaction, when one was sent.' },
         treasury: { type: 'string', description: "Treasury frozen into the clone's terms." },
         taxBps: { type: 'number', description: 'Sales tax in basis points (500 = 5%).' },
+      },
+      required: ['splitter', 'seller', 'factory', 'alreadyExisted', 'treasury', 'taxBps'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
+    name: 'get_split_contract',
+    title: 'Get seller split contract',
+    description:
+      "Read the seller's RevenueSplitter clone address and its frozen terms. Read-only — no " +
+      'signer, no gas. Returns splitter null and deployed false when the seller has not created ' +
+      'one yet; the address cannot be derived off-chain, so there is nothing to report until ' +
+      'create_split_contract has run.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        seller: {
+          type: 'string',
+          description: '0x seller address. Defaults to SELLER_ADDRESS.',
+        },
+      },
+      required: [],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        splitter: {
+          type: ['string', 'null'],
+          description: 'Clone address to use as payTo, or null if the seller has no clone.',
+        },
+        seller: { type: 'string' },
+        factory: { type: 'string' },
+        deployed: { type: 'boolean', description: 'Whether the seller has a clone on-chain.' },
+        treasury: { type: 'string', description: "Treasury frozen into the clone's terms." },
+        taxBps: { type: 'number', description: 'Sales tax in basis points (500 = 5%).' },
+        note: { type: 'string', description: 'Next step, when no clone exists yet.' },
       },
       required: ['splitter', 'seller', 'factory', 'deployed'],
     },

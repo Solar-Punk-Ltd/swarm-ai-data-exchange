@@ -116,9 +116,12 @@ export const findAgentsByMetadataSchema = z
     message: 'Provide either catalogFeedOwner or metadataKey.',
   });
 
-export const ensureSplitContractSchema = z.object({
+export const createSplitContractSchema = z.object({
   seller: z.string().optional(),
-  deploy: z.boolean().optional(),
+});
+
+export const getSplitContractSchema = z.object({
+  seller: z.string().optional(),
 });
 
 export const purchaseCatalogItemSchema = z.object({
