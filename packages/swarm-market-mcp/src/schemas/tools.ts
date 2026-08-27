@@ -12,7 +12,7 @@ const paymentRequirementsSchema = {
       type: 'string',
       description:
         "0x payee address. Omit to use the seller's split contract (requires " +
-        'SPLITTER_FACTORY_ADDRESS + SELLER_ADDRESS). Supplying any other address is rejected: ' +
+        'SPLITTER_FACTORY_ADDRESS + AGENT_PAYMENT_ADDRESS). Supplying any other address is rejected: ' +
         'settling outside the splitter is untaxed and earns no Proof-of-Purchase.',
     },
     facilitator: { type: 'string', description: 'Facilitator URL.' },
@@ -232,6 +232,20 @@ export const SwarmMarketToolsSchema = [
                   hasSample: { type: 'boolean' },
                 },
                 required: ['itemId', 'name', 'lifecycle', 'payment'],
+              },
+            },
+            unreadableItems: {
+              type: 'array',
+              description:
+                'Items present in the Mantaray whose chunk could not be fetched (e.g. stamped ' +
+                'by an expired postage batch). Omitted when every leaf resolved.',
+              items: {
+                type: 'object',
+                properties: {
+                  itemId: { type: 'string' },
+                  error: { type: 'string' },
+                },
+                required: ['itemId', 'error'],
               },
             },
             error: { type: 'string', description: 'Set when the catalog feed is unreadable.' },
@@ -535,7 +549,7 @@ export const SwarmMarketToolsSchema = [
       properties: {
         seller: {
           type: 'string',
-          description: '0x seller address. Defaults to SELLER_ADDRESS.',
+          description: '0x seller address. Defaults to AGENT_PAYMENT_ADDRESS.',
         },
       },
       required: [],
@@ -573,7 +587,7 @@ export const SwarmMarketToolsSchema = [
       properties: {
         seller: {
           type: 'string',
-          description: '0x seller address. Defaults to SELLER_ADDRESS.',
+          description: '0x seller address. Defaults to AGENT_PAYMENT_ADDRESS.',
         },
       },
       required: [],

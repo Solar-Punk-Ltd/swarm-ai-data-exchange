@@ -69,7 +69,7 @@ const config: Config = {
   },
   splitter: {
     factoryAddress: process.env.SPLITTER_FACTORY_ADDRESS,
-    sellerAddress: process.env.SELLER_ADDRESS,
+    sellerAddress: process.env.AGENT_PAYMENT_ADDRESS,
   },
 };
 

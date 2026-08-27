@@ -64,7 +64,7 @@ export interface BuildCatalogItem {
 
 **payTo resolution.** Before staging, each payment entry's `payTo` is resolved to the seller's
 `RevenueSplitter` clone via `src/splitter.ts` (`resolvePayTo`), read from the factory's
-`splitterOf` mapping. With `SPLITTER_FACTORY_ADDRESS` + `SELLER_ADDRESS` set, `payTo` may be
+`splitterOf` mapping. With `SPLITTER_FACTORY_ADDRESS` + `AGENT_PAYMENT_ADDRESS` set, `payTo` may be
 omitted and is filled in. Two **hard errors**, not warnings:
 
 - the seller has no clone yet → run `create_split_contract` first. There is no address to publish;
@@ -84,7 +84,7 @@ Deploys the seller's `RevenueSplitter` clone — the address that belongs in `pa
 
 ```typescript
 export interface CreateSplitContractArgs {
-  seller?: string; // defaults to SELLER_ADDRESS
+  seller?: string; // defaults to AGENT_PAYMENT_ADDRESS
 }
 ```
 
@@ -104,7 +104,7 @@ Reads the seller's clone from the factory's `splitterOf` mapping. Pure RPC — n
 
 ```typescript
 export interface GetSplitContractArgs {
-  seller?: string; // defaults to SELLER_ADDRESS
+  seller?: string; // defaults to AGENT_PAYMENT_ADDRESS
 }
 ```
 
@@ -159,7 +159,7 @@ The tool throws if any priced item is missing its `actSeed` (the builder enforce
 | `RPC_URL`                  | EVM RPC endpoint for `get_agent` reads (default `https://sepolia.base.org`)       |
 | `ERC8004_CHAIN`            | Chain key for the ERC-8004 client (default `base-sepolia`)                        |
 | `SPLITTER_FACTORY_ADDRESS` | `SplitterFactory` address used to resolve a seller's splitter clone               |
-| `SELLER_ADDRESS`           | Seller whose clone becomes `payment[].payTo` in `build_catalog`                   |
+| `AGENT_PAYMENT_ADDRESS`    | Seller whose clone becomes `payment[].payTo` in `build_catalog`                   |
 
 ## Package skeleton (match `swarm-mcp`)
 

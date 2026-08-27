@@ -96,7 +96,7 @@ Each layer depends on the previous:
 | `DB_PATH`                         | `x402-swarm-server`                                     | SQLite file path for nonce store + purchase records, default `./data/store.db`                                   |
 | `SPLITTER_ADDRESS`                | `x402-swarm-server`                                     | This seller's splitter clone. When set, any other advertised `payTo` is rejected (`payment_destination_untaxed`) |
 | `SPLITTER_FACTORY_ADDRESS`        | `swarm-market-mcp`                                      | `SplitterFactory` address used to resolve a seller's clone                                                       |
-| `SELLER_ADDRESS`                  | `swarm-market-mcp`                                      | Seller whose splitter becomes `payment[].payTo` at catalog-build time                                            |
+| `AGENT_PAYMENT_ADDRESS`           | `swarm-market-mcp`                                      | Seller whose splitter becomes `payment[].payTo` at catalog-build time                                            |
 
 ## Hackweek Code Note
 

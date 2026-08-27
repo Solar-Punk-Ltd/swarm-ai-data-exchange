@@ -33,7 +33,7 @@ export async function createSplitContract(args: CreateSplitContractArgs): Promis
   }
   if (!seller) {
     return getToolErrorResponse(
-      'No seller address. Set SELLER_ADDRESS or pass the seller argument.',
+      'No seller address. Set AGENT_PAYMENT_ADDRESS or pass the seller argument.',
     );
   }
 

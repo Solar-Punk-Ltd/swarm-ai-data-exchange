@@ -64,7 +64,7 @@ export function factoryAddress(): Address | undefined {
   return factory ? getAddress(factory) : undefined;
 }
 
-/** The configured seller, or undefined when SELLER_ADDRESS is unset. */
+/** The configured seller, or undefined when AGENT_PAYMENT_ADDRESS is unset. */
 export function sellerAddress(): Address | undefined {
   const { sellerAddress: seller } = config.splitter;
   return seller ? getAddress(seller) : undefined;
@@ -172,7 +172,7 @@ export async function resolvePayTo(
       if (!payment.payTo) {
         throw new Error(
           `Item ${itemId}: payment entry has no payTo, and no splitter is configured. ` +
-            'Set SPLITTER_FACTORY_ADDRESS + SELLER_ADDRESS, or supply payTo explicitly.',
+            'Set SPLITTER_FACTORY_ADDRESS + AGENT_PAYMENT_ADDRESS, or supply payTo explicitly.',
         );
       }
       return { ...payment, payTo: payment.payTo };
