@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { Hash, TransactionReceipt } from 'viem';
+import { isUserRejection, walletErrorMessage } from '../lib/rpcError';
 
 /**
  * The shared transaction state machine: idle → signing → pending → confirmed | failed.
@@ -30,17 +31,6 @@ export interface TxLifecycle {
   ) => Promise<TxState>;
 }
 
-function messageOf(err: unknown): string {
-  if (typeof err === 'object' && err !== null) {
-    // viem errors carry a one-line `shortMessage` far more readable than the full `message`.
-    const short = (err as { shortMessage?: unknown }).shortMessage;
-    if (typeof short === 'string' && short.length > 0) return short;
-    const message = (err as { message?: unknown }).message;
-    if (typeof message === 'string' && message.length > 0) return message.split('\n')[0];
-  }
-  return String(err);
-}
-
 export function useTxLifecycle(): TxLifecycle {
   const [state, setState] = useState<TxState>({ status: 'idle' });
 
@@ -66,7 +56,10 @@ export function useTxLifecycle(): TxLifecycle {
 
       return settle({ status: 'confirmed', hash, note: onConfirmed?.(receipt) });
     } catch (err) {
-      return settle({ status: 'failed', error: messageOf(err) });
+      // A dismissed signature prompt means nothing happened, so return to idle rather than
+      // leaving a red error beside a button the user deliberately backed out of.
+      if (isUserRejection(err)) return settle({ status: 'idle' });
+      return settle({ status: 'failed', error: walletErrorMessage(err) });
     }
   }, []);
 

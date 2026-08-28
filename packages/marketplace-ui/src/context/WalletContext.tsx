@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import { createWalletClient, custom, getAddress, numberToHex } from 'viem';
 import type { Account, Address, Chain, WalletClient } from 'viem';
 import { config } from '../config/env';
+import { isUserRejection, walletErrorMessage } from '../lib/rpcError';
 
 /** What the @solarpunk/contracts write helpers require. */
 export type ReadyWalletClient = WalletClient & { account: Account; chain: Chain };
@@ -31,14 +32,6 @@ export interface WalletState {
 }
 
 const WalletContext = createContext<WalletState | undefined>(undefined);
-
-function shortError(err: unknown): string {
-  if (typeof err === 'object' && err !== null) {
-    const message = (err as { message?: unknown }).message;
-    if (typeof message === 'string') return message.split('\n')[0];
-  }
-  return String(err);
-}
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const provider = typeof window !== 'undefined' ? window.ethereum : undefined;
@@ -89,7 +82,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAccount(accounts.length > 0 ? getAddress(accounts[0]) : undefined);
       setChainId(Number(current));
     } catch (err) {
-      setError(shortError(err));
+      // Dismissing the wallet prompt is a decision, not a failure: leave the button exactly as it
+      // was rather than reporting an error the user already knows about.
+      setError(isUserRejection(err) ? undefined : walletErrorMessage(err));
     } finally {
       setConnecting(false);
     }
@@ -104,7 +99,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         params: [{ chainId: numberToHex(config.chain.id) }],
       });
     } catch (err) {
-      setError(shortError(err));
+      setError(isUserRejection(err) ? undefined : walletErrorMessage(err));
     }
   }, [provider]);
 

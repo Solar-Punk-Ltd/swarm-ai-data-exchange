@@ -11,6 +11,7 @@ import type { Address, PublicClient } from 'viem';
 import { config } from '../config/env';
 import { usePolling } from '../hooks/usePolling';
 import { isFunded, loadRegistry, readBalances } from '../lib/reads';
+import { errorMessage } from '../lib/rpcError';
 import type { BalanceSnapshot, Registry } from '../lib/reads';
 
 /** Re-read the registry every Nth tick; it changes far less often than balances do. */
@@ -33,16 +34,6 @@ export interface MarketplaceState {
 }
 
 const MarketplaceContext = createContext<MarketplaceState | undefined>(undefined);
-
-function shortError(err: unknown): string {
-  if (typeof err === 'object' && err !== null) {
-    const short = (err as { shortMessage?: unknown }).shortMessage;
-    if (typeof short === 'string' && short.length > 0) return short;
-    const message = (err as { message?: unknown }).message;
-    if (typeof message === 'string') return message.split('\n')[0];
-  }
-  return String(err);
-}
 
 export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const client = useMemo(
@@ -98,7 +89,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         // Keep the last good values on screen and mark them stale; blanking the table mid-demo
         // is worse than showing slightly old numbers.
-        setError(shortError(err));
+        setError(errorMessage(err));
         setStale(true);
         setLoading(false);
       } finally {

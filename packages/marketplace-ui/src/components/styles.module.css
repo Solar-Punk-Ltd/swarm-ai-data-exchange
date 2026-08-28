@@ -274,6 +274,12 @@
   background: var(--mp-danger-soft);
 }
 
+.pillClamp {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .pillSuccess {
   color: var(--mp-success);
   border-color: transparent;

@@ -26,7 +26,11 @@ export default function ConnectButton() {
   if (!account) {
     return (
       <>
-        {error && <span className={`${styles.pill} ${styles.pillDanger}`}>{error}</span>}
+        {error && (
+          <span className={`${styles.pill} ${styles.pillDanger} ${styles.pillClamp}`} title={error}>
+            {error}
+          </span>
+        )}
         <button
           type="button"
           className={styles.button}
