@@ -96,6 +96,35 @@ export async function splitterTerms(
   return { seller, treasury, taxBps };
 }
 
+export interface FactoryConfig {
+  /** Treasury applied to clones created from now on. Existing clones keep their frozen terms. */
+  treasury: Address;
+  /** Tax rate applied to clones created from now on, in basis points. */
+  defaultTaxBps: number;
+  /** The EIP-1167 clone target this factory deploys against. */
+  implementation: Address;
+}
+
+/**
+ * The factory's current settings.
+ *
+ * `defaultTaxBps` is the rate for *future* clones only — each clone freezes its own `taxBps` at
+ * `initialize`, so an existing seller's effective rate can differ. Use `splitterTerms` for what a
+ * given seller actually pays.
+ */
+export async function factoryConfig(
+  client: PublicClient,
+  factory: Address,
+): Promise<FactoryConfig> {
+  const address = getAddress(factory);
+  const [treasury, defaultTaxBps, implementation] = await Promise.all([
+    client.readContract({ address, abi: SPLITTER_FACTORY_ABI, functionName: 'treasury' }),
+    client.readContract({ address, abi: SPLITTER_FACTORY_ABI, functionName: 'defaultTaxBps' }),
+    client.readContract({ address, abi: SPLITTER_FACTORY_ABI, functionName: 'implementation' }),
+  ]);
+  return { treasury, defaultTaxBps, implementation };
+}
+
 /** Total number of splitter clones the factory has created. */
 export async function splitterCount(client: PublicClient, factory: Address): Promise<bigint> {
   return client.readContract({

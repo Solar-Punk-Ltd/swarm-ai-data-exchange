@@ -15,7 +15,9 @@ The contracts, not a spec document. Read before changing anything on-chain-facin
 - `../contracts/src/SplitterFactory.sol` — the registry (`_splitters`, `splitterOf`, pagination)
 - `../contracts/src/RevenueSplitter.sol` — clone terms, `pending`, `distribute`, `distributeMany`
 - `../contracts/ts/index.ts` — the viem SDK. **Every contract call in this package goes through
-  it.** Do not re-declare ABIs or hand-roll `readContract` calls here.
+  it.** Do not re-declare ABIs or hand-roll `readContract` calls here. The one exception is ERC-20
+  `balanceOf`, which uses viem's own `erc20Abi`. `factoryConfig()` was added to the SDK for this
+  dashboard's treasury card — extend the SDK rather than reaching around it.
 
 `documents/data-enriched-marketplaces.md` Step 4b is the design rationale for the split model.
 
@@ -304,33 +306,40 @@ Mirror `erc8004-dashboard` so someone who knows one knows the other:
 
 ```
 src/
-  main.tsx                  — createRoot + <App />
+  main.tsx                  — createRoot + <App />, and applyTheme() before first paint
   App.tsx                   — page shell, header, <TreasurySection /> + <SellerSection />
-  theme.ts                  — colour tokens (see Theme above)
+  theme.ts                  — colour tokens + applyTheme() (see Theme above)
   index.css                 — reset + body, matching erc8004-dashboard/src/index.css
   config/
-    env.ts                  — parse + validate import.meta.env, exported typed and frozen
-    currencies.ts           — CURRENCIES by chain id
-    chain.ts                — viem chain object + explorer base URL from VITE_CHAIN_ID
+    env.ts                  — parse + validate import.meta.env; exports `config` or `configError`
+    currencies.ts           — CURRENCIES by chain id, plus the erc20Currencies() filter
+    chain.ts                — viem chain object + explorer address/tx URL builders
   context/
     MarketplaceContext.tsx  — registry + balances + polling; the single fetch owner
     WalletContext.tsx       — EIP-1193 connect / account / chain id / switch chain
+  lib/
+    reads.ts                — every on-chain read: loadRegistry, readBalances, isFunded
+    format.ts               — formatTaxBps (via the SDK BPS_DENOMINATOR), formatAge
   hooks/
-    useBalances.ts          — batched balance reads for a set of addresses
     usePolling.ts           — interval + document.hidden pause
     useTxLifecycle.ts       — shared idle/signing/pending/confirmed state machine
     useDistribute.ts        — one clone; wraps useTxLifecycle
     useDistributeAll.ts     — batch sweep; wraps the same useTxLifecycle
   components/
+    styles.module.css       — shared CSS module for every component
     TreasurySection.tsx
     SellerSection.tsx
     SellerRow.tsx
     AddressLink.tsx         — address + copy + explorer icon; used by every section
     Balance.tsx             — formatUnits + symbol, with a skeleton state
+    TxNote.tsx              — renders the tx state machine; shared by both buttons
     DistributeButton.tsx
     DistributeAllButton.tsx — treasury-level batch sweep
     ConnectButton.tsx
 ```
+
+The reads live in `lib/`, not `hooks/`, on purpose: they are plain async functions, and a
+`useBalances` hook would invite rows to call it and quietly break the single-fetch-owner rule.
 
 One context owns all fetching. Do not let individual rows poll independently — that is how `3N`
 requests become `3N` uncoordinated timers.
