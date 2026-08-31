@@ -5,6 +5,8 @@ import { formatTaxBps } from '../lib/format';
 import { isFunded, totalPending } from '../lib/reads';
 import type { SellerRecord } from '../lib/reads';
 import AddressLink from './AddressLink';
+import AgentBadge from './AgentBadge';
+import CatalogLink from './CatalogLink';
 import Balance, { Skeleton, formatAmount } from './Balance';
 import DistributeButton from './DistributeButton';
 import styles from './styles.module.css';
@@ -23,7 +25,11 @@ export default function SellerRow({ record }: { record: SellerRecord }) {
   return (
     <div className={styles.sellerCard}>
       <div className={styles.sellerTop}>
-        <AddressLink address={record.seller} label="Seller" />
+        <div className={styles.splitterFacts}>
+          <AddressLink address={record.seller} label="Seller" />
+          <AgentBadge splitter={record.splitter} seller={record.seller} />
+          <CatalogLink splitter={record.splitter} />
+        </div>
         <div className={styles.inlineBalances}>
           {config.currencies.map((currency) => (
             <Balance

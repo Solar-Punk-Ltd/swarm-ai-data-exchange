@@ -10,6 +10,7 @@ import type { Address, Chain } from 'viem';
 import { chainById, SUPPORTED_CHAIN_IDS } from './chain';
 import { CURRENCIES } from './currencies';
 import type { Currency } from './currencies';
+import { DEFAULT_LOG_CHUNK_BLOCKS, IDENTITY_REGISTRIES } from './registry';
 
 export interface AppConfig {
   treasury: Address;
@@ -18,6 +19,22 @@ export interface AppConfig {
   rpcUrl: string;
   refreshIntervalMs: number;
   currencies: Currency[];
+  /** Gateway used to resolve `bzz://` Agent Card URIs. Cards are fetched best-effort. */
+  swarmGateway: string;
+  /**
+   * catalogue-feed-browser base URL, used for the per-seller catalog link. Undefined falls back
+   * to the raw Swarm feed URL, which resolves but does not render items.
+   */
+  catalogueBrowserUrl?: string;
+  /**
+   * ERC-8004 Identity Registry, when one is known for this chain. Undefined disables agent
+   * labelling — the link is supplementary and must never block the dashboard.
+   */
+  identityRegistry?: {
+    address: Address;
+    fromBlock: bigint;
+    chunkBlocks: bigint;
+  };
 }
 
 export class ConfigError extends Error {
@@ -30,6 +47,9 @@ export class ConfigError extends Error {
 const DEFAULT_CHAIN_ID = 84532;
 const DEFAULT_RPC_URL = 'https://sepolia.base.org';
 const DEFAULT_REFRESH_MS = 5000;
+const DEFAULT_SWARM_GATEWAY = 'https://api.gateway.ethswarm.org';
+// Matches CATALOGUE_FEED_BROWSER_URL in erc8004-dashboard/src/constants.ts.
+const DEFAULT_CATALOGUE_BROWSER = 'http://localhost:3001';
 
 function requireAddress(raw: string | undefined, name: string, problems: string[]): Address {
   if (!raw) {
@@ -41,6 +61,42 @@ function requireAddress(raw: string | undefined, name: string, problems: string[
     return '0x';
   }
   return getAddress(raw);
+}
+
+/**
+ * Identity Registry for agent labelling. Optional everywhere: an unset or unknown registry means
+ * seller rows show no agent, which is a degraded view rather than a broken one.
+ */
+function parseRegistry(chainId: number, problems: string[]): AppConfig['identityRegistry'] {
+  const env = import.meta.env;
+  const known = IDENTITY_REGISTRIES[chainId];
+  const raw = env.VITE_IDENTITY_REGISTRY_ADDRESS || known?.address;
+  if (!raw) return undefined;
+
+  if (!isAddress(raw)) {
+    problems.push(`VITE_IDENTITY_REGISTRY_ADDRESS is not a valid address: "${raw}"`);
+    return undefined;
+  }
+
+  const fromBlockRaw = env.VITE_IDENTITY_REGISTRY_FROM_BLOCK;
+  const fromBlock = fromBlockRaw ? Number(fromBlockRaw) : (known?.deployBlock ?? 0);
+  if (!Number.isInteger(fromBlock) || fromBlock < 0) {
+    problems.push(`VITE_IDENTITY_REGISTRY_FROM_BLOCK must be a non-negative integer.`);
+    return undefined;
+  }
+
+  const chunkRaw = env.VITE_LOG_CHUNK_BLOCKS;
+  const chunkBlocks = chunkRaw ? Number(chunkRaw) : DEFAULT_LOG_CHUNK_BLOCKS;
+  if (!Number.isInteger(chunkBlocks) || chunkBlocks < 1) {
+    problems.push(`VITE_LOG_CHUNK_BLOCKS must be a positive integer.`);
+    return undefined;
+  }
+
+  return {
+    address: getAddress(raw),
+    fromBlock: BigInt(fromBlock),
+    chunkBlocks: BigInt(chunkBlocks),
+  };
 }
 
 function parseConfig(): AppConfig {
@@ -84,6 +140,9 @@ function parseConfig(): AppConfig {
     rpcUrl: env.VITE_RPC_URL || DEFAULT_RPC_URL,
     refreshIntervalMs,
     currencies: currencies!,
+    swarmGateway: env.VITE_SWARM_GATEWAY_URL || DEFAULT_SWARM_GATEWAY,
+    catalogueBrowserUrl: env.VITE_CATALOGUE_FEED_BROWSER_URL || DEFAULT_CATALOGUE_BROWSER,
+    identityRegistry: parseRegistry(chainId, problems),
   };
 }
 

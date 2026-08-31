@@ -11,6 +11,14 @@ export {
 } from './agent-card';
 
 export { IdentityModule } from './modules/identity';
+export {
+  setAgentSplitter,
+  getAgentSplitter,
+  findAgentSplitters,
+  encodeSplitterMetadata,
+  decodeSplitterMetadata,
+} from './splitter-link';
+export type { AgentSplitterLink } from './splitter-link';
 export { ReputationModule } from './modules/reputation';
 export { AggregateModule } from './modules/aggregate';
 
@@ -24,6 +32,8 @@ export {
   AGENT_CARD_TOPIC,
   SWARM_AI_CAPABLE,
   SWARM_AGENT_ID,
+  AGENT_SPLITTER,
+  RECENT_BLOCK_COUNT,
 } from './constants';
 
 export { default as config } from './config';

@@ -274,10 +274,29 @@
   background: var(--mp-danger-soft);
 }
 
+.pillLink {
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    filter 120ms ease,
+    border-color 120ms ease;
+}
+
+.pillLink:hover {
+  filter: brightness(1.25);
+  border-color: var(--mp-accent);
+}
+
 .pillClamp {
-  max-width: 280px;
+  max-width: 320px;
+  overflow: hidden;
+}
+
+/* The text truncates; the trailing icon must not be pushed out with it. */
+.pillClamp > span {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pillSuccess {

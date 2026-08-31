@@ -612,4 +612,59 @@ export const SwarmMarketToolsSchema = [
       taskSupport: 'forbidden',
     },
   },
+  {
+    name: 'link_split_contract',
+    title: 'Link split contract to ERC-8004 agent',
+    description:
+      'Bind an ERC-8004 agent to its RevenueSplitter clone by writing the clone address into ' +
+      'the Identity Registry under the agent_splitter metadata key. This is what lets indexers ' +
+      'and dashboards resolve agent -> splitter in one read, and splitter -> agent in one ' +
+      'indexed log query. The link lives in the registry rather than in the clone because ' +
+      'createSplitter is permissionless (a clone-held agentId would be unauthenticated) and ' +
+      'clone terms are frozen while NFT ownership can transfer. Sends a transaction; the ' +
+      'PRIVATE_KEY signer must own the agent NFT. Re-run to re-point the link.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'ERC-8004 agent id (NFT token id). The signer must own this NFT.',
+        },
+        splitter: {
+          type: 'string',
+          description:
+            "0x clone address to link. Omit to resolve the seller's clone from the factory.",
+        },
+        seller: {
+          type: 'string',
+          description:
+            'Seller whose clone to resolve when splitter is omitted. Defaults to AGENT_PAYMENT_ADDRESS.',
+        },
+      },
+      required: ['agentId'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string' },
+        splitter: { type: 'string', description: 'Clone address now bound to the agent.' },
+        seller: { type: 'string', description: 'Seller the clone was resolved from, if any.' },
+        factory: { type: 'string' },
+        txHash: {
+          type: 'string',
+          description: 'Empty when the agent already pointed at this splitter.',
+        },
+        metadataKey: { type: 'string', description: 'Registry key written (agent_splitter).' },
+        alreadyLinked: {
+          type: 'boolean',
+          description: 'True when no transaction was needed.',
+        },
+        note: { type: 'string' },
+      },
+      required: ['agentId', 'splitter', 'txHash', 'metadataKey', 'alreadyLinked'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
 ];

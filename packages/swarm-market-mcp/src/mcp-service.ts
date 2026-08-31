@@ -31,6 +31,8 @@ import { createSplitContract } from './tools/create_split_contract';
 import type { CreateSplitContractArgs } from './tools/create_split_contract/models';
 import { getSplitContract } from './tools/get_split_contract';
 import type { GetSplitContractArgs } from './tools/get_split_contract/models';
+import { linkSplitContract } from './tools/link_split_contract';
+import type { LinkSplitContractArgs } from './tools/link_split_contract/models';
 import {
   buildCatalogSchema,
   createAgentSchema,
@@ -38,6 +40,7 @@ import {
   deleteCatalogSchema,
   createSplitContractSchema,
   getSplitContractSchema,
+  linkSplitContractSchema,
   findAgentsByMetadataSchema,
   getAgentSchema,
   purchaseCatalogItemSchema,
@@ -116,6 +119,11 @@ export class SwarmMarketMCPServer {
           case 'get_split_contract': {
             const validArgs = getSplitContractSchema.parse(args);
             return getSplitContract(validArgs as GetSplitContractArgs);
+          }
+
+          case 'link_split_contract': {
+            const validArgs = linkSplitContractSchema.parse(args);
+            return linkSplitContract(validArgs as LinkSplitContractArgs);
           }
 
           default:

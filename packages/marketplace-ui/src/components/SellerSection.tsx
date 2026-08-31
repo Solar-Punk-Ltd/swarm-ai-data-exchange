@@ -23,7 +23,7 @@ function LoadingRows() {
 }
 
 export default function SellerSection() {
-  const { registry, loading, fundedSplitters } = useMarketplace();
+  const { registry, loading, fundedSplitters, agentLinks } = useMarketplace();
 
   const sellers = registry?.sellers ?? [];
 
@@ -37,6 +37,13 @@ export default function SellerSection() {
           </span>
         )}
       </div>
+
+      {agentLinks.partial && (
+        <div className={styles.banner}>
+          The agent index is incomplete — the log sweep was cut short. Rows without an agent may
+          still have one. Lower VITE_LOG_CHUNK_BLOCKS or use an RPC that allows wider ranges.
+        </div>
+      )}
 
       {loading && !registry ? (
         <LoadingRows />

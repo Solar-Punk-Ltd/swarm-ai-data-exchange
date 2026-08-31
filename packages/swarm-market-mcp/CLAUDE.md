@@ -114,6 +114,39 @@ Returns `splitter: null` / `deployed: false` when the seller has no clone. It mu
 speculative address: the clone address cannot be derived off-chain, and a `payTo` nobody can
 collect from is worse than reporting nothing.
 
+### `link_split_contract`
+
+Binds an ERC-8004 agent to its `RevenueSplitter` clone by writing the clone address into the
+Identity Registry under the `agent_splitter` metadata key (`AGENT_SPLITTER` in
+`@solarpunk/erc8004-adapter`).
+
+**Args** (`src/tools/link_split_contract/models.ts`):
+
+```typescript
+export interface LinkSplitContractArgs {
+  agentId: string; // ERC-8004 NFT token id; the PRIVATE_KEY signer must own it
+  splitter?: string; // defaults to the clone resolved for the seller
+  seller?: string; // defaults to AGENT_PAYMENT_ADDRESS
+}
+```
+
+**Return:** `{ agentId, splitter, seller?, factory?, txHash, metadataKey, alreadyLinked, note? }`.
+
+**Why the registry and not the clone.** `SplitterFactory.createSplitter` is permissionless, so an
+`agentId` passed to the factory would be an unauthenticated claim anyone could make about anyone —
+the registry already gates `setMetadata` on NFT ownership. And clone terms are frozen at
+`initialize` while agent NFT ownership can transfer, so a binding baked into the clone would decay
+into a lie with no way to correct it. Re-run this tool to re-point the link. **Do not add `agentId`
+to the splitter contracts.**
+
+Ownership is checked with `getOwner` before sending, so a non-owner gets a readable error instead
+of a bare revert. Idempotent: an agent already pointing at this splitter returns
+`alreadyLinked: true` with no transaction.
+
+Because `MetadataSet` indexes the metadata key, this write is what makes the reverse direction
+(splitter → agent) a single log query for indexers and `marketplace-ui`. Consumers must still
+verify — see `packages/marketplace-ui/CLAUDE.md` § Agent identity.
+
 ### `get_agent`
 
 Resolves an ERC-8004 agent id to its on-chain Agent Card (read-only — RPC + Swarm fetch, no signer). Optionally enumerates the agent's catalog.
@@ -160,6 +193,7 @@ The tool throws if any priced item is missing its `actSeed` (the builder enforce
 | `ERC8004_CHAIN`            | Chain key for the ERC-8004 client (default `base-sepolia`)                        |
 | `SPLITTER_FACTORY_ADDRESS` | `SplitterFactory` address used to resolve a seller's splitter clone               |
 | `AGENT_PAYMENT_ADDRESS`    | Seller whose clone becomes `payment[].payTo` in `build_catalog`                   |
+| `PRIVATE_KEY`              | Signs `create_split_contract` and `link_split_contract`; must own the agent NFT   |
 
 ## Package skeleton (match `swarm-mcp`)
 

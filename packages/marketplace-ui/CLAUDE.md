@@ -277,13 +277,16 @@ splitter row filters on it (native entries are dropped entirely).
 All are Vite build-time vars and **must** carry the `VITE_` prefix — Vite exposes nothing else to
 the browser. All values here are public; there is no secret in this package.
 
-| Variable                        | Required | Default                    | Purpose                                                      |
-| ------------------------------- | -------- | -------------------------- | ------------------------------------------------------------ |
-| `VITE_TREASURY_ADDRESS`         | yes      | —                          | Marketplace treasury shown in the Treasury section           |
-| `VITE_SPLITTER_FACTORY_ADDRESS` | yes      | —                          | `SplitterFactory` to enumerate                               |
-| `VITE_CHAIN_ID`                 | no       | `84532`                    | Base Sepolia. Selects the viem chain and the currency config |
-| `VITE_RPC_URL`                  | no       | `https://sepolia.base.org` | **Required in practice** — the public node rate-limits       |
-| `VITE_REFRESH_INTERVAL_MS`      | no       | `5000`                     | Balance poll interval                                        |
+| Variable                            | Required | Default                    | Purpose                                                         |
+| ----------------------------------- | -------- | -------------------------- | --------------------------------------------------------------- |
+| `VITE_TREASURY_ADDRESS`             | yes      | —                          | Marketplace treasury shown in the Treasury section              |
+| `VITE_SPLITTER_FACTORY_ADDRESS`     | yes      | —                          | `SplitterFactory` to enumerate                                  |
+| `VITE_CHAIN_ID`                     | no       | `84532`                    | Base Sepolia. Selects the viem chain and the currency config    |
+| `VITE_RPC_URL`                      | no       | `https://sepolia.base.org` | **Required in practice** — the public node rate-limits          |
+| `VITE_REFRESH_INTERVAL_MS`          | no       | `5000`                     | Balance poll interval                                           |
+| `VITE_IDENTITY_REGISTRY_ADDRESS`    | no       | known per chain            | ERC-8004 registry, for labelling rows with their agent          |
+| `VITE_IDENTITY_REGISTRY_FROM_BLOCK` | no       | registry deploy block      | Start of the `agent_splitter` log sweep                         |
+| `VITE_LOG_CHUNK_BLOCKS`             | no       | `500000`                   | Blocks per `eth_getLogs` call; lower it if the index is partial |
 
 `VITE_RPC_URL` is not in the original spec for this dashboard but is not optional in reality:
 `VITE_CHAIN_ID` selects a chain, it does not provide a transport. Mirror the wording of
@@ -292,6 +295,74 @@ the browser. All values here are public; there is no secret in this package.
 Validate all of it once at startup in `src/config/env.ts` and fail loudly with a readable message.
 A dashboard that renders empty because `VITE_TREASURY_ADDRESS` was unset is worse than one that
 refuses to boot.
+
+## Agent identity
+
+Seller rows are labelled with the ERC-8004 agent that owns the clone. The binding is **Identity
+Registry metadata** under the `agent_splitter` key (`AGENT_SPLITTER` in
+`erc8004-adapter/src/constants.ts`), written by the `link_split_contract` MCP tool.
+
+It is deliberately **not** stored in the clone. `createSplitter` is permissionless, so an agentId
+held by the factory would be a claim anyone could make about anyone; the registry already gates
+`setMetadata` on NFT ownership. And clone terms are frozen at `initialize` while agent NFT
+ownership can transfer, so a binding baked into the clone would decay into a lie with no way to
+correct it. Do not add `agentId` to `RevenueSplitter` or `SplitterFactory`.
+
+Because `MetadataSet` indexes the metadata key, the whole splitter → agent reverse index is one
+`eth_getLogs` call rather than a crawl over every Agent Card.
+
+**A claim is not proof.** Any agent owner can name any address, so `lib/agents.ts` verifies before
+the badge says "verified":
+
+1. the claimed splitter is in the factory registry (claims on unknown addresses are discarded), and
+2. the clone's frozen `seller` is the agent's registered wallet (`getAgentWallet`) or its NFT owner
+   (`ownerOf`).
+
+Anything else renders as `unverified`, and two agents claiming one clone renders as `disputed` —
+never silently resolved in favour of whichever log came last.
+
+Three constraints on this feature, all load-bearing:
+
+- **It is optional.** No registry for the chain, an unreachable node, or a failed sweep must leave
+  balances rendering normally. It is labelling, not data.
+- **A partial sweep proves nothing.** The log scan is chunked and gives up rather than throwing; when
+  it is cut short, rows show no "No agent linked" text, because absence is no longer evidence.
+- **This package stays viem-only.** It does not import `@solarpunk/erc8004-adapter` (ethers, plus
+  bee-js). `lib/agents.ts` declares a five-entry viem ABI subset of the registry instead — the
+  "no ABIs here" rule is about the splitter contracts, which still go through the SDK.
+
+### Agent names
+
+The badge shows the agent's name from its Agent Card: `tokenURI(agentId)` gives the card's
+location, which `enrichWithCards` fetches with a plain `fetch` (an https feed URL is used as-is;
+`bzz://` is resolved through `VITE_SWARM_GATEWAY_URL`).
+
+This is the one place the package reaches outside the chain — there is still **no Bee dependency**,
+just an HTTP GET. Treat it as unreliable by construction: the gateway is not ours, CORS may reject
+the request, a cold feed may not resolve, and it may simply be slow. So:
+
+- The card pass runs **after** the on-chain index has already been rendered, never before. The
+  badge must never wait on a gateway.
+- Every failure path returns undefined and the badge falls back to the bare agent id. A missing
+  name is a degraded label, never a missing agent.
+- One fetch per distinct agent, not per row, with an 8s abort — the same agent can hold several
+  clones.
+
+### Catalog link
+
+The same card fetch yields the catalog link. The feed owner is the `endpoint` of the card's
+`swarm-ai-catalog` service entry — a bare EOA, deliberately a different key from the card's own
+feed signer, so it cannot be derived from the card's location.
+
+`catalogUrl()` points at `VITE_CATALOGUE_FEED_BROWSER_URL` (default `http://localhost:3001`,
+matching `erc8004-dashboard/src/constants.ts`) and falls back to the raw Swarm feed
+`<gateway>/feeds/<owner>/<CATALOG_FEED_TOPIC>` when that is unset. `CATALOG_FEED_TOPIC` is the
+fixed protocol constant `keccak256("swarm-ai-catalog.v1")`, mirroring
+`swarm-catalog/src/feeds.ts` — do not derive it per chain or per agent.
+
+`CatalogLink` renders **nothing** when no feed owner resolved, rather than a dead link. A seller
+can legitimately hold a splitter and publish no catalog, and from here that is indistinguishable
+from a card that failed to fetch.
 
 ## Explorer links
 
@@ -313,13 +384,16 @@ src/
   config/
     env.ts                  — parse + validate import.meta.env; exports `config` or `configError`
     currencies.ts           — CURRENCIES by chain id, plus the erc20Currencies() filter
+    registry.ts             — ERC-8004 Identity Registry address + deploy block per chain
     chain.ts                — viem chain object + explorer address/tx URL builders
   context/
     MarketplaceContext.tsx  — registry + balances + polling; the single fetch owner
     WalletContext.tsx       — EIP-1193 connect / account / chain id / switch chain
   lib/
     reads.ts                — every on-chain read: loadRegistry, readBalances, isFunded
+    agents.ts               — splitter -> ERC-8004 agent index, with verification
     format.ts               — formatTaxBps (via the SDK BPS_DENOMINATOR), formatAge
+    rpcError.ts             — wallet/RPC errors to one readable line; user-rejection detection
   hooks/
     usePolling.ts           — interval + document.hidden pause
     useTxLifecycle.ts       — shared idle/signing/pending/confirmed state machine
@@ -331,6 +405,7 @@ src/
     SellerSection.tsx
     SellerRow.tsx
     AddressLink.tsx         — address + copy + explorer icon; used by every section
+    AgentBadge.tsx          — the seller's ERC-8004 agent, with its verification status
     Balance.tsx             — formatUnits + symbol, with a skeleton state
     TxNote.tsx              — renders the tx state machine; shared by both buttons
     DistributeButton.tsx

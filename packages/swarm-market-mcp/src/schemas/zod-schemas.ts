@@ -124,6 +124,12 @@ export const getSplitContractSchema = z.object({
   seller: z.string().optional(),
 });
 
+export const linkSplitContractSchema = z.object({
+  agentId: z.string().min(1, { message: 'Missing required parameter: agentId.' }),
+  splitter: z.string().optional(),
+  seller: z.string().optional(),
+});
+
 export const purchaseCatalogItemSchema = z.object({
   itemId: z.string().min(1, { message: 'Missing required parameter: itemId.' }),
   x402Endpoint: z.string().optional(),

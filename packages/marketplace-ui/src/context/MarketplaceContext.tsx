@@ -12,6 +12,8 @@ import { config } from '../config/env';
 import { usePolling } from '../hooks/usePolling';
 import { isFunded, loadRegistry, readBalances } from '../lib/reads';
 import { errorMessage } from '../lib/rpcError';
+import { EMPTY_LINK_INDEX, enrichWithCards, loadAgentLinks } from '../lib/agents';
+import type { AgentLinkIndex } from '../lib/agents';
 import type { BalanceSnapshot, Registry } from '../lib/reads';
 
 /** Re-read the registry every Nth tick; it changes far less often than balances do. */
@@ -29,6 +31,8 @@ export interface MarketplaceState {
   lastUpdated?: number;
   /** Clones currently holding a non-zero ERC-20 balance — the batch sweep's input set. */
   fundedSplitters: Address[];
+  /** splitter -> ERC-8004 agent, from registry metadata. Empty when no registry is configured. */
+  agentLinks: AgentLinkIndex;
   /** Force an immediate refresh, e.g. right after a transaction confirms. */
   refresh: () => Promise<void>;
 }
@@ -48,6 +52,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   );
 
   const [registry, setRegistry] = useState<Registry>();
+  const [agentLinks, setAgentLinks] = useState<AgentLinkIndex>(EMPTY_LINK_INDEX);
   const [balances, setBalances] = useState<BalanceSnapshot>();
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
@@ -57,6 +62,39 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const registryRef = useRef<Registry>();
   const tickRef = useRef(0);
   const inFlight = useRef(false);
+
+  const refreshAgentLinks = useCallback(
+    async (current: Registry) => {
+      const registryConfig = config.identityRegistry;
+      if (!registryConfig) return;
+
+      const sellerBySplitter = new Map(
+        current.sellers.map((seller) => [seller.splitter.toLowerCase(), seller.seller]),
+      );
+
+      try {
+        const links = await loadAgentLinks(
+          client,
+          {
+            registry: registryConfig.address,
+            fromBlock: registryConfig.fromBlock,
+            chunkBlocks: registryConfig.chunkBlocks,
+            knownSplitters: current.sellers.map((seller) => seller.splitter),
+          },
+          (splitter) => sellerBySplitter.get(splitter.toLowerCase()),
+        );
+        // Render the on-chain half immediately; the card fetch hits a gateway we do not
+        // control, and the badge must not wait on it.
+        setAgentLinks(links);
+
+        const enriched = await enrichWithCards(links, config.swarmGateway);
+        if (enriched !== links) setAgentLinks(enriched);
+      } catch {
+        // Keep whatever labels we already had; a failed sweep is not worth a visible error.
+      }
+    },
+    [client],
+  );
 
   const tick = useCallback(
     async (forceRegistry: boolean) => {
@@ -70,6 +108,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           const next = await loadRegistry(client, config.factory);
           registryRef.current = next;
           setRegistry(next);
+          // Agent labels are supplementary: a registry that is unset, unreachable, or slow must
+          // never stop balances from rendering, so this is awaited separately and swallowed.
+          void refreshAgentLinks(next);
         }
 
         const current = registryRef.current;
@@ -121,9 +162,21 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       error,
       lastUpdated,
       fundedSplitters,
+      agentLinks,
       refresh,
     }),
-    [client, registry, balances, loading, stale, error, lastUpdated, fundedSplitters, refresh],
+    [
+      client,
+      registry,
+      balances,
+      loading,
+      stale,
+      error,
+      lastUpdated,
+      fundedSplitters,
+      agentLinks,
+      refresh,
+    ],
   );
 
   return <MarketplaceContext.Provider value={value}>{children}</MarketplaceContext.Provider>;
