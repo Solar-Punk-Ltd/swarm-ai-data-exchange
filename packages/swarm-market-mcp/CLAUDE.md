@@ -67,7 +67,7 @@ export interface BuildCatalogItem {
 `splitterOf` mapping. With `SPLITTER_FACTORY_ADDRESS` + `AGENT_PAYMENT_ADDRESS` set, `payTo` may be
 omitted and is filled in. Two **hard errors**, not warnings:
 
-- the seller has no clone yet → run `create_split_contract` first. There is no address to publish;
+- the seller has no clone yet → run `register_agent` first. There is no address to publish;
   clone addresses are ordinary CREATE addresses and cannot be derived off-chain.
 - a supplied `payTo` is not the seller's clone → publishing it would silently create an untaxed
   listing that earns the seller no Proof-of-Purchase, and the mistake would only surface much
@@ -76,25 +76,57 @@ omitted and is filled in. Two **hard errors**, not warnings:
 `build_catalog` never sends a transaction. Without the splitter configured, `payTo` must be
 supplied explicitly (the pre-splitter behaviour).
 
-### `create_split_contract`
+### `register_agent`
 
-Deploys the seller's `RevenueSplitter` clone — the address that belongs in `payment[].payTo`.
+Idempotent, convergent seller onboarding. Replaces the former `create_agent` and
+`create_split_contract`. **Safe to call on every agent startup** — it converges on the correct
+state rather than creating anything unconditionally, and costs only reads once the agent is
+registered.
 
-**Args** (`src/tools/create_split_contract/models.ts`):
+**Args** (`src/tools/register_agent/models.ts`): `name` and `description` are required; the rest
+are `image`, `version`, `x402`, `capabilities`, `catalogFeedOwner`, `postageBatchId`, `seller`,
+`refreshCard`, `fromBlock`, `dryRun`, `skipSplitter`.
 
-```typescript
-export interface CreateSplitContractArgs {
-  seller?: string; // defaults to AGENT_PAYMENT_ADDRESS
-}
-```
+**Return:** `{ feedOwner, signer, chain, dryRun, identity, splitter, link, warnings, message }`.
 
-**Return:** `{ splitter, seller, factory, alreadyExisted, txHash?, treasury, taxBps }`.
+Three steps with deliberately different failure semantics, which is why each is reported
+separately rather than collapsed into one success flag:
 
-Sends a transaction, so it requires `PRIVATE_KEY` — and that is the point. The seller deploys and
-pays for their own clone, rather than the marketplace operator absorbing the cost later when
-sweeping revenue. Idempotent: a seller who already has a clone gets it back with
-`alreadyExisted: true` and no transaction. Must be run once before the seller's first
-`build_catalog`.
+| step       | semantics                                                                     | statuses                                                                   |
+| ---------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `identity` | **fatal** — without an agentId there is nothing to sell under                 | `existing` / `refreshed` / `repaired` / `minted` / `incomplete` / `failed` |
+| `splitter` | reported; `unconfigured` is legitimate for identity-only deployments          | `existing` / `deployed` / `unconfigured` / `skipped` / `failed`            |
+| `link`     | **never fatal** — a discovery index, and an unattributed agent can still sell | `linked` / `already-linked` / `repointed` / `skipped` / `failed`           |
+
+With `dryRun: true` every write is suppressed and the statuses come back as `would-mint`,
+`would-repair`, `would-refresh`, `would-deploy`, `would-link`. Reads still run, so a dry run
+reports the _real_ current state — this is the intended way to exercise the decision path
+without spending gas.
+
+**Discovery is card-first, and that is load-bearing.** `findAgentsWithMetadata` defaults to
+scanning the last `RECENT_BLOCK_COUNT` (550_000) blocks — about 13 days on Base Sepolia. A
+convergent tool that mints whenever discovery comes up empty would therefore mint a duplicate NFT
+for any agent older than that. So the primary lookup is the Agent Card feed itself, whose URL is
+fully determined by `BEE_FEED_PK` (constant topic, owner derived from the key): no chain read, no
+window. The event scan is only a fallback for the one case the card cannot answer — the repair
+state below. Pass `fromBlock` to widen it.
+
+**Verification, and why a missing back-reference means repair rather than reject.** Three checks:
+`ownerOf(agentId)` equals the `PRIVATE_KEY` signer; the tokenURI resolves to a `/feeds/<owner>/`
+URL owned by `BEE_FEED_PK`; and the card names the agentId in `registrations[]`. The first two
+together _prove_ the agent is ours. Given them, a failing third check is not a spoof — it is our
+own card, stale, which is exactly what a mint leaves behind when the post-mint card write fails.
+Treating that as a rejection would mint a duplicate on the next call, so it is classified
+`repairable` and the card is rewritten instead. An agent that matches the feed but is owned by
+someone else is an **error, never a mint** — a second NFT for one feed is unrecoverable.
+
+**Partial failure never loses the agentId.** Once the mint lands, no later step may return an
+error response: a text-only error would discard the token id the caller just paid for. A failed
+post-mint card write yields `identity.status: "incomplete"` with `agentId` populated and an
+explanatory `warnings[]` entry; the next call repairs it.
+
+**Discovery failure suppresses the mint.** "Found nothing" and "could not look" are distinguished.
+A transient RPC or Swarm error returns an error rather than an NFT.
 
 ### `get_split_contract`
 
@@ -136,8 +168,11 @@ export interface LinkSplitContractArgs {
 `agentId` passed to the factory would be an unauthenticated claim anyone could make about anyone —
 the registry already gates `setMetadata` on NFT ownership. And clone terms are frozen at
 `initialize` while agent NFT ownership can transfer, so a binding baked into the clone would decay
-into a lie with no way to correct it. Re-run this tool to re-point the link. **Do not add `agentId`
-to the splitter contracts.**
+into a lie with no way to correct it. **Do not add `agentId` to the splitter contracts.**
+
+Normal onboarding does not need this tool — `register_agent` establishes the link as part of
+registration. It exists for what registration cannot cover: re-pointing an existing agent at a
+different clone, e.g. after the agent NFT transfers to a new owner.
 
 Ownership is checked with `getOwner` before sending, so a non-owner gets a readable error instead
 of a bare revert. Idempotent: an agent already pointing at this splitter returns
@@ -193,7 +228,7 @@ The tool throws if any priced item is missing its `actSeed` (the builder enforce
 | `ERC8004_CHAIN`            | Chain key for the ERC-8004 client (default `base-sepolia`)                        |
 | `SPLITTER_FACTORY_ADDRESS` | `SplitterFactory` address used to resolve a seller's splitter clone               |
 | `AGENT_PAYMENT_ADDRESS`    | Seller whose clone becomes `payment[].payTo` in `build_catalog`                   |
-| `PRIVATE_KEY`              | Signs `create_split_contract` and `link_split_contract`; must own the agent NFT   |
+| `PRIVATE_KEY`              | Signs `register_agent` and `link_split_contract`; must own the agent NFT          |
 
 ## Package skeleton (match `swarm-mcp`)
 

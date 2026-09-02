@@ -92,6 +92,24 @@ export async function downloadAgentCard(agentURI: string): Promise<AgentCard> {
 }
 
 /**
+ * The canonical Agent Card feed URL for a feed signing key.
+ *
+ * This is the value written on-chain as the ERC-8004 tokenURI. It is fully deterministic:
+ * the topic is a constant and the owner is derived from the key, so an agent can re-derive
+ * its own agentURI with no chain reads and no block-range scan. That is what makes
+ * "find my existing agent" possible without an event window.
+ *
+ * `uploadAgentCard` returns this same value, and calls this helper to build it, so the
+ * writer and the deriver cannot drift apart.
+ */
+export function agentCardFeedUrl(feedPrivateKey: string, topic = AGENT_CARD_TOPIC): string {
+  const normalized = feedPrivateKey.startsWith('0x') ? feedPrivateKey : `0x${feedPrivateKey}`;
+  // The owner segment is written without the 0x prefix and lowercased.
+  const owner = new ethers.Wallet(normalized).address.slice(2).toLowerCase();
+  return `${DEFAULT_GATEWAY_URL}/feeds/${owner}/${normaliseTopic(topic)}`;
+}
+
+/**
  * Uploads a serialised AgentCard to a Swarm feed and returns the content
  * reference and feed URL.
  *
@@ -143,13 +161,9 @@ export async function uploadAgentCard(
 
   const reference = result.reference.toString();
 
-  // Derive the feed owner address from the private key
-  const normalized = feedPrivateKey.startsWith('0x') ? feedPrivateKey : `0x${feedPrivateKey}`;
-  const owner = new ethers.Wallet(normalized).address.slice(2).toLowerCase();
-
   return {
     reference,
     url: `bzz://${reference}`,
-    feedUrl: `${DEFAULT_GATEWAY_URL}/feeds/${owner}/${topicHex}`,
+    feedUrl: agentCardFeedUrl(feedPrivateKey, topic),
   };
 }

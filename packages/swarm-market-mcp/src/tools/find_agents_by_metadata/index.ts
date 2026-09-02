@@ -52,25 +52,35 @@ export async function findAgentsByMetadata(args: FindAgentsByMetadataArgs): Prom
     ? entries.filter((e) => decoder.decode(e.rawValue) === metadataValue)
     : entries;
 
-  let agents: FindAgentsByMetadataResultEntry[];
-  try {
-    agents = await Promise.all(
-      filtered.map(async (e) => ({
-        agentId: e.agentId.toString(),
-        agentURI: e.uri,
-        owner: await erc8004.identity.getOwner(e.agentId),
-        metadataValue: decoder.decode(e.rawValue),
-      })),
-    );
-  } catch (err) {
-    return getToolErrorResponse(
-      `Failed to resolve owners for matched agents: ${getErrorMessage(err)}`,
-    );
-  }
+  // allSettled, not all: `ownerOf` reverts for a burned or nonexistent token, and one dead
+  // entry must not fail the whole lookup — this is the "find my agent on startup" path, so a
+  // single unrelated bad token would otherwise block every agent's bootstrap.
+  const settled = await Promise.allSettled(
+    filtered.map(async (e) => ({
+      agentId: e.agentId.toString(),
+      agentURI: e.uri,
+      owner: await erc8004.identity.getOwner(e.agentId),
+      metadataValue: decoder.decode(e.rawValue),
+    })),
+  );
+
+  const agents: FindAgentsByMetadataResultEntry[] = [];
+  const unresolved: { agentId: string; error: string }[] = [];
+  settled.forEach((outcome, i) => {
+    if (outcome.status === 'fulfilled') {
+      agents.push(outcome.value);
+      return;
+    }
+    unresolved.push({
+      agentId: filtered[i].agentId.toString(),
+      error: getErrorMessage(outcome.reason) || 'ownerOf reverted',
+    });
+  });
 
   const result: FindAgentsByMetadataResult = {
     metadataKey,
     agents,
+    ...(unresolved.length > 0 ? { unresolved } : {}),
   };
   return getResponseWithStructuredContent(result);
 }

@@ -8,7 +8,7 @@
  *
  * The clone must exist before a listing can name it: its address is an ordinary CREATE address
  * recorded in the factory's `splitterOf` mapping, with no way to derive it off-chain. The seller
- * deploys their own clone (`create_split_contract`) and so pays that gas themselves.
+ * deploys their own clone (`register_agent`) and so pays that gas themselves.
  */
 import type { PaymentRequirements } from '@solarpunk/swarm-catalog';
 import { ensureSplitter, splitterOf, splitterTerms } from '@solarpunk/contracts';
@@ -133,6 +133,25 @@ export async function readSplitter(ctx: SplitterContext): Promise<ReadSplitterRe
  */
 export async function createSplitter(ctx: SplitterContext): Promise<CreateSplitterResult> {
   const client = publicClient();
+
+  // Short-circuit before touching the signer. `ensureSplitter` performs the same `splitterOf`
+  // check internally, but `walletClient()` would be evaluated as an argument first and throws
+  // when PRIVATE_KEY is unset — so a seller who already has a clone got "Missing PRIVATE_KEY"
+  // instead of their address. register_agent runs this on every startup, where returning the
+  // existing clone read-only is the common case.
+  const existing = await splitterOf(client, ctx.factory, ctx.seller);
+  if (existing) {
+    const terms = await splitterTerms(client, existing);
+    return {
+      splitter: existing,
+      seller: ctx.seller,
+      factory: ctx.factory,
+      alreadyExisted: true,
+      treasury: terms.treasury,
+      taxBps: terms.taxBps,
+    };
+  }
+
   const { splitter, deployed, txHash } = await ensureSplitter(
     client,
     walletClient(),
@@ -183,8 +202,8 @@ export async function resolvePayTo(
   if (!splitter) {
     throw new Error(
       `Item ${itemId}: seller ${ctx.seller} has no split contract on factory ${ctx.factory}. ` +
-        'Run create_split_contract first — a listing must point at a deployed splitter, or the ' +
-        'sale is untaxed and earns no Proof-of-Purchase.',
+        'Run register_agent first — it deploys the clone. A listing must point at a deployed ' +
+        'splitter, or the sale is untaxed and earns no Proof-of-Purchase.',
     );
   }
 

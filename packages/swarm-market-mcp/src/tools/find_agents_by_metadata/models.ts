@@ -25,4 +25,7 @@ export interface FindAgentsByMetadataResultEntry {
 export interface FindAgentsByMetadataResult {
   metadataKey: string;
   agents: FindAgentsByMetadataResultEntry[];
+  // Entries whose on-chain owner could not be read (burned/nonexistent token). Reported
+  // rather than dropped silently so a caller can tell "no match" from "match unreadable".
+  unresolved?: { agentId: string; error: string }[];
 }

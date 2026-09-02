@@ -93,16 +93,29 @@ export const deleteCatalogSchema = z.object({
   postageBatchId: z.string().optional(),
 });
 
-export const createAgentSchema = z.object({
+export const registerAgentSchema = z.object({
   name: z.string().min(1, { message: 'Missing required parameter: name.' }),
   description: z.string().min(1, { message: 'Missing required parameter: description.' }),
   image: z.string().optional(),
   version: z.string().optional(),
   x402: z.string().optional(),
+  // Defaults to the BEE_FEED_PK address. Override only when the catalog feed signer differs
+  // from the Agent Card feed signer.
   catalogFeedOwner: z.string().optional(),
   // Accept either a comma-separated string or an array; normalized inside the tool.
   capabilities: z.union([z.string(), z.array(z.string())]).optional(),
   postageBatchId: z.string().optional(),
+  // Splitter seller of record. Defaults to AGENT_PAYMENT_ADDRESS, then the PRIVATE_KEY wallet.
+  seller: z.string().optional(),
+  // Re-publish the Agent Card when its content has drifted from these arguments.
+  refreshCard: z.boolean().optional(),
+  // Explicit start block for the fallback MetadataSet scan. Without it the adapter only looks
+  // back RECENT_BLOCK_COUNT (~13 days on Base Sepolia).
+  fromBlock: z.number().int().nonnegative().optional(),
+  // Report what would happen without sending a transaction or writing to Swarm.
+  dryRun: z.boolean().optional(),
+  // Identity-only registration: skip the splitter and the link.
+  skipSplitter: z.boolean().optional(),
 });
 
 export const findAgentsByMetadataSchema = z
@@ -115,10 +128,6 @@ export const findAgentsByMetadataSchema = z
   .refine((v) => Boolean(v.catalogFeedOwner || v.metadataKey), {
     message: 'Provide either catalogFeedOwner or metadataKey.',
   });
-
-export const createSplitContractSchema = z.object({
-  seller: z.string().optional(),
-});
 
 export const getSplitContractSchema = z.object({
   seller: z.string().optional(),

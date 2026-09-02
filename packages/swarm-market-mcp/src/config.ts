@@ -18,7 +18,7 @@ export interface BeeConfig {
 }
 
 // ERC-8004 access. rpcUrl + chain are used read-only by get_agent; walletPrivateKey is
-// required by create_agent to sign the NFT mint transaction.
+// required by register_agent to sign the NFT mint transaction.
 export interface ChainConfig {
   rpcUrl: string;
   chain: string;

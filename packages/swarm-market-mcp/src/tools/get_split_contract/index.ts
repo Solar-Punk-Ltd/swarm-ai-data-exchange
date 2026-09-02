@@ -44,7 +44,7 @@ export async function getSplitContract(args: GetSplitContractArgs): Promise<Tool
       ...result,
       note: result.deployed
         ? undefined
-        : 'No split contract for this seller yet. Run create_split_contract before publishing.',
+        : 'No split contract for this seller yet. Run register_agent before publishing.',
     });
   } catch (err) {
     return getToolErrorResponse(`Failed to read split contract: ${getErrorMessage(err)}`);

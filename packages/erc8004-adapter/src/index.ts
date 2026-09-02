@@ -8,6 +8,7 @@ export {
   parseAgentCard,
   uploadAgentCard,
   downloadAgentCard,
+  agentCardFeedUrl,
 } from './agent-card';
 
 export { IdentityModule } from './modules/identity';
@@ -29,6 +30,7 @@ export {
   DEFAULT_BEE_API_URL,
   DEFAULT_RPC_URL,
   DEFAULT_CHAIN,
+  DEFAULT_GATEWAY_URL,
   AGENT_CARD_TOPIC,
   SWARM_AI_CAPABLE,
   SWARM_AGENT_ID,

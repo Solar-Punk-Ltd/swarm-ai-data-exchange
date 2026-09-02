@@ -14,6 +14,10 @@
  * direction (splitter -> agent) a single log query for indexers and dashboards.
  *
  * Sends a transaction, so PRIVATE_KEY is required and must own the agent NFT.
+ *
+ * Normal onboarding does NOT need this tool: `register_agent` establishes the link as part of
+ * registration. This exists for the case registration cannot cover — re-pointing an existing
+ * agent at a different clone, e.g. after the agent NFT transfers to a new owner.
  */
 import { ethers } from 'ethers';
 import { getAddress } from 'viem';
@@ -89,7 +93,7 @@ export async function linkSplitContract(args: LinkSplitContractArgs): Promise<To
       if (!resolved.splitter) {
         return getToolErrorResponse(
           `Seller ${seller} has no split contract on factory ${factory}. ` +
-            'Run create_split_contract first — there is no address to link yet.',
+            'Run register_agent first — it deploys the clone. There is no address to link yet.',
         );
       }
       splitter = resolved.splitter;

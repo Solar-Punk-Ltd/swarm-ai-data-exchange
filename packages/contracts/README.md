@@ -133,7 +133,7 @@ are exported too, for ethers consumers such as `erc8004-adapter`.
 
 ## Consumers
 
-- **`swarm-market-mcp`** — `create_split_contract` deploys the seller's clone and
+- **`swarm-market-mcp`** — `register_agent` deploys the seller's clone and
   `get_split_contract` reads it back; `build_catalog` fills `payment[].payTo` with it, and fails
   outright if the seller has no clone or names anything else.
 - **`x402-swarm-server`** — `SPLITTER_ADDRESS` pins the accepted settlement destination
