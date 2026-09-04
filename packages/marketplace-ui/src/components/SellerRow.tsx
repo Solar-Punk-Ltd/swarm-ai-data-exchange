@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useMarketplace } from '../context/MarketplaceContext';
 import { config } from '../config/env';
 import { erc20Currencies } from '../config/currencies';
@@ -9,10 +10,18 @@ import AgentBadge from './AgentBadge';
 import CatalogLink from './CatalogLink';
 import Balance, { Skeleton, formatAmount } from './Balance';
 import DistributeButton from './DistributeButton';
+import HistoryTable from './HistoryTable';
 import styles from './styles.module.css';
 
 export default function SellerRow({ record }: { record: SellerRecord }) {
-  const { balances } = useMarketplace();
+  const { balances, history } = useMarketplace();
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Filtered from the single global sweep — a row must never fetch its own logs.
+  const rowHistory = useMemo(
+    () => history.entries.filter((e) => e.splitter.toLowerCase() === record.splitter.toLowerCase()),
+    [history.entries, record.splitter],
+  );
 
   const sellerBalances = balances?.sellers[record.seller];
   const pendingMap = balances?.splitters[record.splitter];
@@ -75,6 +84,27 @@ export default function SellerRow({ record }: { record: SellerRecord }) {
 
         <DistributeButton splitter={record.splitter} funded={funded} />
       </div>
+
+      <div className={styles.historyToggleRow}>
+        <button
+          type="button"
+          className={styles.historyToggle}
+          onClick={() => setShowHistory((v) => !v)}
+          aria-expanded={showHistory}
+        >
+          {showHistory ? '▾' : '▸'} Activity
+          <span className={styles.historyCount}>{rowHistory.length}</span>
+        </button>
+      </div>
+
+      {showHistory && (
+        <HistoryTable
+          entries={rowHistory}
+          showSeller={false}
+          initial={5}
+          emptyLabel="No activity for this seller in the scanned window."
+        />
+      )}
     </div>
   );
 }

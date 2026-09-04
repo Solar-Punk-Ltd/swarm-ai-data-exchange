@@ -9,15 +9,24 @@ import type { ReactNode } from 'react';
 import { createPublicClient, http } from 'viem';
 import type { Address, PublicClient } from 'viem';
 import { config } from '../config/env';
+import { HISTORY_LIMIT, MAX_LOG_CHUNKS } from '../config/registry';
 import { usePolling } from '../hooks/usePolling';
 import { isFunded, loadRegistry, readBalances } from '../lib/reads';
 import { errorMessage } from '../lib/rpcError';
 import { EMPTY_LINK_INDEX, enrichWithCards, loadAgentLinks } from '../lib/agents';
 import type { AgentLinkIndex } from '../lib/agents';
+import { EMPTY_HISTORY, attachTimestamps, loadHistory } from '../lib/history';
+import type { History } from '../lib/history';
 import type { BalanceSnapshot, Registry } from '../lib/reads';
 
 /** Re-read the registry every Nth tick; it changes far less often than balances do. */
 const REGISTRY_RELOAD_EVERY = 12;
+
+/**
+ * Re-sweep history every Nth tick. A log sweep is far more expensive than a balance read and
+ * settled transactions never change, so this deliberately lags the balance cadence.
+ */
+const HISTORY_RELOAD_EVERY = 6;
 
 export interface MarketplaceState {
   client: PublicClient;
@@ -33,6 +42,8 @@ export interface MarketplaceState {
   fundedSplitters: Address[];
   /** splitter -> ERC-8004 agent, from registry metadata. Empty when no registry is configured. */
   agentLinks: AgentLinkIndex;
+  /** Purchases and payouts across every clone, newest first. */
+  history: History;
   /** Force an immediate refresh, e.g. right after a transaction confirms. */
   refresh: () => Promise<void>;
 }
@@ -54,6 +65,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [registry, setRegistry] = useState<Registry>();
   const [agentLinks, setAgentLinks] = useState<AgentLinkIndex>(EMPTY_LINK_INDEX);
   const [balances, setBalances] = useState<BalanceSnapshot>();
+  const [history, setHistory] = useState<History>(EMPTY_HISTORY);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
   const [error, setError] = useState<string>();
@@ -61,6 +73,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
 
   const registryRef = useRef<Registry>();
   const tickRef = useRef(0);
+  const historyInFlight = useRef(false);
   const inFlight = useRef(false);
 
   const refreshAgentLinks = useCallback(
@@ -96,6 +109,37 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     [client],
   );
 
+  const refreshHistory = useCallback(
+    async (current: Registry) => {
+      const registryConfig = config.identityRegistry;
+      // Reuses the identity registry's window/chunking: same public-node constraints, and it
+      // is already the "how far back do we look" knob operators tune.
+      if (!registryConfig || historyInFlight.current) return;
+      historyInFlight.current = true;
+
+      try {
+        const next = await loadHistory(client, {
+          splitters: current.sellers.map((seller) => seller.splitter),
+          currencies: config.currencies,
+          fromBlock: registryConfig.fromBlock,
+          chunkBlocks: registryConfig.chunkBlocks,
+          maxChunks: MAX_LOG_CHUNKS,
+          limit: HISTORY_LIMIT,
+        });
+        // Show rows as soon as they are known; block times are a second round trip and must
+        // not hold up the table.
+        setHistory(next);
+        const withTimes = await attachTimestamps(client, next.entries);
+        setHistory({ ...next, entries: withTimes });
+      } catch {
+        // Keep the previous history; a failed sweep is not worth a visible error.
+      } finally {
+        historyInFlight.current = false;
+      }
+    },
+    [client],
+  );
+
   const tick = useCallback(
     async (forceRegistry: boolean) => {
       // Skip rather than queue: a slow node must not build a backlog of ticks.
@@ -111,6 +155,10 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           // Agent labels are supplementary: a registry that is unset, unreachable, or slow must
           // never stop balances from rendering, so this is awaited separately and swallowed.
           void refreshAgentLinks(next);
+        }
+
+        if (registryRef.current && tickRef.current % HISTORY_RELOAD_EVERY === 0) {
+          void refreshHistory(registryRef.current);
         }
 
         const current = registryRef.current;
@@ -138,7 +186,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         inFlight.current = false;
       }
     },
-    [client],
+    [client, refreshAgentLinks, refreshHistory],
   );
 
   usePolling(() => tick(false), config.refreshIntervalMs);
@@ -163,6 +211,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       lastUpdated,
       fundedSplitters,
       agentLinks,
+      history,
       refresh,
     }),
     [
@@ -173,6 +222,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       stale,
       error,
       lastUpdated,
+      history,
       fundedSplitters,
       agentLinks,
       refresh,

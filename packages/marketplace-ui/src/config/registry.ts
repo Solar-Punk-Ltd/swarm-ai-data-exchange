@@ -24,3 +24,9 @@ export const DEFAULT_LOG_CHUNK_BLOCKS = 500_000;
 
 /** Ceiling on chunks per sweep, so a misconfigured fromBlock cannot spin forever. */
 export const MAX_LOG_CHUNKS = 40;
+
+/**
+ * Most history rows to keep after sorting. A marketplace that has run for months would
+ * otherwise render thousands of rows and fetch a block timestamp for each.
+ */
+export const HISTORY_LIMIT = 200;

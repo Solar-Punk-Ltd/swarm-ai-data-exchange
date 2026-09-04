@@ -4,6 +4,7 @@ import { WalletProvider } from './context/WalletContext';
 import ConnectButton from './components/ConnectButton';
 import SellerSection from './components/SellerSection';
 import TreasurySection from './components/TreasurySection';
+import HistorySection from './components/HistorySection';
 import styles from './components/styles.module.css';
 
 /**
@@ -80,6 +81,7 @@ function Dashboard() {
       <StaleBanner />
       <TreasurySection />
       <SellerSection />
+      <HistorySection />
     </main>
   );
 }

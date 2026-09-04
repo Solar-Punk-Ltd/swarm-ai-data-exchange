@@ -59,7 +59,6 @@ import {
 
 // Fail-fast budgets, mirroring get_agent's. A bootstrap tool that hangs past the MCP client's
 // timeout is indistinguishable from a mint failure — the one state we most need to avoid.
-
 export interface IdentityContext {
   /** Lowercase 0x-prefixed address of the BEE_FEED_PK signer — the catalog/card feed owner. */
   feedOwner: string;
