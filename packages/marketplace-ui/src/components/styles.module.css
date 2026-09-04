@@ -628,3 +628,229 @@
     display: none;
   }
 }
+
+/* ---- map of agents ------------------------------------------------------ */
+
+.nav {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--mp-border);
+  padding-bottom: 0.75rem;
+}
+
+.navItem {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--mp-border-strong);
+  background: var(--mp-surface);
+  color: var(--mp-text-muted);
+  text-decoration: none;
+}
+
+.navItem:hover {
+  color: var(--mp-text);
+}
+
+.navItemOn {
+  background: var(--mp-accent-soft);
+  border-color: var(--mp-accent);
+  color: var(--mp-text);
+}
+
+.graphCanvas {
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--mp-surface);
+}
+
+.graphLegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 0.6rem;
+  font-size: 11px;
+  color: var(--mp-text-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legendDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.legendHint {
+  margin-left: auto;
+}
+
+.nodeDetail {
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--mp-border-strong);
+  border-radius: 12px;
+  background: var(--mp-surface-raised);
+}
+
+.nodeDetailHead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+
+.nodeDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.7rem 1rem;
+  font-size: 11px;
+  color: var(--mp-text-muted);
+}
+
+.nodeDetailGrid > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nodeDetailGrid strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mp-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Agent table. Same CSS Grid idiom as .historyRow: one column template, shared by the header
+   row and every body row, so the two can never drift out of alignment. */
+.agentTable {
+  display: flex;
+  flex-direction: column;
+  margin-top: 1rem;
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--mp-surface);
+}
+
+.agentHead,
+.agentRow {
+  display: grid;
+  /* agent | in | out | txs | peers | pending — the name takes the slack. */
+  grid-template-columns: minmax(0, 1fr) 96px 96px 54px 58px 104px;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--mp-border);
+  font-size: 12px;
+  text-align: left;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  color: inherit;
+  font-family: inherit;
+}
+
+.agentHead {
+  background: var(--mp-surface-raised);
+  padding: 0;
+}
+
+.agentHeadCell {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mp-text-muted);
+  background: none;
+  border: none;
+  padding: 0.55rem 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.agentHeadCell:first-child {
+  padding-left: 0.9rem;
+}
+
+.agentHeadCell:last-child {
+  padding-right: 0.9rem;
+}
+
+.agentHeadCellOn {
+  color: var(--mp-accent);
+}
+
+.agentSortMark {
+  margin-left: 0.25rem;
+}
+
+.agentRow {
+  cursor: pointer;
+}
+
+.agentRow:last-child {
+  border-bottom: none;
+}
+
+.agentRow:hover {
+  background: var(--mp-surface-raised);
+}
+
+.agentRowOn {
+  background: var(--mp-accent-soft);
+}
+
+.agentName {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.agentLabel {
+  font-weight: 600;
+  color: var(--mp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentRole {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mp-text-muted);
+}
+
+.agentNumeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .agentHead,
+  .agentRow {
+    grid-template-columns: minmax(0, 1fr) 84px 54px 88px;
+  }
+  .agentHeadCell:nth-child(3),
+  .agentHeadCell:nth-child(5),
+  .agentRow > span:nth-child(3),
+  .agentRow > span:nth-child(5) {
+    display: none;
+  }
+  .legendHint {
+    display: none;
+  }
+}

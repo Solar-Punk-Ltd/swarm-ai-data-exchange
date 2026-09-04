@@ -13,6 +13,7 @@
     "@solarpunk/contracts": "workspace:*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "react-force-graph-2d": "^1.29.1",
     "viem": "^2.21.0"
   },
   "devDependencies": {

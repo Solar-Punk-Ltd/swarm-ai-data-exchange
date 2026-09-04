@@ -1,7 +1,10 @@
-import { config, configError } from './config/env';
-import { MarketplaceProvider, useMarketplace } from './context/MarketplaceContext';
+import { configError } from './config/env';
+import { MarketplaceProvider } from './context/MarketplaceContext';
 import { WalletProvider } from './context/WalletContext';
-import ConnectButton from './components/ConnectButton';
+import { useHashRoute } from './hooks/useHashRoute';
+import AppShell from './components/AppShell';
+import StaleBanner from './components/StaleBanner';
+import MapPage from './components/MapPage';
 import SellerSection from './components/SellerSection';
 import TreasurySection from './components/TreasurySection';
 import HistorySection from './components/HistorySection';
@@ -30,59 +33,33 @@ function ConfigFailure({ problems }: { problems: string[] }) {
   );
 }
 
-function StatusPills() {
-  const { stale, error, lastUpdated, loading } = useMarketplace();
-
-  if (loading) return <span className={styles.pill}>Loading…</span>;
-
-  if (stale) {
-    return (
-      <span className={`${styles.pill} ${styles.pillDanger}`} title={error}>
-        Stale — showing last known values
-      </span>
-    );
-  }
-
-  return (
-    <span className={styles.pill} title={lastUpdated ? new Date(lastUpdated).toISOString() : ''}>
-      Live · {config.refreshIntervalMs / 1000}s
-    </span>
-  );
-}
-
-function StaleBanner() {
-  const { stale, error } = useMarketplace();
-  if (!stale) return null;
-  return (
-    <div className={`${styles.banner} ${styles.bannerDanger}`}>
-      Could not refresh balances: {error}. The values below are the last ones read successfully.
-    </div>
-  );
-}
-
 function Dashboard() {
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <h1 className={styles.title}>
-            <span className={styles.titleAccent}>Swarm AI</span> <span>Data Exchange</span>
-          </h1>
-          <div className={styles.subtitle}>
-            Marketplace treasury and seller revenue · {config.chain.name}
-          </div>
-        </div>
-        <div className={styles.headerRight}>
-          <StatusPills />
-          <ConnectButton />
-        </div>
-      </header>
-
+    <>
       <StaleBanner />
       <TreasurySection />
       <SellerSection />
       <HistorySection />
-    </main>
+    </>
+  );
+}
+
+const SUBTITLES: Record<ReturnType<typeof useHashRoute>, string> = {
+  dashboard: 'Marketplace treasury and seller revenue',
+  map: 'Agents and the payments between them',
+};
+
+/**
+ * Routing lives here, below the providers, rather than in `App`: `App` returns early when the
+ * config is broken, and a hook called after that return is conditional. Nothing in this repo
+ * would catch it — `eslint-plugin-react-hooks` is not installed.
+ */
+function Routes() {
+  const route = useHashRoute();
+  return (
+    <AppShell route={route} subtitle={SUBTITLES[route]}>
+      {route === 'map' ? <MapPage /> : <Dashboard />}
+    </AppShell>
   );
 }
 
@@ -92,7 +69,7 @@ export default function App() {
   return (
     <MarketplaceProvider>
       <WalletProvider>
-        <Dashboard />
+        <Routes />
       </WalletProvider>
     </MarketplaceProvider>
   );

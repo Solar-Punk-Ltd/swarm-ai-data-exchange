@@ -15,7 +15,12 @@ import { isFunded, loadRegistry, readBalances } from '../lib/reads';
 import { errorMessage } from '../lib/rpcError';
 import { EMPTY_LINK_INDEX, enrichWithCards, loadAgentLinks } from '../lib/agents';
 import type { AgentLinkIndex } from '../lib/agents';
-import { EMPTY_HISTORY, attachTimestamps, loadHistory } from '../lib/history';
+import {
+  EMPTY_HISTORY,
+  applyCachedTimestamps,
+  attachTimestamps,
+  loadHistory,
+} from '../lib/history';
 import type { History } from '../lib/history';
 import type { BalanceSnapshot, Registry } from '../lib/reads';
 
@@ -127,8 +132,9 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
           limit: HISTORY_LIMIT,
         });
         // Show rows as soon as they are known; block times are a second round trip and must
-        // not hold up the table.
-        setHistory(next);
+        // not hold up the table. Cached timestamps are applied up front so consumers that filter
+        // by time do not see every row as timeless for the duration of that round trip.
+        setHistory({ ...next, entries: applyCachedTimestamps(next.entries) });
         const withTimes = await attachTimestamps(client, next.entries);
         setHistory({ ...next, entries: withTimes });
       } catch {

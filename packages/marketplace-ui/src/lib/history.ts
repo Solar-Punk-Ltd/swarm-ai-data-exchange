@@ -172,6 +172,19 @@ export async function loadHistory(
 const blockTimes = new Map<bigint, number>();
 
 /**
+ * Fill in the timestamps that are already cached, synchronously.
+ *
+ * `loadHistory` returns rows with no timestamp at all, so anything rendered between the sweep and
+ * `attachTimestamps` resolving sees every row as timeless — that window opens on *every* sweep,
+ * not just the first. A consumer filtering by time would empty itself twice a minute. This costs
+ * nothing and closes the window after the first sweep, since a settled block's timestamp is
+ * cached for the life of the page.
+ */
+export function applyCachedTimestamps(entries: HistoryEntry[]): HistoryEntry[] {
+  return entries.map((e) => ({ ...e, timestamp: blockTimes.get(e.blockNumber) }));
+}
+
+/**
  * Fill in wall-clock times for the rows on screen.
  *
  * Runs only over rows that survived the limit and dedupes by block, so a busy block costs

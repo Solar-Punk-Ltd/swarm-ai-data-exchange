@@ -8,6 +8,11 @@ This is an **operator/demo surface**, not a consumer surface. It answers "who is
 accrued, and has it been paid out" — it does not browse catalogs, purchase, or touch Swarm. There
 is no Bee dependency in this package.
 
+Two views, behind a top nav: **Dashboard** (the above, and the home route) and **Map of Agents**, a
+force-directed view of the same purchases and payouts as a network — agents are nodes, the payments
+between them are edges. The map adds no fetching; it is a second reading of what the Dashboard
+already loads.
+
 ## Source of truth
 
 The contracts, not a spec document. Read before changing anything on-chain-facing:
@@ -23,16 +28,25 @@ The contracts, not a spec document. Read before changing anything on-chain-facin
 
 ## Tech stack
 
-Mirrors `erc8004-dashboard` — Vite + React 18 + TypeScript, plain CSS, no UI framework — with one
-deliberate divergence:
+Mirrors `erc8004-dashboard` — Vite + React 18 + TypeScript, plain CSS, no UI framework — with two
+deliberate divergences:
 
-| Concern   | Choice                               | Why                                                                                              |
-| --------- | ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| Bundler   | Vite 5                               | same as `erc8004-dashboard`                                                                      |
-| UI        | React 18 + TypeScript 5.7            | same as `erc8004-dashboard`                                                                      |
-| Chain lib | **viem** (not ethers v6)             | `@solarpunk/contracts` is viem-only; duplicating its ABIs in ethers is worse than diverging      |
-| Styling   | CSS Modules over a shared token file | `erc8004-dashboard` uses inline styles with hardcoded hex; that does not scale to this many rows |
-| Wallet    | raw EIP-1193 (`window.ethereum`)     | two write paths, no session state; wagmi/RainbowKit is not worth the dependency weight           |
+| Concern   | Choice                               | Why                                                                                               |
+| --------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| Bundler   | Vite 5                               | same as `erc8004-dashboard`                                                                       |
+| UI        | React 18 + TypeScript 5.7            | same as `erc8004-dashboard`                                                                       |
+| Chain lib | **viem** (not ethers v6)             | `@solarpunk/contracts` is viem-only; duplicating its ABIs in ethers is worse than diverging       |
+| Styling   | CSS Modules over a shared token file | `erc8004-dashboard` uses inline styles with hardcoded hex; that does not scale to this many rows  |
+| Wallet    | raw EIP-1193 (`window.ethereum`)     | two write paths, no session state; wagmi/RainbowKit is not worth the dependency weight            |
+| Graph     | **`react-force-graph-2d`**           | the Map of Agents needs a force layout; hand-rolling one is worse than taking the canvas renderer |
+
+`react-force-graph-2d` is the single largest stack decision in this package's life: it takes it
+from 4 runtime dependencies to roughly 40 installed packages (~200 kB minified), and it is a
+rendering library, which the rule below otherwise forbids. It was chosen over `d3-force` alone and
+over a hand-written simulation because drag, zoom, hit-testing and collision are the parts that
+actually cost time, and they are the parts it gives you. It renders to **canvas**, which is why
+`AgentGraph.tsx` reads `theme.ts` directly (see Theme). Nothing else may follow it in: the
+exception is for the graph, not a general relaxation.
 
 Do not add wagmi, RainbowKit, ethers, Tailwind, or a component library. If a table needs more than
 plain CSS Grid, the design is too complicated.
@@ -54,7 +68,14 @@ palette and add it to `theme.ts` with a comment saying it is a marketplace-ui ad
 dashboards stay visually reconcilable.
 
 Header must match the sibling dashboard: amber `Swarm AI` + cream `Data Exchange`, with the
-subtitle changed to describe this view (e.g. "Marketplace treasury and seller revenue").
+subtitle changed to describe the current view (e.g. "Marketplace treasury and seller revenue" on
+the Dashboard, "Agents and the payments between them" on the map). The wordmark never changes; the
+nav below it says which view you are on.
+
+A 2D canvas context cannot read `var(--mp-*)`, so `AgentGraph.tsx` imports `theme` from
+`theme.ts` and uses the values directly. That is the sanctioned form of "never inline a hex", not
+an exception to it — a colour still has exactly one definition. `linkPurchase` and `linkPayout`
+were added there for the edges.
 
 ## Layout
 
@@ -68,6 +89,77 @@ SELLERS  (one card/row per clone in the factory registry)
   splitter address (+ explorer link)    USDC accrued (seller share / treasury share)   tax rate
   [ DISTRIBUTE ]
 ```
+
+Map of Agents (`#/map`):
+
+```
+[ 24h ][ 7d ][ 30d ][ All ]        (period filter — local state, never the URL)
+
+  force-graph canvas: agents as nodes, payments as edges
+  legend: seller / buyer / both / treasury
+
+  selected-node detail: received · sent · purchases · counterparties
+                        distributed to seller · tax to treasury
+
+AGENT TABLE (sortable)
+  agent (+ role)   in   out   txs   peers   pending
+```
+
+## Map of Agents
+
+`lib/graph.ts` derives the whole thing from the registry, agent links and history the context
+already holds. It fetches nothing — the single-fetch-owner rule is not relaxed for this view.
+
+**One address, one node.** A splitter clone is plumbing, not an actor: an agent's clone, seller
+EOA, registered agent wallet and NFT owner all collapse onto one node keyed by the clone. Without
+that collapse an agent that both sells and buys renders as two disconnected dots, which is exactly
+the relationship the map exists to show. Node ids are bare lowercased addresses — never
+role-prefixed, since prefixing recreates the duplicate it looks like it prevents.
+
+**Lowercase every key.** `bySplitter` is keyed lowercase, a purchase's `splitter` is a decoded log
+arg and therefore checksummed, and a payout's is `log.address` and therefore not. Mixing them
+joins one kind of row and silently drops the other.
+
+**Only the treasury half of a payout is an edge.** `Distributed` carries both halves, but the
+seller's share moves from its clone to its EOA — the same participant here, so drawing it would be
+a self-loop. Both figures are on the node so the treasury edge is never read as the whole
+distribution.
+
+**An untimed entry is inside every period.** `loadHistory` returns rows with no timestamp and
+`attachTimestamps` fills them in a second pass, so a filter that excluded them would empty itself
+on every sweep, not just the first. `applyCachedTimestamps` closes most of that window at the
+source; including unknowns closes the rest. Never filter the map by block number instead — that
+introduces a second, fuzzier truth about "when" alongside the exact one already there.
+
+**The 200-event cap is stated, not hidden.** `HISTORY_LIMIT` applies after sorting newest-first,
+across both kinds and the whole window, so a longer period can never widen past it. `Truncation`
+answers this exactly rather than by guess: the view is provably complete when the oldest retained
+event predates the period cutoff, and the banner appears only when it does not. Do not raise
+`HISTORY_LIMIT` to "fix" this — the first `attachTimestamps` is one batched request of N
+`eth_getBlock` calls, and `blockTimes` has no eviction.
+
+**Identity preservation is what keeps the layout still.** force-graph stamps `x/y/vx/vy/index/
+__indexColor` onto node objects in place and treats an array of all-new objects as a new graph:
+colour tracker reset, d3 re-seeded, layout thrown across the canvas. `reconcile` reuses the object
+for an id already on screen, and `graphSignature` gates the derivation so a tick that changed
+nothing does not re-derive at all. Both are load-bearing — the context hands out a new value every
+5s whether or not anything changed.
+
+**Every canvas accessor must be stable.** `react-force-graph-2d` diffs props by reference, so an
+inline lambda is re-applied on every render. Module-level constants or `useCallback`, and
+`AgentGraph` is memoised so the balance tick stops at its boundary.
+
+**Keeping nodes apart is ours, not force-graph's.** Charge cannot separate buyers: each pays
+several sellers, so they share a barycentre and pile up there however hard the sellers are pushed
+out. `separateOverlaps` resolves overlaps directly, on an animation frame `AgentGraph` owns. Two
+force-graph extension points were tried first and **both fail silently** — a force installed with
+`d3Force('collide', …)` registers and initialises with the right nodes but is never invoked, and
+`onEngineTick` is applied once and never replaced, so under StrictMode's double mount the
+surviving callback is the discarded first instance's, frozen on the node array from before any
+buyer existed. Charge and link distance still go through `d3Force`, which does work for those.
+
+**Escape anything from an Agent Card.** Node tooltips are injected as HTML and card names are
+third-party strings — anyone can register an agent called anything.
 
 ## Data flow
 
@@ -378,7 +470,7 @@ Mirror `erc8004-dashboard` so someone who knows one knows the other:
 ```
 src/
   main.tsx                  — createRoot + <App />, and applyTheme() before first paint
-  App.tsx                   — page shell, header, <TreasurySection /> + <SellerSection />
+  App.tsx                   — ConfigFailure, the providers, and the route switch
   theme.ts                  — colour tokens + applyTheme() (see Theme above)
   index.css                 — reset + body, matching erc8004-dashboard/src/index.css
   config/
@@ -392,18 +484,29 @@ src/
   lib/
     reads.ts                — every on-chain read: loadRegistry, readBalances, isFunded
     agents.ts               — splitter -> ERC-8004 agent index, with verification
+    history.ts              — purchases + payouts from chain logs; the map's edge set
+    graph.ts                — the network derivation: deriveGraph, graphSignature, reconcile
     format.ts               — formatTaxBps (via the SDK BPS_DENOMINATOR), formatAge
     rpcError.ts             — wallet/RPC errors to one readable line; user-rejection detection
   hooks/
+    useHashRoute.ts         — the two-page hash router; nothing else lives in the URL
     usePolling.ts           — interval + document.hidden pause
     useTxLifecycle.ts       — shared idle/signing/pending/confirmed state machine
     useDistribute.ts        — one clone; wraps useTxLifecycle
     useDistributeAll.ts     — batch sweep; wraps the same useTxLifecycle
   components/
     styles.module.css       — shared CSS module for every component
+    AppShell.tsx            — header, nav and page container; wraps both views
+    StatusPills.tsx         — live/stale/loading pill in the header
+    StaleBanner.tsx         — last-tick-failed notice; used by both views
+    MapPage.tsx             — Map of Agents: period filter, memo gate, live node objects
+    AgentGraph.tsx          — the force-graph canvas; memoised, explicitly sized
+    AgentTable.tsx          — sortable per-agent numbers under the map
     TreasurySection.tsx
     SellerSection.tsx
     SellerRow.tsx
+    HistorySection.tsx      — Activity: filters, partial-sweep banner
+    HistoryTable.tsx        — purchase/payout rows
     AddressLink.tsx         — address + copy + explorer icon; used by every section
     AgentBadge.tsx          — the seller's ERC-8004 agent, with its verification status
     Balance.tsx             — formatUnits + symbol, with a skeleton state
@@ -447,10 +550,15 @@ Copy `erc8004-dashboard/vite.config.ts` and adjust:
     "@solarpunk/contracts": "workspace:*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "react-force-graph-2d": "^1.29.1",
     "viem": "^2.21.0"
   }
 }
 ```
+
+`react-force-graph-2d` pulls `force-graph` and `react-kapsule`. Keep `react-kapsule` at **2.6.0 or
+later**: that is the release with the React 18 StrictMode double-mount fix, and below it the canvas
+fails to re-initialise on a remount.
 
 Match `erc8004-dashboard`'s devDependencies exactly (`@types/react`, `@types/react-dom`,
 `@vitejs/plugin-react`, `typescript`, `vite`) so the two stay on one toolchain.

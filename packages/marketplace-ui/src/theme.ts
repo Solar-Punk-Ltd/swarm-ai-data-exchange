@@ -24,6 +24,11 @@ export const theme = {
   dangerSoft: 'rgba(229, 103, 79, 0.12)',
   warning: '#e0b341',
   skeleton: '#1c2027',
+
+  // Map of Agents edges. Dimmed derivations of accent/success: on a dense canvas the edges are
+  // background, and node labels have to stay readable over them.
+  linkPurchase: 'rgba(245, 165, 36, 0.55)',
+  linkPayout: 'rgba(92, 201, 138, 0.45)',
 } as const;
 
 export type ThemeToken = keyof typeof theme;
