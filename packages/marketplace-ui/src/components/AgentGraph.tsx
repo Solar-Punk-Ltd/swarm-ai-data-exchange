@@ -28,11 +28,24 @@ const HEIGHT = 520;
 const SETTLE_FRAMES = 240;
 /** Radius of a node with no activity. Everything else grows from here. */
 const BASE_RADIUS = 4;
+/**
+ * Floor on the radius of a node that has an avatar: a face needs more room than a dot does, and
+ * 4px of one is unreadable.
+ *
+ * Keyed on `avatarUrl` rather than on the decoded sprite, so the layout does not shift when an
+ * image lands seconds after its node was placed. The cost is real and deliberate — it flattens
+ * the area-proportional size encoding below ~5 purchases, where every agent with a face reads as
+ * the same size.
+ */
+const AVATAR_MIN_RADIUS = 9;
+/** Side of the pre-scaled sprite, in device pixels. */
+const AVATAR_SPRITE_PX = 96;
 
 function radiusOf(node: GraphNode): number {
   // Area-proportional to activity, so a busy agent reads as busier without dwarfing the rest.
   // Floored so an agent that has never traded is still a visible, clickable dot.
-  return BASE_RADIUS * Math.sqrt(1 + node.txCount);
+  const base = BASE_RADIUS * Math.sqrt(1 + node.txCount);
+  return node.avatarUrl ? Math.max(base, AVATAR_MIN_RADIUS) : base;
 }
 
 /** Shared with the legend, so the two can never drift apart. */
@@ -110,6 +123,86 @@ export function colorForRoles(roles: Set<NodeRole>): string {
 
 function colorOf(node: GraphNode): string {
   return colorForRoles(node.roles);
+}
+
+/**
+ * Avatar sprites, keyed by resolved card image URL.
+ *
+ * Module-level, so a remount — StrictMode's double mount, or leaving the map and coming back —
+ * does not re-fetch and re-decode what is already here. A present key with a null value means
+ * "asked for, nothing to draw", covering both still-loading and permanently-failed; the canvas
+ * treats them identically and draws the plain dot.
+ *
+ * **A sprite must never be painted on the pointer-area canvas.** force-graph hit-tests by painting
+ * every node in a unique colour to a second, shadow canvas and reading the pixel under the cursor
+ * back with `getImageData` (`force-graph.mjs:1405`). Drawing a cross-origin image taints whatever
+ * canvas it reaches, and `getImageData` on a tainted canvas throws `SecurityError` — which would
+ * kill every click and hover on the map at once. Card images come from a Swarm gateway that is not
+ * ours, so this is the ordinary case and not the exception. `paintPointerArea` therefore paints
+ * plain circles, and the taint stays on the visible canvas, which nothing ever reads back.
+ *
+ * For the same reason `crossOrigin` is deliberately left unset on the loader: asking for CORS from
+ * a gateway that does not send the header fails the load outright, trading every avatar away for a
+ * property we have no use for.
+ */
+const sprites = new Map<string, HTMLCanvasElement | null>();
+
+/**
+ * Decode once into a small, already-circular canvas rather than clipping and downscaling the
+ * full-size source on every frame of every node.
+ *
+ * Centre-cropped to a square: a card's `image` is arbitrary third-party content at an arbitrary
+ * aspect ratio, and a cropped face reads better than a squashed one.
+ */
+function toSprite(image: HTMLImageElement): HTMLCanvasElement | null {
+  const side = Math.min(image.naturalWidth, image.naturalHeight);
+  if (side === 0) return null;
+
+  const sprite = document.createElement('canvas');
+  sprite.width = AVATAR_SPRITE_PX;
+  sprite.height = AVATAR_SPRITE_PX;
+  const ctx = sprite.getContext('2d');
+  if (!ctx) return null;
+
+  const half = AVATAR_SPRITE_PX / 2;
+  ctx.beginPath();
+  ctx.arc(half, half, half, 0, 2 * Math.PI);
+  ctx.clip();
+  ctx.drawImage(
+    image,
+    (image.naturalWidth - side) / 2,
+    (image.naturalHeight - side) / 2,
+    side,
+    side,
+    0,
+    0,
+    AVATAR_SPRITE_PX,
+    AVATAR_SPRITE_PX,
+  );
+  return sprite;
+}
+
+/**
+ * Cache hit, or start one load and report back when it lands. Safe to call from a paint loop:
+ * everything after the first call for a URL is a map lookup.
+ *
+ * There is no error branch and no retry. A card's image is third-party and may simply not be
+ * there; leaving the null in place is the whole failure path, and the node keeps its dot.
+ */
+function spriteFor(url: string, onLoad: () => void): HTMLCanvasElement | null {
+  const cached = sprites.get(url);
+  if (cached !== undefined) return cached;
+
+  sprites.set(url, null);
+  const image = new Image();
+  image.onload = () => {
+    const sprite = toSprite(image);
+    if (!sprite) return;
+    sprites.set(url, sprite);
+    onLoad();
+  };
+  image.src = url;
+  return null;
 }
 
 /**
@@ -208,23 +301,56 @@ function AgentGraph({ nodes, links, selectedId, onSelect }: AgentGraphProps) {
     graph.current?.zoomToFit(400, 60);
   }, []);
 
+  /**
+   * Bumped when a sprite finishes decoding, purely to re-identify `drawNode`.
+   *
+   * force-graph pauses its own redraw once the engine is idle (`autoPauseRedraw` defaults on, see
+   * `force-graph.mjs:1626`), so a sprite that lands after the layout settled would not appear
+   * until the next drag or zoom. Re-applying an accessor makes the inner graph report
+   * `needsRedraw` and the frame gets painted. Unlike re-applying `graphData` it does not restart
+   * the layout, which is why this is its own signal and not a reheat.
+   */
+  const [avatarEpoch, setAvatarEpoch] = useState(0);
+  const onAvatarLoad = useCallback(() => setAvatarEpoch((epoch) => epoch + 1), []);
+
   const drawNode = useCallback(
     (node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const x = node.x ?? 0;
       const y = node.y ?? 0;
       const radius = radiusOf(node);
+      const sprite = node.avatarUrl ? spriteFor(node.avatarUrl, onAvatarLoad) : null;
 
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, 2 * Math.PI);
-      ctx.fillStyle = colorOf(node);
-      ctx.fill();
+      if (sprite) {
+        // Pre-clipped to a circle, so this needs no save/clip/restore of its own.
+        ctx.drawImage(sprite, x - radius, y - radius, radius * 2, radius * 2);
+        // The role used to be the fill, which the avatar has now taken. It becomes the ring rather
+        // than being dropped: seller / buyer / both is what the legend promises, and an avatar is
+        // no substitute for it — an agent's picture says nothing about which side it trades on.
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.strokeStyle = colorOf(node);
+        ctx.lineWidth = 2.5 / globalScale;
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = colorOf(node);
+        ctx.fill();
+      }
 
+      // Outside the avatar's role ring, or on the dot's own edge when there is no avatar, so that
+      // two rings are never drawn on top of each other.
+      const ringRadius = radius + (sprite ? 3 / globalScale : 0);
       if (node.id === selectedId) {
+        ctx.beginPath();
+        ctx.arc(x, y, ringRadius, 0, 2 * Math.PI);
         ctx.strokeStyle = theme.text;
         ctx.lineWidth = 2 / globalScale;
         ctx.stroke();
       } else if (node.roles.has('treasury')) {
         // The hub is the one node that is not an agent; a ring says so without a second colour.
+        ctx.beginPath();
+        ctx.arc(x, y, ringRadius, 0, 2 * Math.PI);
         ctx.strokeStyle = theme.accent;
         ctx.lineWidth = 1.5 / globalScale;
         ctx.stroke();
@@ -237,10 +363,17 @@ function AgentGraph({ nodes, links, selectedId, onSelect }: AgentGraphProps) {
       ctx.fillStyle = node.id === selectedId ? theme.text : theme.textMuted;
       ctx.fillText(node.label, x, y + radius + 2 / globalScale);
     },
-    [selectedId],
+    [selectedId, onAvatarLoad, avatarEpoch],
   );
 
-  // Hit area follows the drawn circle, generously, so small nodes stay clickable.
+  /**
+   * Hit area follows the drawn circle, generously, so small nodes stay clickable.
+   *
+   * Plain circles only — never the avatar. This paints to force-graph's shadow canvas, whose
+   * pixels are read back with `getImageData` to resolve the node under the cursor; a cross-origin
+   * sprite would taint it and turn every hit test into a `SecurityError`. See the note on
+   * `sprites` above.
+   */
   const paintPointerArea = useCallback(
     (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
       ctx.beginPath();

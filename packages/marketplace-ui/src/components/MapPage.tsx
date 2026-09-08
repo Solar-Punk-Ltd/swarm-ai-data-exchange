@@ -140,8 +140,9 @@ export default function MapPage() {
           </span>
         ))}
         <span className={styles.legendHint}>
-          Edge thickness is transfer count. Drag to rearrange, scroll to zoom, click a node to pin
-          it.
+          Edge thickness is transfer count. An avatar marks a verified agent; a plain dot is an
+          unverified link, a buyer wallet, or the treasury. Drag to rearrange, scroll to zoom, click
+          a node to pin it.
         </span>
       </div>
 

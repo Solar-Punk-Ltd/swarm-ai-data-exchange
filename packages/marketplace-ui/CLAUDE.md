@@ -161,6 +161,31 @@ buyer existed. Charge and link distance still go through `d3Force`, which does w
 **Escape anything from an Agent Card.** Node tooltips are injected as HTML and card names are
 third-party strings — anyone can register an agent called anything.
 
+**Avatars never touch the pointer-area canvas.** A `verified` agent's node is painted with its card
+`image` instead of a flat dot. force-graph hit-tests by painting each node in a unique colour to a
+second, shadow canvas and reading the pixel under the cursor back with `getImageData`; a
+cross-origin image taints whatever canvas it reaches, and `getImageData` on a tainted canvas throws
+`SecurityError`, killing every click and hover at once. Card images come from a Swarm gateway that
+is not ours, so that is the ordinary case. `nodePointerAreaPaint` therefore paints plain circles
+and the taint stays on the visible canvas, which nothing reads back. For the same reason
+`crossOrigin` is left unset on the loader — requesting CORS from a gateway that sends no header
+fails the load outright.
+
+Three more consequences of putting a face on a node, all deliberate:
+
+- **Verified only.** An image reads as identity far more strongly than a name does, so
+  `unverified` / `disputed` links stay as dots rather than borrowing the map's authority for a
+  claim `AgentBadge` explicitly hedges. It is also unsanitisable in a way a name is not: `image` is
+  an arbitrary picture from a URL its own subject controls.
+- **Role moves to the ring.** The avatar takes the fill that used to carry seller / buyer / both,
+  and that encoding is what the legend promises — an agent's picture says nothing about which side
+  it trades on. Selection and the treasury ring move outboard so two rings never overlap.
+- **`AVATAR_MIN_RADIUS` breaks size ∝ activity below ~5 purchases**, and is keyed on `avatarUrl`
+  rather than the decoded sprite so the layout does not shift when an image lands. Both are worth
+  it; neither is free. A late sprite still needs a repaint nudge, because `autoPauseRedraw` is on
+  by default and a settled canvas has stopped painting — re-identifying `nodeCanvasObject` is that
+  nudge, and unlike re-applying `graphData` it does not restart the layout.
+
 ## Data flow
 
 ### Enumerating sellers — note the direction
@@ -439,6 +464,11 @@ the request, a cold feed may not resolve, and it may simply be slow. So:
   name is a degraded label, never a missing agent.
 - One fetch per distinct agent, not per row, with an 8s abort — the same agent can hold several
   clones.
+
+The same fetch also yields the card's `image`, which the Map of Agents paints as the node. It is
+resolved through `resolveCardUrl` like the card's own location, so it follows http(s) and `bzz://`
+and nothing else — a `data:` or `javascript:` URL out of a third-party card is dropped rather than
+handed to a renderer.
 
 ### Catalog link
 

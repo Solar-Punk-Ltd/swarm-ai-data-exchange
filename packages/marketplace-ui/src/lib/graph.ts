@@ -56,6 +56,14 @@ export interface GraphNode {
   splitter?: Address;
   sellerEoa?: Address;
   agentId?: bigint;
+  /**
+   * Avatar to draw in place of the dot, from the agent's card.
+   *
+   * Set only for a `verified` link. An image reads as identity far more strongly than a name
+   * does, and `unverified` / `disputed` are exactly the claims `AgentBadge` refuses to endorse —
+   * putting a face on one would lend the map's authority to something unproven.
+   */
+  avatarUrl?: string;
   /** Received, within the period. */
   volumeIn: VolumeMap;
   /** Sent, within the period. */
@@ -197,6 +205,10 @@ export function deriveGraph(input: DeriveGraphInput): DerivedGraph {
     if (link) {
       node.agentId = link.agentId;
       node.label = link.card?.name ?? `Agent #${link.agentId}`;
+      // Assigned on every pass rather than only when there is something to assign, so that
+      // `reconcile`'s Object.assign can clear it: a link that loses its verified status has to
+      // lose its face too, and a key that is never written is a key that never overwrites.
+      node.avatarUrl = link.status === 'verified' ? link.card?.image : undefined;
     }
 
     alias(seller.splitter, id);
@@ -312,8 +324,9 @@ export function deriveGraph(input: DeriveGraphInput): DerivedGraph {
  *
  * The context hands out a new value every 5s — `balances` is freshly allocated each tick — and a
  * new `history` with entirely new entry objects every 30s, so memoising on those references
- * re-derives constantly for no reason. The counts of timed entries and named cards are in here
- * because both change as the second-pass fetches land, and both change what is rendered.
+ * re-derives constantly for no reason. The counts of timed entries, named cards and avatars are in
+ * here because all three change as the second-pass fetches land, and all three change what is
+ * rendered.
  */
 export function graphSignature(
   registry: Registry | undefined,
@@ -328,7 +341,13 @@ export function graphSignature(
   for (const entry of entries) if (entry.timestamp !== undefined) timed += 1;
 
   let named = 0;
-  for (const link of agentLinks.bySplitter.values()) if (link.card?.name) named += 1;
+  let faced = 0;
+  for (const link of agentLinks.bySplitter.values()) {
+    if (link.card?.name) named += 1;
+    // Counted separately from `named`: a card can carry an image and no name, and an avatar
+    // changes both how a node is painted and its radius floor.
+    if (link.status === 'verified' && link.card?.image) faced += 1;
+  }
 
   // A bounded period's cutoff moves with the clock, so an idle page must still re-derive
   // occasionally or nothing would ever age out. One derive a minute over <=200 entries is free.
@@ -340,6 +359,7 @@ export function graphSignature(
     registry?.sellers.length ?? -1,
     agentLinks.bySplitter.size,
     named,
+    faced,
     entries.length,
     timed,
     entries[0]?.txHash ?? '',

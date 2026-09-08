@@ -56,6 +56,12 @@ export interface AgentCardInfo {
   /** Resolved http(s) URL the card was fetched from, for the "open card" affordance. */
   url: string;
   /**
+   * Resolved http(s) URL of the card's `image`. `createAgentCard` defaults it
+   * (`DEFAULT_AGENT_IMAGE` in erc8004-adapter), so most registered agents carry one. Undefined
+   * when the card omits it or names a scheme we will not follow.
+   */
+  image?: string;
+  /**
    * Catalog feed owner from the card's `swarm-ai-catalog` service entry. Undefined when the
    * agent publishes no catalog — a seller can hold a splitter without listing anything.
    */
@@ -274,17 +280,26 @@ function readString(source: Record<string, unknown>, key: string): string | unde
  * gateway this dashboard does not control, so a CORS rejection, a cold feed, or a slow
  * gateway are all expected outcomes, not errors. The badge falls back to the agent id.
  */
-async function fetchCard(url: string, timeoutMs: number): Promise<AgentCardInfo | undefined> {
+async function fetchCard(
+  url: string,
+  gateway: string,
+  timeoutMs: number,
+): Promise<AgentCardInfo | undefined> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) return undefined;
     const card = (await response.json()) as Record<string, unknown>;
+    const image = readString(card, 'image');
     return {
       name: readString(card, 'name'),
       description: readString(card, 'description'),
       url,
+      // Through the same resolver as the card's own location, which follows http(s) and `bzz://`
+      // and nothing else — a `data:` or `javascript:` image URL from a third-party card is
+      // dropped rather than handed to a renderer.
+      image: image ? resolveCardUrl(image, gateway) : undefined,
       catalogFeedOwner: readCatalogFeedOwner(card),
     };
   } catch {
@@ -320,7 +335,7 @@ export async function enrichWithCards(
   const fetched = new Map<string, AgentCardInfo>();
   await Promise.all(
     [...urls.entries()].map(async ([agentId, url]) => {
-      const card = await fetchCard(url, timeoutMs);
+      const card = await fetchCard(url, gateway, timeoutMs);
       if (card) fetched.set(agentId, card);
     }),
   );
