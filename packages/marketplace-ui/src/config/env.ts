@@ -27,6 +27,17 @@ export interface AppConfig {
    */
   catalogueBrowserUrl?: string;
   /**
+   * Devcon demo pages (`#/devcon`, `#/claim-wallet`). Off by default — they are demo scaffolding,
+   * not product surface, so the nav item and both routes disappear when this is false.
+   */
+  showDemoFlow: boolean;
+  /**
+   * Base URL the `#/devcon` QR code points at. Undefined means `window.location.origin`, which is
+   * only scannable when the dashboard is served over the network — a phone cannot resolve
+   * localhost. Stored without a trailing slash.
+   */
+  demoFlowBaseUrl?: string;
+  /**
    * ERC-8004 Identity Registry, when one is known for this chain. Undefined disables agent
    * labelling — the link is supplementary and must never block the dashboard.
    */
@@ -61,6 +72,35 @@ function requireAddress(raw: string | undefined, name: string, problems: string[
     return '0x';
   }
   return getAddress(raw);
+}
+
+/** Accepts only "true"/"false" — a typo must fail loudly rather than silently read as off. */
+function parseBool(raw: string | undefined, name: string, problems: string[]): boolean {
+  if (raw === undefined || raw === '') return false;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  problems.push(`${name} must be "true" or "false" (got "${raw}").`);
+  return false;
+}
+
+/**
+ * QR target base. Only validated when the demo flow is on: a stale value left behind an off flag
+ * must not stop the dashboard from booting.
+ */
+function parseDemoFlowBaseUrl(
+  raw: string | undefined,
+  enabled: boolean,
+  problems: string[],
+): string | undefined {
+  if (!raw || !enabled) return undefined;
+  try {
+    new URL(raw);
+  } catch {
+    problems.push(`VITE_DEMO_FLOW_BASE_URL is not a valid URL: "${raw}"`);
+    return undefined;
+  }
+  // The QR builder appends `/#/claim-wallet`, so a trailing slash here would double it.
+  return raw.replace(/\/+$/, '');
 }
 
 /**
@@ -131,6 +171,9 @@ function parseConfig(): AppConfig {
     );
   }
 
+  const showDemoFlow = parseBool(env.VITE_SHOW_DEMO_FLOW, 'VITE_SHOW_DEMO_FLOW', problems);
+  const demoFlowBaseUrl = parseDemoFlowBaseUrl(env.VITE_DEMO_FLOW_BASE_URL, showDemoFlow, problems);
+
   if (problems.length > 0) throw new ConfigError(problems);
 
   return {
@@ -142,6 +185,8 @@ function parseConfig(): AppConfig {
     currencies: currencies!,
     swarmGateway: env.VITE_SWARM_GATEWAY_URL || DEFAULT_SWARM_GATEWAY,
     catalogueBrowserUrl: env.VITE_CATALOGUE_FEED_BROWSER_URL || DEFAULT_CATALOGUE_BROWSER,
+    showDemoFlow,
+    demoFlowBaseUrl,
     identityRegistry: parseRegistry(chainId, problems),
   };
 }

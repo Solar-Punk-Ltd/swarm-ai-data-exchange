@@ -5,9 +5,17 @@ import ConnectButton from './ConnectButton';
 import StatusPills from './StatusPills';
 import styles from './styles.module.css';
 
-const NAV: { route: Route; href: string; label: string }[] = [
+/**
+ * `demo` entries are dropped unless VITE_SHOW_DEMO_FLOW is on. Filtered rather than conditionally
+ * built so the array stays a declaration of every page there is.
+ *
+ * `claim-wallet` is deliberately absent: you arrive there by scanning the code on `#/devcon`, so
+ * no nav item highlights while you are on it.
+ */
+const NAV: { route: Route; href: string; label: string; demo?: boolean }[] = [
   { route: 'dashboard', href: '#/', label: 'Dashboard' },
   { route: 'map', href: '#/map', label: 'Map of Agents' },
+  { route: 'devcon', href: '#/devcon', label: 'Devcon', demo: true },
 ];
 
 export interface AppShellProps {
@@ -18,7 +26,7 @@ export interface AppShellProps {
 }
 
 /**
- * Page chrome shared by both views: wordmark, per-view subtitle, status/wallet controls, and the
+ * Page chrome shared by every view: wordmark, per-view subtitle, status/wallet controls, and the
  * nav. Plain anchors rather than click handlers, so the hash is the single source of route truth
  * and Back works without the router pushing anything itself.
  */
@@ -41,7 +49,7 @@ export default function AppShell({ route, subtitle, children }: AppShellProps) {
       </header>
 
       <nav className={styles.nav}>
-        {NAV.map((item) => (
+        {NAV.filter((item) => !item.demo || config.showDemoFlow).map((item) => (
           <a
             key={item.route}
             className={`${styles.navItem} ${route === item.route ? styles.navItemOn : ''}`}

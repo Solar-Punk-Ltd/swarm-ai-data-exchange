@@ -1,17 +1,30 @@
 import { useEffect, useState } from 'react';
+import { config } from '../config/env';
 
-export type Route = 'dashboard' | 'map';
+export type Route = 'dashboard' | 'map' | 'devcon' | 'claim-wallet';
 
-/** `#/map` is the map; everything else — including `''` and `#/` — is the home route. */
+/** Reachable only while VITE_SHOW_DEMO_FLOW is on. */
+const DEMO_ROUTES: string[] = ['devcon', 'claim-wallet'];
+
+/**
+ * `#/map` is the map, `#/devcon` and `#/claim-wallet` are the demo pages, and everything else —
+ * including `''` and `#/` — is the home route.
+ *
+ * A demo hash that outlives the flag resolves to the dashboard rather than a page the build is
+ * hiding: a scanned QR code long outlives the build that printed it.
+ */
 function parseRoute(hash: string): Route {
-  return hash.replace(/^#\/?/, '') === 'map' ? 'map' : 'dashboard';
+  const slug = hash.replace(/^#\/?/, '');
+  if (slug === 'map') return 'map';
+  if (DEMO_ROUTES.includes(slug)) return config.showDemoFlow ? (slug as Route) : 'dashboard';
+  return 'dashboard';
 }
 
 /**
- * The two-page router.
+ * The router.
  *
- * Hash rather than the History API so a static `vite preview`, or any static host, serves both
- * pages without rewrite rules. `hashchange` does not fire for the URL the page loaded with, so
+ * Hash rather than the History API so a static `vite preview`, or any static host, serves every
+ * page without rewrite rules. `hashchange` does not fire for the URL the page loaded with, so
  * the initial route is read from `location.hash` directly rather than waited for.
  *
  * Deliberately holds only the route. Filter state stays in component state: writing it to the

@@ -13,6 +13,14 @@ force-directed view of the same purchases and payouts as a network — agents ar
 between them are edges. The map adds no fetching; it is a second reading of what the Dashboard
 already loads.
 
+Behind `VITE_SHOW_DEMO_FLOW` there are two more pages, demo scaffolding rather than product
+surface: **Devcon** (`#/devcon`), a QR code that hands the audience off from the projected
+dashboard to their own phone, and **Claim wallet** (`#/claim-wallet`), the page that code points
+at — where a buyer agent will be created to purchase a funded wallet from a seller agent. With the
+flag off the nav item disappears and both hashes resolve to the Dashboard, because a scanned QR
+code outlives the build that printed it. Only `#/devcon` is in the nav: you reach `#/claim-wallet`
+by scanning, so nothing should highlight while you are on it.
+
 ## Source of truth
 
 The contracts, not a spec document. Read before changing anything on-chain-facing:
@@ -47,6 +55,15 @@ over a hand-written simulation because drag, zoom, hit-testing and collision are
 actually cost time, and they are the parts it gives you. It renders to **canvas**, which is why
 `AgentGraph.tsx` reads `theme.ts` directly (see Theme). Nothing else may follow it in: the
 exception is for the graph, not a general relaxation.
+
+One narrower exception has since been taken: **`qrcode-generator`**, for the Devcon page's QR code.
+It is a single package with zero transitive dependencies (21 kB minified, 8 kB gzipped), and the
+alternative was owning ~280 lines of Reed-Solomon error correction, version selection and mask
+scoring — specified, fiddly, and with no interesting failure modes to test against. It is used for
+the **matrix only**: `QrCode.tsx` reads `getModuleCount()` / `isDark()` and emits its own SVG,
+because `createSvgTag()` / `createImgTag()` return HTML strings (which would need
+`dangerouslySetInnerHTML`) with their colours baked in. Treat this the way you treat the graph —
+a named exception, not a precedent.
 
 Do not add wagmi, RainbowKit, ethers, Tailwind, or a component library. If a table needs more than
 plain CSS Grid, the design is too complicated.
@@ -394,16 +411,18 @@ splitter row filters on it (native entries are dropped entirely).
 All are Vite build-time vars and **must** carry the `VITE_` prefix — Vite exposes nothing else to
 the browser. All values here are public; there is no secret in this package.
 
-| Variable                            | Required | Default                    | Purpose                                                         |
-| ----------------------------------- | -------- | -------------------------- | --------------------------------------------------------------- |
-| `VITE_TREASURY_ADDRESS`             | yes      | —                          | Marketplace treasury shown in the Treasury section              |
-| `VITE_SPLITTER_FACTORY_ADDRESS`     | yes      | —                          | `SplitterFactory` to enumerate                                  |
-| `VITE_CHAIN_ID`                     | no       | `84532`                    | Base Sepolia. Selects the viem chain and the currency config    |
-| `VITE_RPC_URL`                      | no       | `https://sepolia.base.org` | **Required in practice** — the public node rate-limits          |
-| `VITE_REFRESH_INTERVAL_MS`          | no       | `5000`                     | Balance poll interval                                           |
-| `VITE_IDENTITY_REGISTRY_ADDRESS`    | no       | known per chain            | ERC-8004 registry, for labelling rows with their agent          |
-| `VITE_IDENTITY_REGISTRY_FROM_BLOCK` | no       | registry deploy block      | Start of the `agent_splitter` log sweep                         |
-| `VITE_LOG_CHUNK_BLOCKS`             | no       | `500000`                   | Blocks per `eth_getLogs` call; lower it if the index is partial |
+| Variable                            | Required | Default                    | Purpose                                                          |
+| ----------------------------------- | -------- | -------------------------- | ---------------------------------------------------------------- |
+| `VITE_TREASURY_ADDRESS`             | yes      | —                          | Marketplace treasury shown in the Treasury section               |
+| `VITE_SPLITTER_FACTORY_ADDRESS`     | yes      | —                          | `SplitterFactory` to enumerate                                   |
+| `VITE_CHAIN_ID`                     | no       | `84532`                    | Base Sepolia. Selects the viem chain and the currency config     |
+| `VITE_RPC_URL`                      | no       | `https://sepolia.base.org` | **Required in practice** — the public node rate-limits           |
+| `VITE_REFRESH_INTERVAL_MS`          | no       | `5000`                     | Balance poll interval                                            |
+| `VITE_IDENTITY_REGISTRY_ADDRESS`    | no       | known per chain            | ERC-8004 registry, for labelling rows with their agent           |
+| `VITE_IDENTITY_REGISTRY_FROM_BLOCK` | no       | registry deploy block      | Start of the `agent_splitter` log sweep                          |
+| `VITE_LOG_CHUNK_BLOCKS`             | no       | `500000`                   | Blocks per `eth_getLogs` call; lower it if the index is partial  |
+| `VITE_SHOW_DEMO_FLOW`               | no       | `false`                    | Enables `#/devcon` and `#/claim-wallet`. `"true"`/`"false"` only |
+| `VITE_DEMO_FLOW_BASE_URL`           | no       | `window.location.origin`   | Base URL the demo QR encodes; only read when the flag is on      |
 
 `VITE_RPC_URL` is not in the original spec for this dashboard but is not optional in reality:
 `VITE_CHAIN_ID` selects a chain, it does not provide a transport. Mirror the wording of
@@ -530,6 +549,9 @@ src/
     StatusPills.tsx         — live/stale/loading pill in the header
     StaleBanner.tsx         — last-tick-failed notice; used by both views
     MapPage.tsx             — Map of Agents: period filter, memo gate, live node objects
+    DevconPage.tsx          — demo hand-off: the QR code and its resolved URL
+    ClaimWalletPage.tsx     — the QR code's target; empty until the buyer flow lands
+    QrCode.tsx              — QR matrix as inline SVG; dark-on-light, 4-module quiet zone
     AgentGraph.tsx          — the force-graph canvas; memoised, explicitly sized
     AgentTable.tsx          — sortable per-agent numbers under the map
     TreasurySection.tsx

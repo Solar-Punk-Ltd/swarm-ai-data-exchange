@@ -2,9 +2,12 @@ import { configError } from './config/env';
 import { MarketplaceProvider } from './context/MarketplaceContext';
 import { WalletProvider } from './context/WalletContext';
 import { useHashRoute } from './hooks/useHashRoute';
+import type { Route } from './hooks/useHashRoute';
 import AppShell from './components/AppShell';
 import StaleBanner from './components/StaleBanner';
 import MapPage from './components/MapPage';
+import DevconPage from './components/DevconPage';
+import ClaimWalletPage from './components/ClaimWalletPage';
 import SellerSection from './components/SellerSection';
 import TreasurySection from './components/TreasurySection';
 import HistorySection from './components/HistorySection';
@@ -44,9 +47,22 @@ function Dashboard() {
   );
 }
 
-const SUBTITLES: Record<ReturnType<typeof useHashRoute>, string> = {
+const SUBTITLES: Record<Route, string> = {
   dashboard: 'Marketplace treasury and seller revenue',
   map: 'Agents and the payments between them',
+  devcon: 'Scan to create a buyer agent',
+  'claim-wallet': 'Buy a funded wallet from a seller agent',
+};
+
+/**
+ * Both records are keyed by `Route`, so widening the union is a type error until every page is
+ * named here — which is the point of the lookup over a chain of ternaries.
+ */
+const PAGES: Record<Route, () => JSX.Element> = {
+  dashboard: Dashboard,
+  map: MapPage,
+  devcon: DevconPage,
+  'claim-wallet': ClaimWalletPage,
 };
 
 /**
@@ -56,9 +72,10 @@ const SUBTITLES: Record<ReturnType<typeof useHashRoute>, string> = {
  */
 function Routes() {
   const route = useHashRoute();
+  const Page = PAGES[route];
   return (
     <AppShell route={route} subtitle={SUBTITLES[route]}>
-      {route === 'map' ? <MapPage /> : <Dashboard />}
+      <Page />
     </AppShell>
   );
 }

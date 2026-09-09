@@ -854,3 +854,60 @@
     display: none;
   }
 }
+
+/* ── Devcon demo (#/devcon) ──────────────────────────────────────────────── */
+
+.qrCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.qrCopy {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+.qrLead {
+  margin: 0;
+  color: var(--mp-text-muted);
+  font-size: 13px;
+}
+
+.qrOutcome {
+  margin: 0.5rem 0 1.1rem;
+  font-size: 18px;
+  line-height: 1.45;
+  max-width: 32ch;
+}
+
+.qrUrl {
+  display: inline-block;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--mp-text-muted);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--mp-border-strong);
+  overflow-wrap: anywhere;
+}
+
+.qrUrl:hover {
+  color: var(--mp-accent);
+}
+
+/* The frame carries the light field the code needs; QrCode paints dark modules onto it. */
+.qrFrame {
+  flex: 0 0 auto;
+  display: flex;
+  background: var(--mp-text);
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.qrSvg {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}

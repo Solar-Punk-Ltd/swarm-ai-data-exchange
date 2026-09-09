@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_LOG_CHUNK_BLOCKS?: string;
   readonly VITE_SWARM_GATEWAY_URL?: string;
   readonly VITE_CATALOGUE_FEED_BROWSER_URL?: string;
+  readonly VITE_SHOW_DEMO_FLOW?: string;
+  readonly VITE_DEMO_FLOW_BASE_URL?: string;
 }
 
 interface ImportMeta {
