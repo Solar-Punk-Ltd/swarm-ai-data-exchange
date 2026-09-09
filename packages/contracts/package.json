@@ -1,0 +1,26 @@
+{
+  "name": "@solarpunk/contracts",
+  "version": "0.1.0",
+  "description": "Revenue splitter contracts (per-seller x402 payTo) and their TypeScript SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:contracts": "node scripts/forge.mjs build",
+    "build:abis": "node scripts/forge.mjs build && tsx ts/gen-abis.ts",
+    "test": "node scripts/forge.mjs test",
+    "test:contracts": "node scripts/forge.mjs test -vvv",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "fmt:sol": "node scripts/forge.mjs fmt"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}

@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020"],
+    "target": "ES2022",
+    // node16 (matching x402-swarm-server / swarm-catalog) so package `exports` maps are honoured.
+    // Classic "node" resolution walks past viem's .d.ts into ox's .ts sources, which skipLibCheck
+    // does not cover, and typechecks a dependency's implementation.
+    "module": "node16",
+    "moduleResolution": "node16",
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,

@@ -232,7 +232,13 @@ export class IdentityModule {
   }
 
   async getMetadata(agentId: bigint, key: string): Promise<Uint8Array> {
-    return this.contract.getMetadata(agentId, key) as Promise<Uint8Array>;
+    // ethers decodes a Solidity `bytes` return as a 0x hex STRING, not a Uint8Array. Returning
+    // it unconverted made every length check downstream compare against the hex length (42 for
+    // a 20-byte address), so decodeSplitterMetadata always saw a malformed value and returned
+    // null — which meant link_split_contract never detected an existing link and rewrote it,
+    // spending gas, on every single call. Normalise here so there is one conversion site.
+    const raw = (await this.contract.getMetadata(agentId, key)) as unknown;
+    return typeof raw === 'string' ? getBytes(raw) : (raw as Uint8Array);
   }
 
   /**

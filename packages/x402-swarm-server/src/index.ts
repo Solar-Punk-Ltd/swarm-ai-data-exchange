@@ -18,4 +18,12 @@ app.post('/v1/items/:itemId/purchase', purchaseHandler({ bee, store, facilitator
 
 app.listen(config.port, () => {
   console.log(`x402 Swarm server listening on port ${config.port}`);
+  if (config.splitterAddress) {
+    console.log(`Settlement destination pinned to split contract ${config.splitterAddress}`);
+  } else {
+    console.warn(
+      'SPLITTER_ADDRESS is unset — any advertised payTo will be accepted. Sales settled to a ' +
+        'non-split destination are untaxed and earn no Proof-of-Purchase.',
+    );
+  }
 });

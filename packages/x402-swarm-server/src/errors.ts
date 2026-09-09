@@ -14,6 +14,7 @@ export type ErrorCode =
   | 'intent_expired'
   | 'intent_not_yet_valid'
   | 'intent_replay'
+  | 'payment_destination_untaxed'
   | 'payment_verify_failed'
   | 'payment_settle_failed'
   | 'act_grant_failed'
@@ -37,6 +38,10 @@ const CODES: Record<ErrorCode, CodeSpec> = {
   intent_expired: { status: 400, retryable: false },
   intent_not_yet_valid: { status: 400, retryable: true },
   intent_replay: { status: 409, retryable: false },
+  // Not in the §15.2 catalog — marketplace-level guard. The catalog entry advertises a payTo
+  // that is not the configured split contract, so the sale would bypass the sales tax and
+  // produce no valid Proof-of-Purchase. Not retryable: the publisher must republish the item.
+  payment_destination_untaxed: { status: 400, retryable: false },
   payment_verify_failed: { status: 402, retryable: false },
   payment_settle_failed: { status: 502, retryable: true },
   act_grant_failed: { status: 500, retryable: true },

@@ -1,0 +1,913 @@
+/* Shared visual primitives. All colours come from --mp-* custom properties stamped by theme.ts. */
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+/* ---- header ------------------------------------------------------------ */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-bottom: 6px;
+}
+
+.titleAccent {
+  color: var(--mp-accent);
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--mp-text-muted);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---- cards + sections -------------------------------------------------- */
+
+.card {
+  background: var(--mp-surface);
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.35rem;
+}
+
+.section {
+  margin-bottom: 1.75rem;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mp-text-muted);
+}
+
+.sectionMeta {
+  font-size: 12px;
+  color: var(--mp-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- stat grid --------------------------------------------------------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--mp-border);
+  border: 1px solid var(--mp-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.stat {
+  background: var(--mp-surface-raised);
+  padding: 0.8rem 0.95rem;
+}
+
+.statLabel {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mp-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.statValue {
+  font-size: 19px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.statUnit {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mp-text-muted);
+  margin-left: 0.3rem;
+}
+
+.statNote {
+  font-size: 11px;
+  color: var(--mp-text-muted);
+  margin-top: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- addresses --------------------------------------------------------- */
+
+.address {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.addressLabel {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mp-text-muted);
+  margin-right: 0.15rem;
+  font-family: system-ui, sans-serif;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mp-text-muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.iconButton:hover {
+  color: var(--mp-accent);
+  background: var(--mp-accent-soft);
+  border-color: var(--mp-border-strong);
+}
+
+.copied {
+  color: var(--mp-success);
+}
+
+/* ---- seller rows ------------------------------------------------------- */
+
+.sellerCard {
+  background: var(--mp-surface);
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 0.75rem;
+}
+
+.sellerCardSkipped {
+  border-color: var(--mp-danger);
+  box-shadow: inset 3px 0 0 var(--mp-danger);
+}
+
+.sellerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.inlineBalances {
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.inlineBalanceUnit {
+  color: var(--mp-text-muted);
+  margin-left: 0.25rem;
+  font-size: 11px;
+}
+
+.splitterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--mp-surface-raised);
+  border: 1px solid var(--mp-border);
+  border-radius: 9px;
+}
+
+.splitterFacts {
+  display: flex;
+  align-items: center;
+  gap: 1.35rem;
+  flex-wrap: wrap;
+}
+
+.accrued {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.accruedSplit {
+  font-size: 11px;
+  color: var(--mp-text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.15rem;
+}
+
+/* ---- pills + buttons --------------------------------------------------- */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--mp-border-strong);
+  color: var(--mp-text-muted);
+  white-space: nowrap;
+}
+
+.pillAccent {
+  color: var(--mp-accent);
+  border-color: transparent;
+  background: var(--mp-accent-soft);
+}
+
+.pillWarn {
+  color: var(--mp-warning);
+  border-color: transparent;
+  background: var(--mp-accent-soft);
+}
+
+.pillDanger {
+  color: var(--mp-danger);
+  border-color: transparent;
+  background: var(--mp-danger-soft);
+}
+
+.pillLink {
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    filter 120ms ease,
+    border-color 120ms ease;
+}
+
+.pillLink:hover {
+  filter: brightness(1.25);
+  border-color: var(--mp-accent);
+}
+
+.pillClamp {
+  max-width: 320px;
+  overflow: hidden;
+}
+
+/* The text truncates; the trailing icon must not be pushed out with it. */
+.pillClamp > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pillSuccess {
+  color: var(--mp-success);
+  border-color: transparent;
+  background: var(--mp-success-soft);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: 8px;
+  border: 1px solid var(--mp-border-strong);
+  background: var(--mp-surface-raised);
+  color: var(--mp-text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    opacity 120ms ease;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--mp-accent);
+  background: var(--mp-accent-soft);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.buttonPrimary {
+  background: var(--mp-accent);
+  border-color: var(--mp-accent);
+  color: #0b0d10;
+}
+
+.buttonPrimary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  background: var(--mp-accent);
+}
+
+.actionCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.txNote {
+  font-size: 11px;
+  color: var(--mp-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 340px;
+  text-align: right;
+}
+
+.txNoteError {
+  color: var(--mp-danger);
+}
+
+.txNoteSuccess {
+  color: var(--mp-success);
+}
+
+/* ---- states ------------------------------------------------------------ */
+
+.skeleton {
+  display: inline-block;
+  min-width: 64px;
+  height: 1em;
+  border-radius: 4px;
+  background: var(--mp-skeleton);
+  animation: mp-pulse 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+.empty {
+  padding: 2.25rem 1.25rem;
+  text-align: center;
+  color: var(--mp-text-muted);
+  font-size: 13px;
+  border: 1px dashed var(--mp-border-strong);
+  border-radius: 12px;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 9px;
+  font-size: 12px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--mp-border-strong);
+  color: var(--mp-text-muted);
+}
+
+.bannerDanger {
+  color: var(--mp-danger);
+  border-color: transparent;
+  background: var(--mp-danger-soft);
+}
+
+.bannerWarn {
+  color: var(--mp-warning);
+  border-color: transparent;
+  background: var(--mp-accent-soft);
+}
+
+.fatal {
+  max-width: 640px;
+  margin: 4rem auto;
+  padding: 1.5rem;
+  border: 1px solid var(--mp-danger);
+  border-radius: 12px;
+  background: var(--mp-danger-soft);
+}
+
+.fatalTitle {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--mp-danger);
+}
+
+.fatalList {
+  margin: 0.5rem 0 0 1.1rem;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.fatalHint {
+  margin-top: 1rem;
+  font-size: 12px;
+  color: var(--mp-text-muted);
+}
+
+/* ---- transaction history ----------------------------------------------- */
+
+.historyFilters {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.historyFilter {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--mp-border-strong);
+  background: var(--mp-surface);
+  color: var(--mp-text-muted);
+  cursor: pointer;
+}
+
+.historyFilter:hover {
+  color: var(--mp-text);
+}
+
+.historyFilterOn {
+  background: var(--mp-accent-soft);
+  border-color: var(--mp-accent);
+  color: var(--mp-text);
+}
+
+.historyTable {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--mp-surface);
+}
+
+.historyRow {
+  display: grid;
+  /* kind | amount | parties | when | tx — parties takes the slack so addresses never clip. */
+  grid-template-columns: 84px 130px minmax(0, 1fr) 82px 28px;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--mp-border);
+  font-size: 12px;
+}
+
+.historyRow:last-child {
+  border-bottom: none;
+}
+
+.historyKind {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  text-align: center;
+}
+
+.historyKindBuy {
+  background: var(--mp-success-soft);
+  color: var(--mp-success);
+}
+
+.historyKindPay {
+  background: var(--mp-accent-soft);
+  color: var(--mp-accent);
+}
+
+.historyAmount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--mp-text);
+}
+
+.historyParties {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  color: var(--mp-text-muted);
+}
+
+.historyArrow {
+  color: var(--mp-text-muted);
+}
+
+.historySeller {
+  color: var(--mp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.historySplit {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+.historyWhen {
+  color: var(--mp-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: 11px;
+}
+
+.historyTx {
+  color: var(--mp-text-muted);
+  font-size: 11px;
+  text-decoration: none;
+  text-align: right;
+}
+
+.historyTx:hover {
+  color: var(--mp-accent);
+}
+
+.historyEmpty {
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+  color: var(--mp-text-muted);
+  font-size: 12px;
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  background: var(--mp-surface);
+}
+
+.historyMore {
+  padding: 0.5rem;
+  border: none;
+  border-top: 1px solid var(--mp-border);
+  background: var(--mp-surface-raised);
+  color: var(--mp-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.historyMore:hover {
+  color: var(--mp-text);
+}
+
+/* per-seller drilldown */
+
+.historyToggleRow {
+  margin-top: 0.6rem;
+}
+
+.historyToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--mp-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.historyToggle:hover {
+  color: var(--mp-text);
+}
+
+.historyCount {
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--mp-surface-raised);
+  border: 1px solid var(--mp-border);
+}
+
+@media (max-width: 720px) {
+  .historyRow {
+    grid-template-columns: 70px 100px minmax(0, 1fr) 28px;
+  }
+  .historyWhen {
+    display: none;
+  }
+}
+
+/* ---- map of agents ------------------------------------------------------ */
+
+.nav {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--mp-border);
+  padding-bottom: 0.75rem;
+}
+
+.navItem {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--mp-border-strong);
+  background: var(--mp-surface);
+  color: var(--mp-text-muted);
+  text-decoration: none;
+}
+
+.navItem:hover {
+  color: var(--mp-text);
+}
+
+.navItemOn {
+  background: var(--mp-accent-soft);
+  border-color: var(--mp-accent);
+  color: var(--mp-text);
+}
+
+.graphCanvas {
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--mp-surface);
+}
+
+.graphLegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 0.6rem;
+  font-size: 11px;
+  color: var(--mp-text-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legendDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.legendHint {
+  margin-left: auto;
+}
+
+.nodeDetail {
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--mp-border-strong);
+  border-radius: 12px;
+  background: var(--mp-surface-raised);
+}
+
+.nodeDetailHead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+
+.nodeDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.7rem 1rem;
+  font-size: 11px;
+  color: var(--mp-text-muted);
+}
+
+.nodeDetailGrid > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nodeDetailGrid strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mp-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Agent table. Same CSS Grid idiom as .historyRow: one column template, shared by the header
+   row and every body row, so the two can never drift out of alignment. */
+.agentTable {
+  display: flex;
+  flex-direction: column;
+  margin-top: 1rem;
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--mp-surface);
+}
+
+.agentHead,
+.agentRow {
+  display: grid;
+  /* agent | in | out | txs | peers | pending — the name takes the slack. */
+  grid-template-columns: minmax(0, 1fr) 96px 96px 54px 58px 104px;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--mp-border);
+  font-size: 12px;
+  text-align: left;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  color: inherit;
+  font-family: inherit;
+}
+
+.agentHead {
+  background: var(--mp-surface-raised);
+  padding: 0;
+}
+
+.agentHeadCell {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mp-text-muted);
+  background: none;
+  border: none;
+  padding: 0.55rem 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.agentHeadCell:first-child {
+  padding-left: 0.9rem;
+}
+
+.agentHeadCell:last-child {
+  padding-right: 0.9rem;
+}
+
+.agentHeadCellOn {
+  color: var(--mp-accent);
+}
+
+.agentSortMark {
+  margin-left: 0.25rem;
+}
+
+.agentRow {
+  cursor: pointer;
+}
+
+.agentRow:last-child {
+  border-bottom: none;
+}
+
+.agentRow:hover {
+  background: var(--mp-surface-raised);
+}
+
+.agentRowOn {
+  background: var(--mp-accent-soft);
+}
+
+.agentName {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.agentLabel {
+  font-weight: 600;
+  color: var(--mp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentRole {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mp-text-muted);
+}
+
+.agentNumeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .agentHead,
+  .agentRow {
+    grid-template-columns: minmax(0, 1fr) 84px 54px 88px;
+  }
+  .agentHeadCell:nth-child(3),
+  .agentHeadCell:nth-child(5),
+  .agentRow > span:nth-child(3),
+  .agentRow > span:nth-child(5) {
+    display: none;
+  }
+  .legendHint {
+    display: none;
+  }
+}
+
+/* ── Devcon demo (#/devcon) ──────────────────────────────────────────────── */
+
+.qrCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.qrCopy {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+.qrLead {
+  margin: 0;
+  color: var(--mp-text-muted);
+  font-size: 13px;
+}
+
+.qrOutcome {
+  margin: 0.5rem 0 1.1rem;
+  font-size: 18px;
+  line-height: 1.45;
+  max-width: 32ch;
+}
+
+.qrUrl {
+  display: inline-block;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--mp-text-muted);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--mp-border-strong);
+  overflow-wrap: anywhere;
+}
+
+.qrUrl:hover {
+  color: var(--mp-accent);
+}
+
+/* The frame carries the light field the code needs; QrCode paints dark modules onto it. */
+.qrFrame {
+  flex: 0 0 auto;
+  display: flex;
+  background: var(--mp-text);
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.qrSvg {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}

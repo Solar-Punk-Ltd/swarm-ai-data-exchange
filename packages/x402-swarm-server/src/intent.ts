@@ -41,6 +41,9 @@ interface VerifyOpts {
   itemPayments: PaymentRequirements[];
   isNonceUsed: (nonce: string) => boolean;
   now: number; // unix seconds
+  // Optional marketplace guard: the seller's split contract. When set, the matched payment's
+  // payTo must equal it.
+  expectedPayTo?: string;
 }
 
 // §11.5 steps 2–7 (reversible checks). Step 1 (decode) runs separately; steps 8–11 are committing.
@@ -155,6 +158,17 @@ export async function verifyPurchaseIntent(
         intentAmount: message.payment.amount,
         advertisedAmounts: opts.itemPayments.map((p) => p.amount),
       },
+    );
+  }
+
+  // Step 5b: settlement destination must be the seller's split contract. A catalog entry that
+  // still advertises a bare EOA would settle untaxed and produce no valid Proof-of-Purchase, so
+  // it is rejected here — before /settle, while the failure is still free.
+  if (opts.expectedPayTo && match.payTo.toLowerCase() !== opts.expectedPayTo.toLowerCase()) {
+    throw new PurchaseError(
+      'payment_destination_untaxed',
+      'Advertised payTo is not this seller’s split contract; republish the item',
+      { expectedPayTo: opts.expectedPayTo, advertisedPayTo: match.payTo },
     );
   }
 

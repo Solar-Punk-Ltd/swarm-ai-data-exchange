@@ -143,6 +143,7 @@ export function purchaseHandler(deps: Deps) {
         itemPayments: lookup.payments,
         isNonceUsed: (n) => store.isNonceUsed(n),
         now: Math.floor(Date.now() / 1000),
+        expectedPayTo: config.splitterAddress,
       });
 
       // Step 8: Facilitator /verify.
@@ -176,7 +177,7 @@ export function purchaseHandler(deps: Deps) {
       // Step 9 (cont): burn the nonce + write the purchase record (before the grant).
       const nonce = envelope.payload.purchaseIntent.message.nonce;
       store.recordNonce(nonce);
-      store.recordPurchase(consumerAddress, itemId, txHash, settledAt);
+      store.recordPurchase(consumerAddress, itemId, txHash, settledAt, matched.payTo);
 
       // Step 10: issue the ACT grant (retryable — publisher MUST retry on failure).
       const granteePublicKey = envelope.payload.purchaseIntent.message.granteePublicKey;

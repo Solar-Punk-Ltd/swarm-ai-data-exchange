@@ -33,6 +33,10 @@ export interface AgentCatalog {
   // Every path present in the Mantaray. Diagnostic: lets a caller distinguish
   // "empty catalog" from "items exist but at unexpected paths".
   allPaths?: string[];
+  // Items whose leaf is in the Mantaray but whose chunk could not be fetched — typically
+  // content stamped by a since-expired postage batch. Listed rather than thrown so one
+  // unreadable entry cannot make the rest of the catalog unpurchasable.
+  unreadableItems?: { itemId: string; error: string }[];
   // Set instead of items when the feed exists in the card but cannot be read.
   error?: string;
 }

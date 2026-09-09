@@ -1,0 +1,35 @@
+/* Reset + body, matching erc8004-dashboard/src/index.css. Colours come from theme.ts, stamped
+   onto :root as --mp-* custom properties by applyTheme() in main.tsx. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  background: var(--mp-bg);
+  color: var(--mp-text);
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+@keyframes mp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}

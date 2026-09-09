@@ -97,6 +97,12 @@ Steps 1–8 are reversible (no state change on failure). Steps 9–11 are commit
    the server advertised in the 402 response — find the matching entry, used in step 8)
    → 400 intent_payment_mismatch
 
+5b. Check settlement destination (marketplace guard, not a §11.5 step)
+   If SPLITTER_ADDRESS is set, the matched entry's payTo MUST equal it
+   → 400 payment_destination_untaxed
+   A stale catalog entry advertising a bare EOA would settle untaxed and produce no
+   valid Proof-of-Purchase; reject before /settle while the failure is still free.
+
 6. Check time window (validAfter ≤ now ≤ validBefore)
    → 400 intent_expired / intent_not_yet_valid
 
@@ -138,7 +144,8 @@ CREATE TABLE purchases (
   consumer_address  TEXT NOT NULL,
   item_id           TEXT NOT NULL,
   tx_hash           TEXT NOT NULL,
-  settled_at        TEXT NOT NULL
+  settled_at        TEXT NOT NULL,
+  pay_to            TEXT          -- settlement destination (the split contract)
 );
 CREATE INDEX purchases_item_id ON purchases(item_id);
 CREATE INDEX purchases_consumer ON purchases(consumer_address);
@@ -192,6 +199,8 @@ CATALOG_FEED_OWNER      — EOA address of the catalog feed signer
 ITEM_STATE_FEED_PK      — private key for per-item state feed signer (hot key)
 PURCHASE_INTENT_DOMAIN_CONTRACT  — verifyingContract address for EIP-712 domain
 DB_PATH                 — path to SQLite DB file (default: ./data/store.db)
+SPLITTER_ADDRESS        — this seller's RevenueSplitter clone; pins the accepted settlement
+                          destination (optional — unset disables the step-5b guard)
 ```
 
 ## Prototype exclusions

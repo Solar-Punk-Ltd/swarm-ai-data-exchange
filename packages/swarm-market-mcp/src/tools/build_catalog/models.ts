@@ -1,8 +1,13 @@
 import type { CatalogItem } from '@solarpunk/swarm-catalog';
+import type { PaymentInput } from '../../splitter';
+
+// CatalogItem as accepted from a tool caller: payTo may be omitted on payment entries and is
+// resolved to the seller's split contract before staging.
+export type CatalogItemInput = Omit<CatalogItem, 'payment'> & { payment: PaymentInput[] };
 
 export interface BuildCatalogItem {
   // Mirrors swarm-catalog's CatalogItem (id MUST equal storage.reference; payment MUST be non-empty).
-  item: CatalogItem;
+  item: CatalogItemInput;
   // REQUIRED for every priced item: the ACT refs the caller captured when ACT-wrapping the content.
   actSeed: { actHistoryRef: string; granteeRef: string };
   // Optional sample bytes → builder.stageSampleData(itemId, ...). Interpreted per

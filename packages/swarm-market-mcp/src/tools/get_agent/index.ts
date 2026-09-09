@@ -101,18 +101,41 @@ async function readCatalog(bee: Bee, owner: string): Promise<AgentCatalog> {
   }
 
   const leaves = manifest.collect().filter((n) => ITEM_JSONLD_PATH_RE.test(n.fullPathString));
-  const items = (
-    await Promise.all(
-      leaves.map(async (node) => {
-        if (!hasTarget(node)) return null;
-        const itemId = ITEM_JSONLD_PATH_RE.exec(node.fullPathString)![1];
-        const doc = await downloadJson(bee, node.targetAddress);
-        return summarize(itemId, doc);
-      }),
-    )
-  ).filter((s): s is CatalogItemSummary => s !== null);
+  // allSettled, not all: a leaf whose chunk has fallen out of Swarm (expired postage batch)
+  // must not fail the whole catalog. Skip the dead entry, report it, keep the rest sellable.
+  const settled = await Promise.allSettled(
+    leaves.map(async (node) => {
+      if (!hasTarget(node)) return null;
+      const itemId = ITEM_JSONLD_PATH_RE.exec(node.fullPathString)![1];
+      const doc = await downloadJson(bee, node.targetAddress);
+      return summarize(itemId, doc);
+    }),
+  );
 
-  return { owner, root, name, description, license, items, allPaths };
+  const items: CatalogItemSummary[] = [];
+  const unreadableItems: { itemId: string; error: string }[] = [];
+  settled.forEach((outcome, i) => {
+    if (outcome.status === 'fulfilled') {
+      if (outcome.value !== null) items.push(outcome.value);
+      return;
+    }
+    const itemId = ITEM_JSONLD_PATH_RE.exec(leaves[i].fullPathString)![1];
+    unreadableItems.push({
+      itemId,
+      error: getErrorMessage(outcome.reason) || `Unreadable item leaf (${typeof outcome.reason})`,
+    });
+  });
+
+  return {
+    owner,
+    root,
+    name,
+    description,
+    license,
+    items,
+    allPaths,
+    ...(unreadableItems.length > 0 ? { unreadableItems } : {}),
+  };
 }
 
 // registrations[].agentId is a bigint at runtime — stringify so the result serializes cleanly.

@@ -8,11 +8,17 @@ const paymentRequirementsSchema = {
     chainId: { type: 'string', description: 'CAIP-2 chain id.' },
     asset: { type: 'string', description: 'CAIP-19 asset id.' },
     amount: { type: 'string', description: 'Smallest-unit decimal string.' },
-    payTo: { type: 'string', description: '0x payee address.' },
+    payTo: {
+      type: 'string',
+      description:
+        "0x payee address. Omit to use the seller's split contract (requires " +
+        'SPLITTER_FACTORY_ADDRESS + AGENT_PAYMENT_ADDRESS). Supplying any other address is rejected: ' +
+        'settling outside the splitter is untaxed and earns no Proof-of-Purchase.',
+    },
     facilitator: { type: 'string', description: 'Facilitator URL.' },
     description: { type: 'string' },
   },
-  required: ['scheme', 'chainId', 'asset', 'amount', 'payTo'],
+  required: ['scheme', 'chainId', 'asset', 'amount'],
 };
 
 const catalogItemSchema = {
@@ -228,6 +234,20 @@ export const SwarmMarketToolsSchema = [
                 required: ['itemId', 'name', 'lifecycle', 'payment'],
               },
             },
+            unreadableItems: {
+              type: 'array',
+              description:
+                'Items present in the Mantaray whose chunk could not be fetched (e.g. stamped ' +
+                'by an expired postage batch). Omitted when every leaf resolved.',
+              items: {
+                type: 'object',
+                properties: {
+                  itemId: { type: 'string' },
+                  error: { type: 'string' },
+                },
+                required: ['itemId', 'error'],
+              },
+            },
             error: { type: 'string', description: 'Set when the catalog feed is unreadable.' },
           },
           required: ['owner', 'items'],
@@ -345,15 +365,22 @@ export const SwarmMarketToolsSchema = [
     },
   },
   {
-    name: 'create_agent',
-    title: 'Create agent',
+    name: 'register_agent',
+    title: 'Register agent',
     description:
-      'Register an ERC-8004 agent identity end-to-end: builds an Agent Card, uploads it to a ' +
-      'Swarm feed, mints the ERC-8004 NFT with the feed URL as tokenURI, and re-uploads the ' +
-      'card with a populated registrations[] entry. Uses PRIVATE_KEY (on-chain wallet), ' +
-      'BEE_FEED_PK (Swarm feed signer) and POSTAGE_BATCH_ID from env. Optional catalogFeedOwner ' +
-      'is published as the "swarm-ai-catalog" service entry so consumers can discover the ' +
-      "agent's catalog. Returns { agentId, txHash, agentURI }.",
+      'Idempotent, convergent seller-agent onboarding — safe to call on EVERY agent startup. ' +
+      'Converges on the correct state rather than creating anything unconditionally. ' +
+      "Discovers the agent's existing ERC-8004 NFT from the deterministic Agent Card feed " +
+      'owned by BEE_FEED_PK (no block-range scan needed), verifying NFT ownership ' +
+      '(ownerOf == PRIVATE_KEY signer), tokenURI feed ownership, and the card registrations[] ' +
+      'back-reference; falls back to a swarm_agent_id MetadataSet scan. Mints ONLY when no ' +
+      'candidate exists and discovery itself succeeded. Repairs a card that fails only the ' +
+      "back-reference check instead of minting a duplicate. Then ensures the seller's " +
+      'RevenueSplitter clone exists and binds it to the agent under the agent_splitter ' +
+      'registry key. Replaces create_agent and create_split_contract. Reports per-step ' +
+      'outcomes in identity/splitter/link: identity failures are fatal, splitter failures are ' +
+      'reported, link failures are always non-fatal. Set dryRun true to report what would ' +
+      'happen without spending gas.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -371,10 +398,8 @@ export const SwarmMarketToolsSchema = [
         catalogFeedOwner: {
           type: 'string',
           description:
-            'Catalog feed owner address (0x-prefixed EOA). Published as the "swarm-ai-catalog" ' +
-            "service entry — the discovery entry point for the agent's catalog — and " +
-            'automatically indexed on-chain under the swarm_agent_id metadata key so future ' +
-            'startups can locate this agent via find_agents_by_metadata (catalogFeedOwner mode).',
+            'Catalog feed owner address. Defaults to the BEE_FEED_PK address — override only ' +
+            'when the catalog feed signer differs from the Agent Card feed signer.',
         },
         capabilities: {
           oneOf: [
@@ -386,21 +411,120 @@ export const SwarmMarketToolsSchema = [
           type: 'string',
           description: 'Override the upload postage batch; falls back to POSTAGE_BATCH_ID env.',
         },
+        seller: {
+          type: 'string',
+          description:
+            'Splitter seller of record. Defaults to AGENT_PAYMENT_ADDRESS, then the PRIVATE_KEY wallet.',
+        },
+        refreshCard: {
+          type: 'boolean',
+          description:
+            'Re-publish the Agent Card when its content has drifted from these arguments. Default true.',
+        },
+        fromBlock: {
+          type: 'number',
+          description:
+            'Explicit start block for the fallback MetadataSet scan. Without it the adapter only ' +
+            'looks back RECENT_BLOCK_COUNT (~13 days on Base Sepolia).',
+        },
+        dryRun: {
+          type: 'boolean',
+          description:
+            'Report what would happen without sending any transaction or Swarm write. Statuses ' +
+            'come back as would-mint / would-repair / would-deploy / would-link.',
+        },
+        skipSplitter: {
+          type: 'boolean',
+          description: 'Identity-only registration: skip the splitter and the link entirely.',
+        },
       },
       required: ['name', 'description'],
     },
     outputSchema: {
       type: 'object',
       properties: {
-        agentId: { type: 'string', description: 'Minted ERC-8004 NFT token id.' },
-        txHash: { type: 'string', description: 'Base Sepolia transaction hash of the mint.' },
-        agentURI: {
-          type: 'string',
-          description: 'Swarm feed URL stored on-chain; resolves to the latest Agent Card version.',
+        feedOwner: { type: 'string' },
+        signer: { type: 'string' },
+        chain: { type: 'string' },
+        dryRun: { type: 'boolean' },
+        identity: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              description:
+                'existing | refreshed | repaired | minted | incomplete | failed | would-*. ' +
+                'incomplete means the mint landed but the card write did not — agentId IS ' +
+                'present and a re-run will repair rather than mint again.',
+            },
+            agentId: { type: ['string', 'null'] },
+            agentURI: {
+              type: 'string',
+              description: 'Deterministic; known even when agentId is null.',
+            },
+            txHash: { type: 'string' },
+            cardReference: { type: 'string' },
+            verified: {
+              type: 'boolean',
+              description: 'The single boolean a caller should gate on.',
+            },
+            metadataStatus: { type: 'string' },
+            metadataTxHash: { type: 'string' },
+            candidatesScanned: { type: 'number' },
+            candidates: { type: 'array', items: { type: 'object' } },
+            discoveryError: {
+              type: 'string',
+              description: 'Discovery threw rather than returning empty; the mint was suppressed.',
+            },
+            error: { type: 'string' },
+          },
+          required: [
+            'status',
+            'agentId',
+            'agentURI',
+            'verified',
+            'metadataStatus',
+            'candidatesScanned',
+          ],
         },
+        splitter: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              description: 'existing | deployed | unconfigured | failed | skipped | would-deploy.',
+            },
+            address: { type: ['string', 'null'], description: 'Clone address to use as payTo.' },
+            seller: { type: ['string', 'null'] },
+            factory: { type: ['string', 'null'] },
+            treasury: { type: 'string' },
+            taxBps: { type: 'number' },
+            txHash: { type: 'string' },
+            error: { type: 'string' },
+          },
+          required: ['status', 'address', 'seller', 'factory'],
+        },
+        link: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              description:
+                'linked | already-linked | repointed | skipped | failed | would-link. Never fatal.',
+            },
+            metadataKey: { type: 'string' },
+            splitter: { type: ['string', 'null'] },
+            previousSplitter: { type: 'string' },
+            txHash: { type: 'string' },
+            reason: { type: 'string' },
+            error: { type: 'string' },
+          },
+          required: ['status', 'metadataKey', 'splitter'],
+        },
+        warnings: { type: 'array', items: { type: 'string' } },
         message: { type: 'string' },
       },
-      required: ['agentId', 'txHash', 'agentURI'],
+      required: ['feedOwner', 'signer', 'chain', 'dryRun', 'identity', 'splitter', 'link'],
     },
     execution: {
       taskSupport: 'forbidden',
@@ -509,6 +633,99 @@ export const SwarmMarketToolsSchema = [
         message: { type: 'string' },
       },
       required: ['itemId', 'granteePublicKey'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
+    name: 'get_split_contract',
+    title: 'Get seller split contract',
+    description:
+      "Read the seller's RevenueSplitter clone address and its frozen terms. Read-only — no " +
+      'signer, no gas. Returns splitter null and deployed false when the seller has not created ' +
+      'one yet; the address cannot be derived off-chain, so there is nothing to report until ' +
+      'register_agent has run.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        seller: {
+          type: 'string',
+          description: '0x seller address. Defaults to AGENT_PAYMENT_ADDRESS.',
+        },
+      },
+      required: [],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        splitter: {
+          type: ['string', 'null'],
+          description: 'Clone address to use as payTo, or null if the seller has no clone.',
+        },
+        seller: { type: 'string' },
+        factory: { type: 'string' },
+        deployed: { type: 'boolean', description: 'Whether the seller has a clone on-chain.' },
+        treasury: { type: 'string', description: "Treasury frozen into the clone's terms." },
+        taxBps: { type: 'number', description: 'Sales tax in basis points (500 = 5%).' },
+        note: { type: 'string', description: 'Next step, when no clone exists yet.' },
+      },
+      required: ['splitter', 'seller', 'factory', 'deployed'],
+    },
+    execution: {
+      taskSupport: 'forbidden',
+    },
+  },
+  {
+    name: 'link_split_contract',
+    title: 'Link split contract to ERC-8004 agent',
+    description:
+      'Bind an ERC-8004 agent to its RevenueSplitter clone by writing the clone address into ' +
+      'the Identity Registry under the agent_splitter metadata key. This is what lets indexers ' +
+      'and dashboards resolve agent -> splitter in one read, and splitter -> agent in one ' +
+      'indexed log query. The link lives in the registry rather than in the clone because ' +
+      'createSplitter is permissionless (a clone-held agentId would be unauthenticated) and ' +
+      'clone terms are frozen while NFT ownership can transfer. Sends a transaction; the ' +
+      'PRIVATE_KEY signer must own the agent NFT. Re-run to re-point the link.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description: 'ERC-8004 agent id (NFT token id). The signer must own this NFT.',
+        },
+        splitter: {
+          type: 'string',
+          description:
+            "0x clone address to link. Omit to resolve the seller's clone from the factory.",
+        },
+        seller: {
+          type: 'string',
+          description:
+            'Seller whose clone to resolve when splitter is omitted. Defaults to AGENT_PAYMENT_ADDRESS.',
+        },
+      },
+      required: ['agentId'],
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string' },
+        splitter: { type: 'string', description: 'Clone address now bound to the agent.' },
+        seller: { type: 'string', description: 'Seller the clone was resolved from, if any.' },
+        factory: { type: 'string' },
+        txHash: {
+          type: 'string',
+          description: 'Empty when the agent already pointed at this splitter.',
+        },
+        metadataKey: { type: 'string', description: 'Registry key written (agent_splitter).' },
+        alreadyLinked: {
+          type: 'boolean',
+          description: 'True when no transaction was needed.',
+        },
+        note: { type: 'string' },
+      },
+      required: ['agentId', 'splitter', 'txHash', 'metadataKey', 'alreadyLinked'],
     },
     execution: {
       taskSupport: 'forbidden',

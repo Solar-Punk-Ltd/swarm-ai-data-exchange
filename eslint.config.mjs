@@ -33,6 +33,17 @@ export default [
     },
   },
   {
+    // Node-run build/tooling scripts (e.g. packages/contracts/scripts/forge.mjs).
+    files: ['**/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        __dirname: 'readonly',
+      },
+    },
+  },
+  {
     files: ['**/public/**/*.js'],
     languageOptions: {
       globals: {

@@ -23,15 +23,21 @@ import { deleteCatalog } from './tools/delete_catalog';
 import type { DeleteCatalogArgs } from './tools/delete_catalog/models';
 import { purchaseCatalogItem } from './tools/purchase_catalog_item';
 import type { PurchaseCatalogItemArgs } from './tools/purchase_catalog_item/models';
-import { createAgent } from './tools/create_agent';
-import type { CreateAgentArgs } from './tools/create_agent/models';
+import { registerAgent } from './tools/register_agent';
+import type { RegisterAgentArgs } from './tools/register_agent/models';
 import { findAgentsByMetadata } from './tools/find_agents_by_metadata';
 import type { FindAgentsByMetadataArgs } from './tools/find_agents_by_metadata/models';
+import { getSplitContract } from './tools/get_split_contract';
+import type { GetSplitContractArgs } from './tools/get_split_contract/models';
+import { linkSplitContract } from './tools/link_split_contract';
+import type { LinkSplitContractArgs } from './tools/link_split_contract/models';
 import {
   buildCatalogSchema,
-  createAgentSchema,
+  registerAgentSchema,
   deleteCatalogItemSchema,
   deleteCatalogSchema,
+  getSplitContractSchema,
+  linkSplitContractSchema,
   findAgentsByMetadataSchema,
   getAgentSchema,
   purchaseCatalogItemSchema,
@@ -92,14 +98,24 @@ export class SwarmMarketMCPServer {
             return purchaseCatalogItem(validArgs as PurchaseCatalogItemArgs, this.bee);
           }
 
-          case 'create_agent': {
-            const validArgs = createAgentSchema.parse(args);
-            return createAgent(validArgs as CreateAgentArgs);
+          case 'register_agent': {
+            const validArgs = registerAgentSchema.parse(args);
+            return registerAgent(validArgs as RegisterAgentArgs);
           }
 
           case 'find_agents_by_metadata': {
             const validArgs = findAgentsByMetadataSchema.parse(args);
             return findAgentsByMetadata(validArgs as FindAgentsByMetadataArgs);
+          }
+
+          case 'get_split_contract': {
+            const validArgs = getSplitContractSchema.parse(args);
+            return getSplitContract(validArgs as GetSplitContractArgs);
+          }
+
+          case 'link_split_contract': {
+            const validArgs = linkSplitContractSchema.parse(args);
+            return linkSplitContract(validArgs as LinkSplitContractArgs);
           }
 
           default:
