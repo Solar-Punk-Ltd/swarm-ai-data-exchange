@@ -911,3 +911,141 @@
   height: auto;
   max-width: 100%;
 }
+
+/* ── Claim wallet (demo) ──────────────────────────────────────────────────────
+   Phone-first: this page is only ever reached by scanning the #/devcon QR code,
+   so it is laid out for a single narrow column rather than the dashboard grid. */
+
+.claimCard {
+  background: var(--mp-surface);
+  border: 1px solid var(--mp-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.35rem;
+  max-width: 30rem;
+}
+
+.claimLead {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mp-text);
+  margin: 0 0 1.1rem;
+}
+
+.claimSteps {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.claimStep {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding-bottom: 0.85rem;
+  color: var(--mp-text-muted);
+}
+
+/* The connector between dots. Not on the last step, so the line stops at the
+   final dot instead of trailing off the end of the list. */
+.claimStep:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 14px;
+  bottom: 0;
+  width: 1px;
+  background: var(--mp-border-strong);
+}
+
+.claimStepDot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--mp-border-strong);
+  z-index: 1;
+}
+
+.claimStepDone {
+  color: var(--mp-text-muted);
+}
+
+.claimStepDone .claimStepDot {
+  background: var(--mp-success);
+}
+
+.claimStepOn {
+  color: var(--mp-text);
+}
+
+.claimStepOn .claimStepDot {
+  background: var(--mp-accent);
+  box-shadow: 0 0 0 3px var(--mp-accent-soft);
+}
+
+.claimStepText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.claimStepLabel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.claimStepDetail {
+  font-size: 11px;
+  color: var(--mp-text-muted);
+}
+
+.claimFacts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--mp-border);
+}
+
+.claimFact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 12px;
+}
+
+.claimFactLabel {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mp-text-muted);
+}
+
+.claimFactValue {
+  font-variant-numeric: tabular-nums;
+  color: var(--mp-text);
+}
+
+.claimHint {
+  font-size: 11px;
+  color: var(--mp-text-muted);
+  margin: 0.35rem 0 0;
+  line-height: 1.5;
+}
+
+/* Tabular figures so the countdown does not reflow the sentence every second. */
+.claimCountdown {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 5px;
+  background: var(--mp-surface-raised);
+  color: var(--mp-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

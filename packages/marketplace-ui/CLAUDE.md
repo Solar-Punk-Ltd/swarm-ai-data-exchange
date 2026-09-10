@@ -16,8 +16,8 @@ already loads.
 Behind `VITE_SHOW_DEMO_FLOW` there are two more pages, demo scaffolding rather than product
 surface: **Devcon** (`#/devcon`), a QR code that hands the audience off from the projected
 dashboard to their own phone, and **Claim wallet** (`#/claim-wallet`), the page that code points
-at — where a buyer agent will be created to purchase a funded wallet from a seller agent. With the
-flag off the nav item disappears and both hashes resolve to the Dashboard, because a scanned QR
+at — where a buyer agent is deployed for that visitor and buys one item from a seller agent. With
+the flag off the nav item disappears and both hashes resolve to the Dashboard, because a scanned QR
 code outlives the build that printed it. Only `#/devcon` is in the nav: you reach `#/claim-wallet`
 by scanning, so nothing should highlight while you are on it.
 
@@ -202,6 +202,40 @@ Three more consequences of putting a face on a node, all deliberate:
   it; neither is free. A late sprite still needs a repaint nudge, because `autoPauseRedraw` is on
   by default and a settled canvas has stopped painting — re-identifying `nodeCanvasObject` is that
   nudge, and unlike re-applying `graphData` it does not restart the layout.
+
+## Claim wallet
+
+`#/claim-wallet` is the only page here that talks to a **service of ours**, and the only one that
+causes anything to be created: on arrival it asks `agent-orchestration-api` (in the sibling
+`swarm-agent-demo` repo) to deploy a buyer agent for this visitor, narrates its progress, and hands
+it back when the page closes. `lib/devcon.ts` is the client, `hooks/useClaim.ts` owns the lifecycle.
+
+Four things about it are load-bearing:
+
+- **The single-fetch-owner rule is not relaxed.** That rule governs the registry and balance reads
+  in `MarketplaceContext`. `useClaim` polls a different service for state no other view renders,
+  and folding it into the context would couple a demo page to the dashboard's 5s tick. Do not move
+  it there.
+- **The status poll _is_ the heartbeat.** The server reaps a claim whose polling stops, and that is
+  what actually enforces "the agent is deleted when the page closes" — `pagehide` fires nothing on
+  a phone that locks its screen or loses wifi. So the poll must keep running while the page is
+  open, and `releaseClaim` on `pagehide` is only an optimisation for a deliberate close.
+- **Release uses `sendBeacon`, so the endpoint is a POST.** `sendBeacon` is the only request that
+  survives unload on mobile and it cannot issue DELETE; the API exposes `POST .../release` next to
+  its `DELETE` for exactly this. `keepalive` fetch is the fallback.
+- **Release is _not_ wired to unmount.** Unmount also fires on an in-app route change and twice
+  under React 18 StrictMode, so releasing there would either kill an agent the visitor still wants
+  or churn one agent per mount. An in-app navigation instead stops the heartbeat and lets the
+  server reap it.
+
+Progress is rendered as distinct named steps rather than one spinner because nearly all the wall
+clock sits in two of them: `starting`, and `buying` while an x402 settlement lands. Half a minute of
+undifferentiated spinner reads as a hang, which is the one thing this page cannot look like on
+stage.
+
+There is **no Vite proxy** for the API. The QR points at a LAN origin so a phone can resolve it, and
+a dev-server proxy exists in neither `pnpm preview` nor a static deploy — which is why the API's own
+`DEVCON_ALLOWED_ORIGINS` has to list this dashboard's origin.
 
 ## Data flow
 
@@ -423,6 +457,7 @@ the browser. All values here are public; there is no secret in this package.
 | `VITE_LOG_CHUNK_BLOCKS`             | no       | `500000`                   | Blocks per `eth_getLogs` call; lower it if the index is partial  |
 | `VITE_SHOW_DEMO_FLOW`               | no       | `false`                    | Enables `#/devcon` and `#/claim-wallet`. `"true"`/`"false"` only |
 | `VITE_DEMO_FLOW_BASE_URL`           | no       | `window.location.origin`   | Base URL the demo QR encodes; only read when the flag is on      |
+| `VITE_DEVCON_API_URL`               | no       | —                          | `agent-orchestration-api` base URL for `#/claim-wallet`          |
 
 `VITE_RPC_URL` is not in the original spec for this dashboard but is not optional in reality:
 `VITE_CHAIN_ID` selects a chain, it does not provide a transport. Mirror the wording of
@@ -533,12 +568,14 @@ src/
   lib/
     reads.ts                — every on-chain read: loadRegistry, readBalances, isFunded
     agents.ts               — splitter -> ERC-8004 agent index, with verification
+    devcon.ts               — agent-orchestration-api client; the only service of ours
     history.ts              — purchases + payouts from chain logs; the map's edge set
     graph.ts                — the network derivation: deriveGraph, graphSignature, reconcile
     format.ts               — formatTaxBps (via the SDK BPS_DENOMINATOR), formatAge
     rpcError.ts             — wallet/RPC errors to one readable line; user-rejection detection
   hooks/
     useHashRoute.ts         — the two-page hash router; nothing else lives in the URL
+    useClaim.ts             — the claim lifecycle: claim, poll/heartbeat, release on close
     usePolling.ts           — interval + document.hidden pause
     useTxLifecycle.ts       — shared idle/signing/pending/confirmed state machine
     useDistribute.ts        — one clone; wraps useTxLifecycle
@@ -550,7 +587,7 @@ src/
     StaleBanner.tsx         — last-tick-failed notice; used by both views
     MapPage.tsx             — Map of Agents: period filter, memo gate, live node objects
     DevconPage.tsx          — demo hand-off: the QR code and its resolved URL
-    ClaimWalletPage.tsx     — the QR code's target; empty until the buyer flow lands
+    ClaimWalletPage.tsx     — the QR code's target; the claim state machine, phone-first
     QrCode.tsx              — QR matrix as inline SVG; dark-on-light, 4-module quiet zone
     AgentGraph.tsx          — the force-graph canvas; memoised, explicitly sized
     AgentTable.tsx          — sortable per-agent numbers under the map

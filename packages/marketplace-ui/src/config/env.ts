@@ -38,6 +38,14 @@ export interface AppConfig {
    */
   demoFlowBaseUrl?: string;
   /**
+   * agent-orchestration-api base URL (e.g. `http://192.168.1.20:8000`), which the Claim Wallet
+   * page calls to have a buyer agent deployed for the visitor. Only read when the demo flow is on.
+   *
+   * Undefined leaves that page saying it is not configured — it must never block the dashboard,
+   * and unlike the chain reads this is a service that may simply not be running.
+   */
+  devconApiUrl?: string;
+  /**
    * ERC-8004 Identity Registry, when one is known for this chain. Undefined disables agent
    * labelling — the link is supplementary and must never block the dashboard.
    */
@@ -84,22 +92,25 @@ function parseBool(raw: string | undefined, name: string, problems: string[]): b
 }
 
 /**
- * QR target base. Only validated when the demo flow is on: a stale value left behind an off flag
+ * A demo-flow URL. Only validated when the demo flow is on: a stale value left behind an off flag
  * must not stop the dashboard from booting.
+ *
+ * Trailing slashes are stripped because every caller appends its own path — the QR builder adds
+ * `/#/claim-wallet` and the claim client adds `/devcon/...`, and a trailing slash would double it.
  */
-function parseDemoFlowBaseUrl(
+function parseDemoUrl(
   raw: string | undefined,
   enabled: boolean,
+  name: string,
   problems: string[],
 ): string | undefined {
   if (!raw || !enabled) return undefined;
   try {
     new URL(raw);
   } catch {
-    problems.push(`VITE_DEMO_FLOW_BASE_URL is not a valid URL: "${raw}"`);
+    problems.push(`${name} is not a valid URL: "${raw}"`);
     return undefined;
   }
-  // The QR builder appends `/#/claim-wallet`, so a trailing slash here would double it.
   return raw.replace(/\/+$/, '');
 }
 
@@ -172,7 +183,18 @@ function parseConfig(): AppConfig {
   }
 
   const showDemoFlow = parseBool(env.VITE_SHOW_DEMO_FLOW, 'VITE_SHOW_DEMO_FLOW', problems);
-  const demoFlowBaseUrl = parseDemoFlowBaseUrl(env.VITE_DEMO_FLOW_BASE_URL, showDemoFlow, problems);
+  const demoFlowBaseUrl = parseDemoUrl(
+    env.VITE_DEMO_FLOW_BASE_URL,
+    showDemoFlow,
+    'VITE_DEMO_FLOW_BASE_URL',
+    problems,
+  );
+  const devconApiUrl = parseDemoUrl(
+    env.VITE_DEVCON_API_URL,
+    showDemoFlow,
+    'VITE_DEVCON_API_URL',
+    problems,
+  );
 
   if (problems.length > 0) throw new ConfigError(problems);
 
@@ -187,6 +209,7 @@ function parseConfig(): AppConfig {
     catalogueBrowserUrl: env.VITE_CATALOGUE_FEED_BROWSER_URL || DEFAULT_CATALOGUE_BROWSER,
     showDemoFlow,
     demoFlowBaseUrl,
+    devconApiUrl,
     identityRegistry: parseRegistry(chainId, problems),
   };
 }
