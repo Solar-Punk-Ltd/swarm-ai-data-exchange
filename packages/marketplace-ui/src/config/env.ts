@@ -27,12 +27,12 @@ export interface AppConfig {
    */
   catalogueBrowserUrl?: string;
   /**
-   * Devcon demo pages (`#/devcon`, `#/claim-wallet`). Off by default — they are demo scaffolding,
+   * Devcon demo pages (`/devcon`, `/claim-wallet`). Off by default — they are demo scaffolding,
    * not product surface, so the nav item and both routes disappear when this is false.
    */
   showDemoFlow: boolean;
   /**
-   * Base URL the `#/devcon` QR code points at. Undefined means `window.location.origin`, which is
+   * Base URL the `/devcon` QR code points at. Undefined means `window.location.origin`, which is
    * only scannable when the dashboard is served over the network — a phone cannot resolve
    * localhost. Stored without a trailing slash.
    */
@@ -96,7 +96,7 @@ function parseBool(raw: string | undefined, name: string, problems: string[]): b
  * must not stop the dashboard from booting.
  *
  * Trailing slashes are stripped because every caller appends its own path — the QR builder adds
- * `/#/claim-wallet` and the claim client adds `/devcon/...`, and a trailing slash would double it.
+ * `/claim-wallet` and the claim client adds `/devcon/...`, and a trailing slash would double it.
  */
 function parseDemoUrl(
   raw: string | undefined,

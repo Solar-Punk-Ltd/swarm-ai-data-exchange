@@ -12,10 +12,18 @@ import { Claim, DevconError, createClaim, getClaim, releaseClaim } from '../lib/
  */
 
 const TOKEN_KEY = 'devcon.sessionToken';
-const POLL_MS = 5_000;
 
-/** Terminal states — stop polling, there is nothing further to see. */
-const SETTLED: ReadonlySet<Claim['state']> = new Set(['purchased', 'expired', 'failed']);
+/**
+ * Polled faster while the agent is still working. Nine states arrive over roughly a minute, four of
+ * them inside a single purchase, and the server only folds in the buyer's emitted steps when it is
+ * polled — so the cadence here *is* the resolution of the progress display. Once the item has
+ * landed there is nothing left to watch, and the slower rate is enough to keep the heartbeat alive.
+ */
+const POLL_ACTIVE_MS = 2_000;
+const POLL_SETTLED_MS = 5_000;
+
+/** Terminal states — nothing further will happen. */
+const SETTLED: ReadonlySet<Claim['state']> = new Set(['delivered', 'expired', 'failed']);
 
 /**
  * A stable per-browser token, so a refresh or a re-scan reattaches to the same agent rather than
@@ -40,6 +48,8 @@ function sessionToken(): string {
 
 export interface ClaimResult {
   claim?: Claim;
+  /** This browser's session token. The page needs it to prove ownership of a delivered item. */
+  sessionToken: string;
   /** Readable failure. Set when the API is unreachable, at capacity, or the fleet is missing. */
   error?: string;
   /** Structured code where the server sent one, e.g. `at_capacity`, `fleet_missing`. */
@@ -53,6 +63,8 @@ export interface ClaimResult {
 
 export default function useClaim(): ClaimResult {
   const base = config.devconApiUrl;
+  // Resolved once per mount, not per render: sessionToken() writes to localStorage on first use.
+  const [token] = useState(sessionToken);
   const [claim, setClaim] = useState<Claim>();
   const [error, setError] = useState<string>();
   const [errorCode, setErrorCode] = useState<string>();
@@ -88,14 +100,15 @@ export default function useClaim(): ClaimResult {
     const poll = async (claimId: string) => {
       if (stopped) return;
       try {
-        const next = await getClaim(base, claimId, controller.signal);
+        const next = await getClaim(base, claimId, token, controller.signal);
         if (stopped) return;
         setClaim(next);
         setLoading(false);
-        // Keep polling a settled-but-unreleased claim: `purchased` still lingers server-side, and
+        // Keep polling a settled-but-unreleased claim: `delivered` still lingers server-side, and
         // seeing it flip to released is how the page knows the agent has actually gone.
         if (next.released && SETTLED.has(next.state)) return;
-        timer = setTimeout(() => void poll(claimId), POLL_MS);
+        const wait = SETTLED.has(next.state) ? POLL_SETTLED_MS : POLL_ACTIVE_MS;
+        timer = setTimeout(() => void poll(claimId), wait);
       } catch (err) {
         if (stopped || controller.signal.aborted) return;
         if (err instanceof DevconError && err.status === 404) {
@@ -107,7 +120,7 @@ export default function useClaim(): ClaimResult {
         // and keep trying.
         setError(err instanceof DevconError ? err.message : 'Lost contact with the API.');
         setErrorCode(err instanceof DevconError ? err.code : undefined);
-        timer = setTimeout(() => void poll(claimId), POLL_MS);
+        timer = setTimeout(() => void poll(claimId), POLL_SETTLED_MS);
       }
     };
 
@@ -115,13 +128,13 @@ export default function useClaim(): ClaimResult {
       try {
         // Safe to call twice: the server is idempotent per session token, which is what makes
         // React 18 StrictMode's double mount in dev harmless here.
-        const first = await createClaim(base, sessionToken(), controller.signal);
+        const first = await createClaim(base, token, controller.signal);
         if (stopped) return;
         setClaim(first);
         setError(undefined);
         setErrorCode(undefined);
         setLoading(false);
-        timer = setTimeout(() => void poll(first.claimId), POLL_MS);
+        timer = setTimeout(() => void poll(first.claimId), POLL_ACTIVE_MS);
       } catch (err) {
         fail(err);
       }
@@ -147,7 +160,7 @@ export default function useClaim(): ClaimResult {
       if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [base, attempt]);
+  }, [base, attempt, token]);
 
   // Give the agent back on close. Registered once, and deliberately NOT in the effect above:
   // unmount also fires on an in-app route change and under StrictMode's double mount, and
@@ -163,5 +176,13 @@ export default function useClaim(): ClaimResult {
     return () => window.removeEventListener('pagehide', onPageHide);
   }, [base]);
 
-  return { claim, error, errorCode, loading, configured: Boolean(base), retry };
+  return {
+    claim,
+    sessionToken: token,
+    error,
+    errorCode,
+    loading,
+    configured: Boolean(base),
+    retry,
+  };
 }

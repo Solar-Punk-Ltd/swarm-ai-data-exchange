@@ -1,8 +1,8 @@
 import { configError } from './config/env';
 import { MarketplaceProvider } from './context/MarketplaceContext';
 import { WalletProvider } from './context/WalletContext';
-import { useHashRoute } from './hooks/useHashRoute';
-import type { Route } from './hooks/useHashRoute';
+import { useRoute } from './hooks/useRoute';
+import type { Route } from './hooks/useRoute';
 import AppShell from './components/AppShell';
 import StaleBanner from './components/StaleBanner';
 import MapPage from './components/MapPage';
@@ -13,10 +13,6 @@ import TreasurySection from './components/TreasurySection';
 import HistorySection from './components/HistorySection';
 import styles from './components/styles.module.css';
 
-/**
- * A misconfigured dashboard must refuse to boot rather than render an empty one — an empty table
- * looks like "no sellers yet", which is a legitimate state and hides the real problem.
- */
 function ConfigFailure({ problems }: { problems: string[] }) {
   return (
     <div className={styles.fatal}>
@@ -54,10 +50,6 @@ const SUBTITLES: Record<Route, string> = {
   'claim-wallet': 'Buy a funded wallet from a seller agent',
 };
 
-/**
- * Both records are keyed by `Route`, so widening the union is a type error until every page is
- * named here — which is the point of the lookup over a chain of ternaries.
- */
 const PAGES: Record<Route, () => JSX.Element> = {
   dashboard: Dashboard,
   map: MapPage,
@@ -65,29 +57,32 @@ const PAGES: Record<Route, () => JSX.Element> = {
   'claim-wallet': ClaimWalletPage,
 };
 
+const CHAIN_ROUTES: ReadonlySet<Route> = new Set<Route>(['dashboard', 'map']);
+
 /**
- * Routing lives here, below the providers, rather than in `App`: `App` returns early when the
- * config is broken, and a hook called after that return is conditional. Nothing in this repo
- * would catch it — `eslint-plugin-react-hooks` is not installed.
+ * Routing lives here, below `WalletProvider`, rather than in `App`: `App` returns early when the
+ * config is broken, and a hook called after that return is conditional.
  */
 function Routes() {
-  const route = useHashRoute();
+  const route = useRoute();
   const Page = PAGES[route];
-  return (
-    <AppShell route={route} subtitle={SUBTITLES[route]}>
+  const onChain = CHAIN_ROUTES.has(route);
+
+  const shell = (
+    <AppShell route={route} subtitle={SUBTITLES[route]} showStatus={onChain}>
       <Page />
     </AppShell>
   );
+
+  return onChain ? <MarketplaceProvider>{shell}</MarketplaceProvider> : shell;
 }
 
 export default function App() {
   if (configError) return <ConfigFailure problems={configError.problems} />;
 
   return (
-    <MarketplaceProvider>
-      <WalletProvider>
-        <Routes />
-      </WalletProvider>
-    </MarketplaceProvider>
+    <WalletProvider>
+      <Routes />
+    </WalletProvider>
   );
 }

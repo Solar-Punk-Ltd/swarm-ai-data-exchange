@@ -11,15 +11,51 @@
  * no caching: the page owns exactly one claim at a time.
  */
 
-/** Mirrors the claim lifecycle in `agent-orchestration-api/app/claims.py`. */
+/**
+ * Mirrors the claim lifecycle in `agent-orchestration-api/app/claims.py`, in order. The first
+ * three are provisioning; the next five are what the buyer agent is doing inside its container,
+ * reported through the progress file it writes to its bind-mounted directory.
+ */
 export type ClaimState =
   | 'provisioning'
   | 'funding'
   | 'starting'
-  | 'buying'
-  | 'purchased'
+  | 'discovering'
+  | 'seller_found'
+  | 'purchasing'
+  | 'settled'
+  | 'downloading'
+  | 'delivered'
   | 'expired'
   | 'failed';
+
+/** What the buyer's wallet was actually given. USDC on Base Sepolia — see the API's CLAUDE.md. */
+export interface ClaimFunding {
+  amount?: string | null;
+  txHash?: string | null;
+}
+
+export interface ClaimSeller {
+  agentId?: string | null;
+  name?: string | null;
+  itemCount?: number | null;
+}
+
+/**
+ * The purchased item, captured onto the claim record before its container is torn down — so it
+ * outlives the agent rather than vanishing with it.
+ *
+ * `content` is only sent to a caller that proves the session token; `contentWithheld` says so
+ * explicitly instead of leaving an empty string that looks like an empty item.
+ */
+export interface ClaimItem {
+  name: string | null;
+  size: number;
+  isText: boolean;
+  truncated: boolean;
+  content: string | null;
+  contentWithheld: boolean;
+}
 
 export interface Claim {
   claimId: string;
@@ -28,9 +64,17 @@ export interface Claim {
   buyerAddress: string | null;
   expiresAt: string | null;
   secondsRemaining: number;
+  funding: ClaimFunding;
+  seller: ClaimSeller;
   itemId: string | null;
   txHash: string | null;
+  item: ClaimItem | null;
   error: string | null;
+  /**
+   * `[state, iso]` pairs, one per transition. The page renders a cumulative checklist from this
+   * rather than from `state` alone, so nothing is lost when two steps land between two polls.
+   */
+  history: [ClaimState, string][];
 }
 
 export interface DevconStatus {
@@ -127,9 +171,29 @@ export function createClaim(base: string, sessionToken: string, signal?: AbortSi
   );
 }
 
-/** Progress for a claim. This call is also the heartbeat that keeps the agent alive. */
-export function getClaim(base: string, claimId: string, signal?: AbortSignal) {
-  return request<Claim>(`${base}/devcon/agents/${claimId}`, { method: 'GET' }, signal);
+/**
+ * Progress for a claim. This call is also the heartbeat that keeps the agent alive, and it is what
+ * makes the server fold in the steps its buyer has emitted.
+ *
+ * The session token goes in a header because it is what authorises reading the purchased item — a
+ * gift code is redeemable value, and the claim id is already in the URL path of every one of these
+ * polls and therefore in any access log. Everything except the item's content comes back without
+ * it.
+ */
+export function getClaim(
+  base: string,
+  claimId: string,
+  sessionToken?: string,
+  signal?: AbortSignal,
+) {
+  return request<Claim>(
+    `${base}/devcon/agents/${claimId}`,
+    {
+      method: 'GET',
+      headers: sessionToken ? { 'x-session-token': sessionToken } : undefined,
+    },
+    signal,
+  );
 }
 
 /** Capacity and configuration, so the page can distinguish "full" from "broken". */

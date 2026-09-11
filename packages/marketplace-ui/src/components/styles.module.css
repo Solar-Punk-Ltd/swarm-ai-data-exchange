@@ -855,7 +855,7 @@
   }
 }
 
-/* ── Devcon demo (#/devcon) ──────────────────────────────────────────────── */
+/* ── Devcon demo (/devcon) ───────────────────────────────────────────────── */
 
 .qrCard {
   display: flex;
@@ -913,7 +913,7 @@
 }
 
 /* ── Claim wallet (demo) ──────────────────────────────────────────────────────
-   Phone-first: this page is only ever reached by scanning the #/devcon QR code,
+   Phone-first: this page is only ever reached by scanning the /devcon QR code,
    so it is laid out for a single narrow column rather than the dashboard grid. */
 
 .claimCard {
@@ -1003,6 +1003,20 @@
   color: var(--mp-text-muted);
 }
 
+/* A tx hash in a step detail is the same chip the dashboard uses for addresses, sized down to
+   the step line it sits on. Only the scale changes — truncation, copy and the explorer icon are
+   whatever AddressLink renders everywhere else. */
+.claimStepDetail .address {
+  font-size: 11px;
+  gap: 0.25rem;
+  vertical-align: middle;
+}
+
+.claimStepDetail .iconButton {
+  width: 18px;
+  height: 18px;
+}
+
 .claimFacts {
   display: flex;
   flex-direction: column;
@@ -1048,4 +1062,54 @@
   color: var(--mp-text);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+
+/* A step not yet reached: dimmed, so the checklist reads as a journey with a remainder
+   rather than as a flat list where "done" and "pending" look alike. */
+.claimStepPending {
+  opacity: 0.45;
+}
+
+/* ── The delivered item ───────────────────────────────────────────────────────
+   The payoff of the demo: a gift code someone has to act on from a phone. */
+
+.claimItem {
+  margin: 0.25rem 0 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--mp-accent);
+  border-radius: 10px;
+  background: var(--mp-accent-soft);
+}
+
+.claimItemHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.claimItemName {
+  font-size: 11px;
+  color: var(--mp-text-muted);
+  word-break: break-all;
+}
+
+/* Scrolls inside its own box: a long code must never push the phone layout sideways.
+   pre-wrap keeps a code that has deliberate structure readable. */
+.claimItemBody {
+  margin: 0 0 0.7rem;
+  padding: 0.6rem 0.7rem;
+  max-height: 11rem;
+  overflow: auto;
+  border-radius: 7px;
+  background: var(--mp-surface);
+  color: var(--mp-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* Tapping the code selects all of it, for anyone who reaches past the copy button. */
+  user-select: all;
 }

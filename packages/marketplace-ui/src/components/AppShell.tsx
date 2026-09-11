@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { config } from '../config/env';
-import type { Route } from '../hooks/useHashRoute';
+import { linkTo } from '../hooks/useRoute';
+import type { Route } from '../hooks/useRoute';
 import ConnectButton from './ConnectButton';
 import StatusPills from './StatusPills';
 import styles from './styles.module.css';
@@ -9,28 +10,27 @@ import styles from './styles.module.css';
  * `demo` entries are dropped unless VITE_SHOW_DEMO_FLOW is on. Filtered rather than conditionally
  * built so the array stays a declaration of every page there is.
  *
- * `claim-wallet` is deliberately absent: you arrive there by scanning the code on `#/devcon`, so
+ * `claim-wallet` is deliberately absent: you arrive there by scanning the code on `/devcon`, so
  * no nav item highlights while you are on it.
  */
-const NAV: { route: Route; href: string; label: string; demo?: boolean }[] = [
-  { route: 'dashboard', href: '#/', label: 'Dashboard' },
-  { route: 'map', href: '#/map', label: 'Map of Agents' },
-  { route: 'devcon', href: '#/devcon', label: 'Devcon', demo: true },
+const NAV: { route: Route; label: string; demo?: boolean }[] = [
+  { route: 'dashboard', label: 'Dashboard' },
+  { route: 'map', label: 'Map of Agents' },
+  { route: 'devcon', label: 'Devcon8', demo: true },
 ];
 
 export interface AppShellProps {
   route: Route;
-  /** Describes the current view. The wordmark above it is fixed and matches the sibling dashboard. */
+  /** Describes the current view. */
   subtitle: string;
+  /**
+   * Whether this route is wrapped in `MarketplaceProvider` — see `CHAIN_ROUTES` in `App.tsx`.
+   */
+  showStatus: boolean;
   children: ReactNode;
 }
 
-/**
- * Page chrome shared by every view: wordmark, per-view subtitle, status/wallet controls, and the
- * nav. Plain anchors rather than click handlers, so the hash is the single source of route truth
- * and Back works without the router pushing anything itself.
- */
-export default function AppShell({ route, subtitle, children }: AppShellProps) {
+export default function AppShell({ route, subtitle, showStatus, children }: AppShellProps) {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -43,7 +43,7 @@ export default function AppShell({ route, subtitle, children }: AppShellProps) {
           </div>
         </div>
         <div className={styles.headerRight}>
-          <StatusPills />
+          {showStatus && <StatusPills />}
           <ConnectButton />
         </div>
       </header>
@@ -53,7 +53,7 @@ export default function AppShell({ route, subtitle, children }: AppShellProps) {
           <a
             key={item.route}
             className={`${styles.navItem} ${route === item.route ? styles.navItemOn : ''}`}
-            href={item.href}
+            {...linkTo(item.route)}
             aria-current={route === item.route ? 'page' : undefined}
           >
             {item.label}

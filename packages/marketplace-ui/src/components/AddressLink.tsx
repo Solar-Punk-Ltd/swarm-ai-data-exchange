@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { config } from '../config/env';
-import { addressUrl } from '../config/chain';
+import { addressUrl, txUrl } from '../config/chain';
 import styles from './styles.module.css';
 
 /** `0x1234…abcd` — the full value stays available via `title` and the copy button. */
@@ -57,14 +57,22 @@ function ExternalIcon() {
 }
 
 export interface AddressLinkProps {
+  /** Any 0x value: an address, or a transaction hash with `kind="tx"`. */
   address: string;
   /** Small uppercase prefix, e.g. "SELLER" or "SPLITTER". */
   label?: string;
+  /**
+   * Which explorer page the icon opens — `/address/` or `/tx/`. Only the destination differs:
+   * truncation, the copy button and the layout are deliberately identical, so a hash and an
+   * address read as the same kind of thing wherever they sit next to each other.
+   */
+  kind?: 'address' | 'tx';
 }
 
-export default function AddressLink({ address, label }: AddressLinkProps) {
+export default function AddressLink({ address, label, kind = 'address' }: AddressLinkProps) {
   const [copied, setCopied] = useState(false);
-  const href = addressUrl(config.chain, address);
+  const href = kind === 'tx' ? txUrl(config.chain, address) : addressUrl(config.chain, address);
+  const noun = kind === 'tx' ? 'transaction' : 'address';
 
   const copy = useCallback(() => {
     void navigator.clipboard.writeText(address).then(() => {
@@ -82,7 +90,7 @@ export default function AddressLink({ address, label }: AddressLinkProps) {
         className={`${styles.iconButton} ${copied ? styles.copied : ''}`}
         onClick={copy}
         aria-label={copied ? 'Copied' : `Copy ${address}`}
-        title={copied ? 'Copied' : 'Copy address'}
+        title={copied ? 'Copied' : `Copy ${noun}`}
       >
         {copied ? <CheckIcon /> : <CopyIcon />}
       </button>

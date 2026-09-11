@@ -1,4 +1,5 @@
 import { config } from '../config/env';
+import { href } from '../hooks/useRoute';
 import QrCode from './QrCode';
 import styles from './styles.module.css';
 
@@ -13,7 +14,7 @@ import styles from './styles.module.css';
  */
 export default function DevconPage() {
   const base = config.demoFlowBaseUrl ?? window.location.origin;
-  const claimWalletUrl = `${base}/#/claim-wallet`;
+  const claimWalletUrl = `${base}${href('claim-wallet')}`;
 
   return (
     <section className={styles.section}>

@@ -1,47 +1,84 @@
-import { useEffect, useState } from 'react';
-import { config } from '../config/env';
-import { txUrl } from '../config/chain';
+import { useCallback, useEffect, useState } from 'react';
 import useClaim from '../hooks/useClaim';
-import type { ClaimState } from '../lib/devcon';
+import type { Claim, ClaimItem, ClaimState } from '../lib/devcon';
 import AddressLink from './AddressLink';
 import styles from './styles.module.css';
 
 /**
- * The QR code's target — the phone-side surface, reached by scanning `#/devcon`.
+ * The QR code's target — the phone-side surface, reached by scanning `/devcon`.
  *
- * On arrival it asks `agent-orchestration-api` to deploy a buyer agent for this visitor, then
- * narrates its progress until it has bought something. The agent is handed back when this page
- * closes, or after the server's TTL, whichever comes first.
- *
- * The progress steps are not decoration. Getting a container running takes seconds (a USDC
- * transfer blocks on a chain receipt) and the purchase itself tens more, and `starting` and
- * `buying` are where nearly all of that time goes — a single spinner over half a minute reads as
- * a hang, which is the one thing this page cannot afford to look like on stage.
- *
- * Absent from the nav on purpose: nothing links to a page you arrive at by scanning.
+ * On arrival it asks `agent-orchestration-api` to deploy a buyer agent for this visitor, narrates
+ * what that agent does, and shows what it bought. The agent is handed back when this page closes,
+ * or after the server's TTL, whichever comes first.
  */
 
+type StepKey =
+  | 'created'
+  | 'funded'
+  | 'started'
+  | 'seller'
+  | 'purchase'
+  | 'settled'
+  | 'download'
+  | 'ready';
+
 interface Step {
-  state: ClaimState;
+  key: StepKey;
+  /** States that belong to this step. The first is the one that activates it. */
+  states: ClaimState[];
   label: string;
+  /** Shown while this step is the current one. */
   detail: string;
 }
 
 const STEPS: Step[] = [
-  { state: 'provisioning', label: 'Creating', detail: 'Generating a wallet for your agent' },
-  { state: 'funding', label: 'Funding', detail: 'Sending it USDC to spend' },
-  { state: 'starting', label: 'Starting', detail: 'Booting the agent' },
-  { state: 'buying', label: 'Buying', detail: 'Your agent is shopping the seller catalog' },
-  { state: 'purchased', label: 'Bought', detail: 'Your agent bought an item' },
+  {
+    key: 'created',
+    states: ['provisioning'],
+    label: 'Buyer agent created',
+    detail: 'Generating its wallet',
+  },
+  {
+    key: 'funded',
+    states: ['funding'],
+    label: 'Wallet funded',
+    detail: 'Sending it USDC to spend',
+  },
+  { key: 'started', states: ['starting'], label: 'Agent started', detail: 'Booting the agent' },
+  {
+    key: 'seller',
+    states: ['discovering', 'seller_found'],
+    label: 'Seller agent discovered',
+    detail: 'Looking up the seller on-chain',
+  },
+  {
+    key: 'purchase',
+    states: ['purchasing'],
+    label: 'Purchase initiated',
+    detail: 'Paying over x402',
+  },
+  {
+    key: 'settled',
+    states: ['settled'],
+    label: 'Purchase finalized',
+    detail: 'Settling on Base Sepolia',
+  },
+  {
+    key: 'download',
+    states: ['downloading'],
+    label: 'Downloading purchased item',
+    detail: 'Decrypting from Swarm',
+  },
+  { key: 'ready', states: ['delivered'], label: 'Item ready', detail: 'Fetching your item' },
 ];
 
-const STEP_INDEX: Record<string, number> = Object.fromEntries(
-  STEPS.map((step, index) => [step.state, index]),
+const STEP_OF: Record<string, number> = Object.fromEntries(
+  STEPS.flatMap((step, index) => step.states.map((state) => [state, index])),
 );
 
 /**
- * Ticks locally rather than rendering `claim.secondsRemaining`, which only moves when the 5s poll
- * lands — a clock that jumps in five-second steps looks broken.
+ * Ticks locally rather than rendering `claim.secondsRemaining`, which only moves when a poll lands
+ * — a clock that jumps in whole seconds at a time looks broken.
  */
 function useCountdown(expiresAt: string | null | undefined, active: boolean): number | undefined {
   const [remaining, setRemaining] = useState<number>();
@@ -68,26 +105,111 @@ function clock(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
-function Steps({ state }: { state: ClaimState }) {
-  const current = STEP_INDEX[state] ?? 0;
+/**
+ * Per-step detail, once it is known. Both the funding and the settlement step carry a live
+ * explorer link — the funding amount and its transaction are what make "your agent has money"
+ * checkable rather than a claim.
+ */
+function StepDetail({
+  step,
+  claim,
+  active,
+  fallback,
+}: {
+  step: StepKey;
+  claim: Claim;
+  active: boolean;
+  fallback: string;
+}) {
+  if (step === 'funded' && claim.funding.amount) {
+    return (
+      <span className={styles.claimStepDetail}>
+        {claim.funding.amount} USDC
+        {claim.funding.txHash && (
+          <>
+            {' · '}
+            <AddressLink address={claim.funding.txHash} kind="tx" />
+          </>
+        )}
+      </span>
+    );
+  }
+  if (step === 'seller' && (claim.seller.name || claim.seller.agentId)) {
+    return (
+      <span className={styles.claimStepDetail}>
+        {claim.seller.name ?? `agent ${claim.seller.agentId}`}
+        {typeof claim.seller.itemCount === 'number' && ` · ${claim.seller.itemCount} item(s)`}
+      </span>
+    );
+  }
+  if (step === 'purchase' && claim.itemId) {
+    return (
+      <span className={styles.claimStepDetail} title={claim.itemId}>
+        item {claim.itemId.slice(0, 10)}…
+      </span>
+    );
+  }
+  if (step === 'settled' && claim.txHash) {
+    return (
+      <span className={styles.claimStepDetail}>
+        <AddressLink address={claim.txHash} kind="tx" />
+      </span>
+    );
+  }
+
+  if (active) {
+    return <span className={styles.claimStepDetail}>{fallback}</span>;
+  }
+
+  return null;
+}
+
+/**
+ * The cumulative checklist. Reached steps stay visible with a tick; the current one is
+ * highlighted. `reached` comes from the claim's history rather than from its state alone, because
+ * a step whose whole duration fell between two polls still happened.
+ */
+function Steps({ claim }: { claim: Claim }) {
+  const mapped = STEP_OF[claim.state];
+  const terminal =
+    claim.state === 'delivered' || claim.state === 'expired' || claim.state === 'failed';
+
+  const reached = new Set<number>();
+
+  if (mapped !== undefined) {
+    reached.add(mapped);
+  }
+
+  for (const [state] of claim.history) {
+    const index = STEP_OF[state];
+
+    if (index !== undefined) {
+      reached.add(index);
+    }
+  }
+  const furthest = reached.size > 0 ? Math.max(...reached) : 0;
+  const current = mapped ?? furthest;
+
   return (
     <ol className={styles.claimSteps}>
       {STEPS.map((step, index) => {
-        const done = index < current;
-        const active = index === current;
+        const done = index < furthest || (index === furthest && terminal);
+        const active = index === current && !terminal;
+        const pending = index > furthest;
         const className = [
           styles.claimStep,
           done ? styles.claimStepDone : '',
           active ? styles.claimStepOn : '',
+          pending ? styles.claimStepPending : '',
         ]
           .filter(Boolean)
           .join(' ');
         return (
-          <li key={step.state} className={className}>
+          <li key={step.key} className={className}>
             <span className={styles.claimStepDot} aria-hidden="true" />
             <span className={styles.claimStepText}>
               <span className={styles.claimStepLabel}>{step.label}</span>
-              {active && <span className={styles.claimStepDetail}>{step.detail}</span>}
+              <StepDetail step={step.key} claim={claim} active={active} fallback={step.detail} />
             </span>
           </li>
         );
@@ -96,11 +218,59 @@ function Steps({ state }: { state: ClaimState }) {
   );
 }
 
+function DeliveredItem({ item }: { item: ClaimItem }) {
+  const [copied, setCopied] = useState(false);
+  const content = item.content;
+
+  const copy = useCallback(() => {
+    if (!content) {
+      return;
+    }
+
+    void navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [content]);
+
+  return (
+    <div className={styles.claimItem}>
+      <div className={styles.claimItemHead}>
+        <span className={styles.claimFactLabel}>Your item</span>
+        {item.name && <span className={styles.claimItemName}>{item.name}</span>}
+      </div>
+
+      {content ? (
+        <>
+          <pre className={styles.claimItemBody}>{content}</pre>
+          <button
+            type="button"
+            className={`${styles.button} ${styles.buttonPrimary}`}
+            onClick={copy}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          {item.truncated && (
+            <p className={styles.claimHint}>
+              Showing the first part only — the item is {item.size} bytes.
+            </p>
+          )}
+        </>
+      ) : (
+        <p className={styles.claimHint}>
+          {item.contentWithheld
+            ? 'Open this page in the browser that claimed the agent to see your item.'
+            : `This item is not text (${item.size} bytes), so it cannot be shown here.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function ClaimWalletPage() {
   const { claim, error, errorCode, loading, configured, retry } = useClaim();
 
-  // The clock is only meaningful while the agent is still doing something.
-  const counting = Boolean(claim && !claim.released && claim.state !== 'purchased');
+  const counting = Boolean(claim && !claim.released && claim.state !== 'delivered');
   const remaining = useCountdown(claim?.expiresAt, counting);
 
   const heading = <h2 className={styles.sectionTitle}>Claim wallet</h2>;
@@ -145,14 +315,12 @@ export default function ClaimWalletPage() {
         <div className={styles.sectionHead}>{heading}</div>
         <div className={styles.claimCard}>
           <p className={styles.claimLead}>Creating a buyer agent for you…</p>
-          <Steps state="provisioning" />
         </div>
       </section>
     );
   }
 
-  const explorer = claim.txHash ? txUrl(config.chain, claim.txHash) : undefined;
-  const finished = claim.state === 'purchased';
+  const delivered = claim.state === 'delivered';
   const gone = claim.released || claim.state === 'expired';
   const broke = claim.state === 'failed';
 
@@ -179,51 +347,26 @@ export default function ClaimWalletPage() {
         ) : (
           <>
             <p className={styles.claimLead}>
-              {finished
-                ? 'Your agent bought an item from the seller.'
-                : 'Your buyer agent is live.'}
+              {delivered ? 'Your agent bought this for you.' : 'Your buyer agent is working.'}
             </p>
 
-            <Steps state={claim.state} />
+            <Steps claim={claim} />
 
-            <div className={styles.claimFacts}>
-              {claim.buyerAddress && (
+            {claim.item && <DeliveredItem item={claim.item} />}
+
+            {claim.buyerAddress && (
+              <div className={styles.claimFacts}>
                 <div className={styles.claimFact}>
                   <span className={styles.claimFactLabel}>Your agent</span>
                   <AddressLink address={claim.buyerAddress} />
                 </div>
-              )}
-              {claim.itemId && (
-                <div className={styles.claimFact}>
-                  <span className={styles.claimFactLabel}>Item</span>
-                  <span className={styles.claimFactValue} title={claim.itemId}>
-                    {claim.itemId.slice(0, 10)}…
-                  </span>
-                </div>
-              )}
-              {claim.txHash && (
-                <div className={styles.claimFact}>
-                  <span className={styles.claimFactLabel}>Payment</span>
-                  {explorer ? (
-                    <a
-                      className={styles.pillLink}
-                      href={explorer}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {claim.txHash.slice(0, 10)}…
-                    </a>
-                  ) : (
-                    <span className={styles.claimFactValue}>{claim.txHash.slice(0, 10)}…</span>
-                  )}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {gone ? (
               <p className={styles.claimHint}>
-                {finished
-                  ? 'Your agent has finished and been shut down.'
+                {delivered
+                  ? 'Your agent has finished and been shut down. The item above is yours to keep.'
                   : 'Your agent has been returned. Reload the page to get another one.'}
               </p>
             ) : (
@@ -231,15 +374,15 @@ export default function ClaimWalletPage() {
                 {remaining !== undefined && (
                   <span className={styles.claimCountdown}>{clock(remaining)}</span>
                 )}
-                Your agent is yours for up to ten minutes, and is shut down when you close this
-                page.
+                Your agent is yours while this page is open, and is shut down when you close it.
               </p>
             )}
 
-            {gone && (
+            {gone && !delivered && (
               <button
                 type="button"
                 className={`${styles.button} ${styles.buttonPrimary}`}
+                style={{ marginTop: '20px' }}
                 onClick={retry}
               >
                 Claim another

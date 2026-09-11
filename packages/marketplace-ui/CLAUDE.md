@@ -14,11 +14,11 @@ between them are edges. The map adds no fetching; it is a second reading of what
 already loads.
 
 Behind `VITE_SHOW_DEMO_FLOW` there are two more pages, demo scaffolding rather than product
-surface: **Devcon** (`#/devcon`), a QR code that hands the audience off from the projected
-dashboard to their own phone, and **Claim wallet** (`#/claim-wallet`), the page that code points
+surface: **Devcon** (`/devcon`), a QR code that hands the audience off from the projected
+dashboard to their own phone, and **Claim wallet** (`/claim-wallet`), the page that code points
 at — where a buyer agent is deployed for that visitor and buys one item from a seller agent. With
-the flag off the nav item disappears and both hashes resolve to the Dashboard, because a scanned QR
-code outlives the build that printed it. Only `#/devcon` is in the nav: you reach `#/claim-wallet`
+the flag off the nav item disappears and both paths resolve to the Dashboard, because a scanned QR
+code outlives the build that printed it. Only `/devcon` is in the nav: you reach `/claim-wallet`
 by scanning, so nothing should highlight while you are on it.
 
 ## Source of truth
@@ -107,7 +107,7 @@ SELLERS  (one card/row per clone in the factory registry)
   [ DISTRIBUTE ]
 ```
 
-Map of Agents (`#/map`):
+Map of Agents (`/map`):
 
 ```
 [ 24h ][ 7d ][ 30d ][ All ]        (period filter — local state, never the URL)
@@ -203,19 +203,94 @@ Three more consequences of putting a face on a node, all deliberate:
   by default and a settled canvas has stopped painting — re-identifying `nodeCanvasObject` is that
   nudge, and unlike re-applying `graphData` it does not restart the layout.
 
+## Routing
+
+`hooks/useRoute.ts` is the whole router — four pages, real paths, no dependency. It exports
+`useRoute()` (the current route), `href(route)`, `linkTo(route)` (href + click handler) and
+`navigate(route)`. Every in-app link goes through `linkTo`; nothing writes a path by hand.
+
+- **Paths, not a hash.** `/map` reads as a URL and a QR code encodes it without a `#`. The cost is
+  a hosting requirement — see below — which is real but one-time, and paid by the deploy rather
+  than by every printed link.
+- **The anchor keeps a real `href`.** `linkTo` suppresses the page load only on a plain left click;
+  modified clicks, middle clicks and "copy link address" stay the browser's. A `<a href="#">` plus
+  `onClick`, or a `<button>` styled as a link, breaks all three.
+- **`useSyncExternalStore`, not state plus an effect.** `location` is exactly an external store,
+  and reading it in an effect leaves the first render showing a route the URL has already moved
+  past. `pushState` fires no event, so `navigate` notifies subscribers itself; `popstate` covers
+  Back and Forward.
+- **Only the route lives in the URL.** Filter state stays in component state — writing it to the
+  URL would push a history entry per click, so Back would step through filter changes instead of
+  returning to the previous page.
+- **Everything goes through `import.meta.env.BASE_URL`.** A sub-path deploy needs `base` in
+  `vite.config.ts` and no other change, including in the QR builder.
+
+### Chain traffic is route-scoped
+
+`MarketplaceProvider` wraps **only the routes in `CHAIN_ROUTES`** (`App.tsx`) — Dashboard and Map.
+It is not mounted above the router, and must not be moved back there.
+
+Mounted globally it polled on every route, including two that read none of it: neither
+`DevconPage` nor `ClaimWalletPage` calls `useMarketplace`, so an open `/claim-wallet` tab paid for
+balances every 5s, two `eth_getLogs` every 30s, and a registry + Agent Card sweep every 60s while
+rendering none of it. That page runs on a visitor's phone over conference wifi, against the same
+2s claim poll that is also its heartbeat.
+
+Three consequences to keep in mind:
+
+- **`AppShell` takes `showStatus`.** `StatusPills` reads `MarketplaceContext` and throws outside
+  the provider, so the header's "Live · 5s" chip renders only on chain routes. It would be a false
+  claim on the others regardless. `ConnectButton` stays on every page: `WalletProvider` is still
+  global, and it binds to an injected provider rather than polling anything.
+- **Dashboard ↔ Map does not refetch.** Both render `MarketplaceProvider` at the same position, so
+  React keeps it mounted across that switch. Entering a demo route unmounts it and returning
+  reloads from scratch — a few seconds of skeletons, against data that was 5s-fresh anyway.
+- **A new chain-backed page must be added to `CHAIN_ROUTES`.** Forgetting is not silent: the first
+  `useMarketplace` call throws with the provider's own message.
+
+Worth knowing separately: a history sweep always restarts at `fromBlock`, so it re-reads the whole
+window each time. `HISTORY_RELOAD_EVERY` bounds how often that happens, not how much it costs.
+
+### Hosting
+
+**Every unknown path must serve `index.html`.** A real path means a real request: the browser asks
+the server for `/map`, and there is no file there. `vite dev` and `vite preview` do this already
+(`appType: 'spa'`, the default), so nothing in local development or `pnpm preview` reveals a
+missing rule — it fails first on the deployed build.
+
+| Host                        | What it needs                                         |
+| --------------------------- | ----------------------------------------------------- |
+| `vite dev` / `vite preview` | nothing                                               |
+| nginx                       | `try_files $uri $uri/ /index.html;`                   |
+| Caddy                       | `try_files {path} /index.html`                        |
+| Netlify / Cloudflare Pages  | `/* /index.html 200` in `_redirects`                  |
+| Vercel                      | a rewrite of `/(.*)` → `/index.html`                  |
+| S3 + CloudFront             | error document `index.html`, or a CloudFront function |
+| `npx serve`                 | `-s`                                                  |
+| GitHub Pages                | no real support — the `404.html` copy trick           |
+
+**`/claim-wallet` is the one that must not 404.** It is reached by a phone scanning a QR code: a
+cold GET straight at a deep path, with no client-side code running to recover, in front of an
+audience. Verify that path on the actual deploy target before the demo — not the nav, which works
+either way because `pushState` never touches the server.
+
 ## Claim wallet
 
-`#/claim-wallet` is the only page here that talks to a **service of ours**, and the only one that
+`/claim-wallet` is the only page here that talks to a **service of ours**, and the only one that
 causes anything to be created: on arrival it asks `agent-orchestration-api` (in the sibling
 `swarm-agent-demo` repo) to deploy a buyer agent for this visitor, narrates its progress, and hands
 it back when the page closes. `lib/devcon.ts` is the client, `hooks/useClaim.ts` owns the lifecycle.
 
-Four things about it are load-bearing:
+Six things about it are load-bearing:
 
 - **The single-fetch-owner rule is not relaxed.** That rule governs the registry and balance reads
   in `MarketplaceContext`. `useClaim` polls a different service for state no other view renders,
   and folding it into the context would couple a demo page to the dashboard's 5s tick. Do not move
   it there.
+- **This page makes no chain requests at all.** `MarketplaceProvider` is not mounted on it — see
+  _Routing → Chain traffic is route-scoped_. The claim poll is the only thing on the wire, which is
+  the point: it runs on a phone over conference wifi, and the dashboard's sweep was competing with
+  the one request the page depends on.
 - **The status poll _is_ the heartbeat.** The server reaps a claim whose polling stops, and that is
   what actually enforces "the agent is deleted when the page closes" — `pagehide` fires nothing on
   a phone that locks its screen or loses wifi. So the poll must keep running while the page is
@@ -227,11 +302,44 @@ Four things about it are load-bearing:
   under React 18 StrictMode, so releasing there would either kill an agent the visitor still wants
   or churn one agent per mount. An in-app navigation instead stops the heartbeat and lets the
   server reap it.
+- **The session token goes in a header on every poll.** It is what authorises reading the purchased
+  item; a gift code is redeemable value, and the claim id is already in the URL of every poll and
+  so in any access log. Everything except that content comes back without it.
 
-Progress is rendered as distinct named steps rather than one spinner because nearly all the wall
-clock sits in two of them: `starting`, and `buying` while an x402 settlement lands. Half a minute of
-undifferentiated spinner reads as a hang, which is the one thing this page cannot look like on
-stage.
+### The checklist
+
+Eight steps, cumulative: reached steps keep a tick and their detail, the current one is highlighted,
+the rest are dimmed. Nearly all the wall clock sits in two of them — starting the agent, and waiting
+for an x402 settlement — and half a minute of undifferentiated spinner reads as a hang, which is the
+one thing this page cannot look like on stage.
+
+Three things about it are easy to break:
+
+- **Steps come from `claim.history`, not from `claim.state`.** The server records every transition
+  with a timestamp, so a step whose whole duration fell between two polls still shows. Deriving the
+  list from the current state alone would silently drop it.
+- **`expired` and `failed` are not steps and have no index.** Falling back to step 0 would highlight
+  "Buyer agent created" as the _current_ step on a claim that got most of the way through, so an
+  unmapped state resolves to the furthest step actually reached and nothing renders as in-progress.
+- **A step's "in progress" wording is a fallback, not an addition.** Once real detail is known —
+  the funded amount, the seller's name, a tx hash — it replaces the placeholder, or the funding step
+  would read "0.001 USDC · tx…" and "Sending it USDC to spend" simultaneously.
+
+Polling is 2s while the claim is pre-terminal and 5s after. The server only folds in the buyer's
+emitted steps when it is polled, so that cadence _is_ the resolution of this display.
+
+### The delivered item
+
+The payoff of the demo, and the seller sells gift codes, so it has to be actionable from a phone:
+monospace, `user-select: all`, and a one-tap copy button. It **scrolls inside its own container** —
+a long code must never push the phone layout sideways.
+
+It keeps rendering after the agent is released. The API captures the content onto the claim record
+before tearing the container down, precisely so the item outlives the agent; the visitor paid for
+it. Withheld, binary and truncated are each stated in words rather than rendered as an empty box.
+
+Never reach for `dangerouslySetInnerHTML` here. The content is arbitrary bytes from a third-party
+seller; React's default escaping is what makes displaying it safe.
 
 There is **no Vite proxy** for the API. The QR points at a LAN origin so a phone can resolve it, and
 a dev-server proxy exists in neither `pnpm preview` nor a static deploy — which is why the API's own
@@ -445,19 +553,19 @@ splitter row filters on it (native entries are dropped entirely).
 All are Vite build-time vars and **must** carry the `VITE_` prefix — Vite exposes nothing else to
 the browser. All values here are public; there is no secret in this package.
 
-| Variable                            | Required | Default                    | Purpose                                                          |
-| ----------------------------------- | -------- | -------------------------- | ---------------------------------------------------------------- |
-| `VITE_TREASURY_ADDRESS`             | yes      | —                          | Marketplace treasury shown in the Treasury section               |
-| `VITE_SPLITTER_FACTORY_ADDRESS`     | yes      | —                          | `SplitterFactory` to enumerate                                   |
-| `VITE_CHAIN_ID`                     | no       | `84532`                    | Base Sepolia. Selects the viem chain and the currency config     |
-| `VITE_RPC_URL`                      | no       | `https://sepolia.base.org` | **Required in practice** — the public node rate-limits           |
-| `VITE_REFRESH_INTERVAL_MS`          | no       | `5000`                     | Balance poll interval                                            |
-| `VITE_IDENTITY_REGISTRY_ADDRESS`    | no       | known per chain            | ERC-8004 registry, for labelling rows with their agent           |
-| `VITE_IDENTITY_REGISTRY_FROM_BLOCK` | no       | registry deploy block      | Start of the `agent_splitter` log sweep                          |
-| `VITE_LOG_CHUNK_BLOCKS`             | no       | `500000`                   | Blocks per `eth_getLogs` call; lower it if the index is partial  |
-| `VITE_SHOW_DEMO_FLOW`               | no       | `false`                    | Enables `#/devcon` and `#/claim-wallet`. `"true"`/`"false"` only |
-| `VITE_DEMO_FLOW_BASE_URL`           | no       | `window.location.origin`   | Base URL the demo QR encodes; only read when the flag is on      |
-| `VITE_DEVCON_API_URL`               | no       | —                          | `agent-orchestration-api` base URL for `#/claim-wallet`          |
+| Variable                            | Required | Default                    | Purpose                                                         |
+| ----------------------------------- | -------- | -------------------------- | --------------------------------------------------------------- |
+| `VITE_TREASURY_ADDRESS`             | yes      | —                          | Marketplace treasury shown in the Treasury section              |
+| `VITE_SPLITTER_FACTORY_ADDRESS`     | yes      | —                          | `SplitterFactory` to enumerate                                  |
+| `VITE_CHAIN_ID`                     | no       | `84532`                    | Base Sepolia. Selects the viem chain and the currency config    |
+| `VITE_RPC_URL`                      | no       | `https://sepolia.base.org` | **Required in practice** — the public node rate-limits          |
+| `VITE_REFRESH_INTERVAL_MS`          | no       | `5000`                     | Balance poll interval                                           |
+| `VITE_IDENTITY_REGISTRY_ADDRESS`    | no       | known per chain            | ERC-8004 registry, for labelling rows with their agent          |
+| `VITE_IDENTITY_REGISTRY_FROM_BLOCK` | no       | registry deploy block      | Start of the `agent_splitter` log sweep                         |
+| `VITE_LOG_CHUNK_BLOCKS`             | no       | `500000`                   | Blocks per `eth_getLogs` call; lower it if the index is partial |
+| `VITE_SHOW_DEMO_FLOW`               | no       | `false`                    | Enables `/devcon` and `/claim-wallet`. `"true"`/`"false"` only  |
+| `VITE_DEMO_FLOW_BASE_URL`           | no       | `window.location.origin`   | Base URL the demo QR encodes; only read when the flag is on     |
+| `VITE_DEVCON_API_URL`               | no       | —                          | `agent-orchestration-api` base URL for `/claim-wallet`          |
 
 `VITE_RPC_URL` is not in the original spec for this dashboard but is not optional in reality:
 `VITE_CHAIN_ID` selects a chain, it does not provide a transport. Mirror the wording of
@@ -554,7 +662,8 @@ Mirror `erc8004-dashboard` so someone who knows one knows the other:
 ```
 src/
   main.tsx                  — createRoot + <App />, and applyTheme() before first paint
-  App.tsx                   — ConfigFailure, the providers, and the route switch
+  App.tsx                   — ConfigFailure, the route switch, and CHAIN_ROUTES (which routes
+                              mount MarketplaceProvider)
   theme.ts                  — colour tokens + applyTheme() (see Theme above)
   index.css                 — reset + body, matching erc8004-dashboard/src/index.css
   config/
@@ -563,7 +672,8 @@ src/
     registry.ts             — ERC-8004 Identity Registry address + deploy block per chain
     chain.ts                — viem chain object + explorer address/tx URL builders
   context/
-    MarketplaceContext.tsx  — registry + balances + polling; the single fetch owner
+    MarketplaceContext.tsx  — registry + balances + polling; the single fetch owner, mounted
+                              only on the chain routes
     WalletContext.tsx       — EIP-1193 connect / account / chain id / switch chain
   lib/
     reads.ts                — every on-chain read: loadRegistry, readBalances, isFunded
@@ -574,7 +684,7 @@ src/
     format.ts               — formatTaxBps (via the SDK BPS_DENOMINATOR), formatAge
     rpcError.ts             — wallet/RPC errors to one readable line; user-rejection detection
   hooks/
-    useHashRoute.ts         — the two-page hash router; nothing else lives in the URL
+    useRoute.ts             — the path router: useRoute, navigate, href, linkTo
     useClaim.ts             — the claim lifecycle: claim, poll/heartbeat, release on close
     usePolling.ts           — interval + document.hidden pause
     useTxLifecycle.ts       — shared idle/signing/pending/confirmed state machine
@@ -596,7 +706,8 @@ src/
     SellerRow.tsx
     HistorySection.tsx      — Activity: filters, partial-sweep banner
     HistoryTable.tsx        — purchase/payout rows
-    AddressLink.tsx         — address + copy + explorer icon; used by every section
+    AddressLink.tsx         — any 0x value + copy + explorer icon; kind="tx" links a hash to
+                              /tx/ rather than /address/. Used by every section
     AgentBadge.tsx          — the seller's ERC-8004 agent, with its verification status
     Balance.tsx             — formatUnits + symbol, with a skeleton state
     TxNote.tsx              — renders the tx state machine; shared by both buttons
@@ -619,6 +730,9 @@ Copy `erc8004-dashboard/vite.config.ts` and adjust:
   build step (the same trick the sibling uses for `erc8004-adapter`).
 - `server: { port: 5174 }` — `erc8004-dashboard` occupies the default 5173, and root `pnpm dev`
   runs every package in parallel.
+- `appType: 'spa'` — the default, stated explicitly because the path router depends on it. See
+  _Routing → Hosting_; it is what makes `/map` work in `dev` and `preview`, and it is also why
+  neither of those catches a static host that is missing the same rule.
 - No `@ethersphere/bee-js` externalization and no `dotenv` mock are needed; this package touches
   neither.
 
