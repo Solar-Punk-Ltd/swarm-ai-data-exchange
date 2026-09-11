@@ -112,7 +112,7 @@ export default function useClaim(): ClaimResult {
       } catch (err) {
         if (stopped || controller.signal.aborted) return;
         if (err instanceof DevconError && err.status === 404) {
-          // The claim was reaped and forgotten. Asking again is the right move, not an error.
+          // The claim was cleared and forgotten. Asking again is the right move, not an error.
           void start();
           return;
         }
@@ -143,7 +143,7 @@ export default function useClaim(): ClaimResult {
     void start();
 
     // Coming back to a backgrounded tab: mobile browsers suspend timers, so the heartbeat may
-    // have lapsed and the agent may already be reaped. Poll at once — that either revives the
+    // have lapsed and the agent may already be cleared. Poll at once — that either revives the
     // heartbeat or 404s into a fresh claim.
     const onVisible = () => {
       if (document.visibilityState !== 'visible' || stopped) return;
@@ -165,7 +165,7 @@ export default function useClaim(): ClaimResult {
   // Give the agent back on close. Registered once, and deliberately NOT in the effect above:
   // unmount also fires on an in-app route change and under StrictMode's double mount, and
   // releasing there would either kill an agent the visitor still wants or churn one per mount.
-  // An in-app navigation instead stops the heartbeat and lets the server reap it.
+  // An in-app navigation instead stops the heartbeat and lets the server clear it.
   useEffect(() => {
     if (!base) return;
     const onPageHide = () => {

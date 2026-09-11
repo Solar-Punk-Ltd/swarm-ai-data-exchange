@@ -291,7 +291,7 @@ Six things about it are load-bearing:
   _Routing → Chain traffic is route-scoped_. The claim poll is the only thing on the wire, which is
   the point: it runs on a phone over conference wifi, and the dashboard's sweep was competing with
   the one request the page depends on.
-- **The status poll _is_ the heartbeat.** The server reaps a claim whose polling stops, and that is
+- **The status poll _is_ the heartbeat.** The server clears a claim whose polling stops, and that is
   what actually enforces "the agent is deleted when the page closes" — `pagehide` fires nothing on
   a phone that locks its screen or loses wifi. So the poll must keep running while the page is
   open, and `releaseClaim` on `pagehide` is only an optimisation for a deliberate close.
@@ -301,7 +301,7 @@ Six things about it are load-bearing:
 - **Release is _not_ wired to unmount.** Unmount also fires on an in-app route change and twice
   under React 18 StrictMode, so releasing there would either kill an agent the visitor still wants
   or churn one agent per mount. An in-app navigation instead stops the heartbeat and lets the
-  server reap it.
+  server clear it.
 - **The session token goes in a header on every poll.** It is what authorises reading the purchased
   item; a gift code is redeemable value, and the claim id is already in the URL of every poll and
   so in any access log. Everything except that content comes back without it.
