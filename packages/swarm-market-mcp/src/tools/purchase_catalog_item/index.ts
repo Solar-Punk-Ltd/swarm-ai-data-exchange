@@ -27,6 +27,11 @@ import {
   PurchaseChallenge,
 } from './models';
 
+// The x402 server's settle response. Some servers (e.g. x402-swarm-devcon8-server) attach a
+// fulfillment payload in `data`; it is passed through to the caller verbatim and absent
+// everywhere else. The cast is compile-time only — extra fields already survive res.json().
+type X402Response = ActGrantResult & { data?: string };
+
 // Mirrors swarm-catalog PURCHASE_INTENT_TYPES. Reused for signing and for the wire
 // envelope (no EIP712Domain entry — ethers derives the domain separator itself).
 const PURCHASE_INTENT_TYPES = {
@@ -258,7 +263,7 @@ export async function purchaseCatalogItem(
   const xPayment = Buffer.from(JSON.stringify(envelope), 'utf-8').toString('base64');
 
   // Phase 2: settle + ACT grant.
-  let result: ActGrantResult;
+  let result: X402Response;
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -269,7 +274,7 @@ export async function purchaseCatalogItem(
     if (!res.ok) {
       return getToolErrorResponse(`Purchase failed (${res.status}): ${await res.text()}`);
     }
-    result = (await res.json()) as ActGrantResult;
+    result = (await res.json()) as X402Response;
   } catch (err) {
     return getToolErrorResponse(`x402 settlement request failed: ${getErrorMessage(err)}`);
   }
@@ -281,5 +286,6 @@ export async function purchaseCatalogItem(
     actHistoryRef: result.actHistoryRef,
     grantorPublicKey: result.grantorPublicKey,
     message: `Purchased ${args.itemId}; ACT grant issued to the buyer node.`,
+    data: result.data,
   });
 }

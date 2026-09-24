@@ -57,6 +57,46 @@ export interface ClaimItem {
   contentWithheld: boolean;
 }
 
+/**
+ * The devcon8 voucher carried in a delivered item's content. The voucher x402 server returns
+ * `{type: "devcon8-voucher", address, privateKey, funded, fundTx}` as a JSON string and the buyer
+ * agent delivers it verbatim. `privateKey` can be absent: the server stores it nowhere, so it is
+ * delivered exactly once — a duplicate settlement gets the address with a note instead.
+ */
+export interface VoucherContent {
+  type: 'devcon8-voucher';
+  address: string;
+  privateKey?: string;
+  funded: boolean;
+  fundTx?: { xdai?: string; xbzz?: string };
+  error?: string;
+  note?: string;
+}
+
+/**
+ * Parse an item's content as a voucher; null for anything else. Defensive on purpose: item
+ * content is arbitrary seller data, and a parse failure only means "render it as plain text".
+ */
+export function parseVoucher(content: string | null): VoucherContent | null {
+  if (!content) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(content);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      (parsed as Record<string, unknown>).type === 'devcon8-voucher' &&
+      typeof (parsed as Record<string, unknown>).address === 'string'
+    ) {
+      return parsed as unknown as VoucherContent;
+    }
+  } catch {
+    // Not JSON — a plain text item.
+  }
+  return null;
+}
+
 export interface Claim {
   claimId: string;
   state: ClaimState;

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import useClaim from '../hooks/useClaim';
-import type { Claim, ClaimItem, ClaimState } from '../lib/devcon';
+import { parseVoucher, type Claim, type ClaimItem, type ClaimState } from '../lib/devcon';
 import AddressLink from './AddressLink';
+import QrCode from './QrCode';
 import styles from './styles.module.css';
 
 /**
@@ -12,15 +13,7 @@ import styles from './styles.module.css';
  * or after the server's TTL, whichever comes first.
  */
 
-type StepKey =
-  | 'created'
-  | 'funded'
-  | 'started'
-  | 'seller'
-  | 'purchase'
-  | 'settled'
-  | 'download'
-  | 'ready';
+type StepKey = 'created' | 'funded' | 'started' | 'seller' | 'purchase' | 'settled' | 'download';
 
 interface Step {
   key: StepKey;
@@ -69,7 +62,6 @@ const STEPS: Step[] = [
     label: 'Downloading purchased item',
     detail: 'Decrypting from Swarm',
   },
-  { key: 'ready', states: ['delivered'], label: 'Item ready', detail: 'Fetching your item' },
 ];
 
 const STEP_OF: Record<string, number> = Object.fromEntries(
@@ -218,20 +210,73 @@ function Steps({ claim }: { claim: Claim }) {
   );
 }
 
-function DeliveredItem({ item }: { item: ClaimItem }) {
+/** Copy-to-clipboard button with the shared copied-flash behaviour. */
+function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
-  const content = item.content;
-
   const copy = useCallback(() => {
-    if (!content) {
-      return;
-    }
-
-    void navigator.clipboard.writeText(content).then(() => {
+    void navigator.clipboard.writeText(value).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
-  }, [content]);
+  }, [value]);
+  return (
+    <button type="button" className={`${styles.button} ${styles.buttonPrimary}`} onClick={copy}>
+      {copied ? 'Copied' : label}
+    </button>
+  );
+}
+
+/**
+ * The devcon8 payoff: the purchased voucher IS a wallet. The private key is rendered as text and
+ * as a QR (the existing dark-on-light QrCode — inverted codes fail on plenty of scanners), with a
+ * save-it-now warning: the key is stored nowhere server-side, so this page is the only copy. An
+ * API restart or the claim's retention prune makes it unrecoverable.
+ */
+function VoucherItem({ voucher }: { voucher: NonNullable<ReturnType<typeof parseVoucher>> }) {
+  return (
+    <div className={styles.claimItem}>
+      <div className={styles.claimItemHead}>
+        <span className={styles.claimFactLabel}>Your wallet</span>
+        <span className={styles.claimItemName}>
+          {voucher.funded ? 'Funded with xBZZ + xDAI on Gnosis' : 'Created — funding pending'}
+        </span>
+      </div>
+
+      <pre className={styles.claimItemBody}>{voucher.address}</pre>
+
+      {voucher.privateKey ? (
+        <>
+          <QrCode value={voucher.privateKey} size={200} />
+          <pre className={styles.claimItemBody}>{voucher.privateKey}</pre>
+          <CopyButton value={voucher.privateKey} label="Copy private key" />
+          <p className={styles.claimHint}>
+            Save this key now — it is shown only here, is stored nowhere, and cannot be recovered
+            after this page is gone.
+          </p>
+        </>
+      ) : (
+        <p className={styles.claimHint}>
+          {voucher.note ?? 'The private key was already delivered and is not stored anywhere.'}
+        </p>
+      )}
+
+      {!voucher.funded && (
+        <p className={styles.claimHint}>
+          {voucher.error ??
+            'Funding did not complete. Keep the key — the wallet address can still be topped up.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DeliveredItem({ item }: { item: ClaimItem }) {
+  const content = item.content;
+  const voucher = parseVoucher(content);
+
+  if (voucher) {
+    return <VoucherItem voucher={voucher} />;
+  }
 
   return (
     <div className={styles.claimItem}>
@@ -243,13 +288,7 @@ function DeliveredItem({ item }: { item: ClaimItem }) {
       {content ? (
         <>
           <pre className={styles.claimItemBody}>{content}</pre>
-          <button
-            type="button"
-            className={`${styles.button} ${styles.buttonPrimary}`}
-            onClick={copy}
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </button>
+          <CopyButton value={content} label="Copy" />
           {item.truncated && (
             <p className={styles.claimHint}>
               Showing the first part only — the item is {item.size} bytes.

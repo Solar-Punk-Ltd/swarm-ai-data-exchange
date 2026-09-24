@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { config } from '../config/env';
-import { Claim, DevconError, createClaim, getClaim, releaseClaim } from '../lib/devcon';
+import {
+  Claim,
+  ClaimItem,
+  DevconError,
+  createClaim,
+  getClaim,
+  parseVoucher,
+  releaseClaim,
+} from '../lib/devcon';
 
 /**
  * Owns the Claim Wallet page's buyer agent: asks for one on arrival, polls its progress, and hands
@@ -24,6 +32,42 @@ const POLL_SETTLED_MS = 5_000;
 
 /** Terminal states — nothing further will happen. */
 const SETTLED: ReadonlySet<Claim['state']> = new Set(['delivered', 'expired', 'failed']);
+
+/** States that mean this claim's agent got as far as paying for something. */
+const PURCHASED: ReadonlySet<Claim['state']> = new Set(['settled', 'downloading', 'delivered']);
+
+/**
+ * Whether this claim ever completed a purchase — read from `history`, not just `state`, so it
+ * stays true after the claim has since expired or been released.
+ *
+ * Once it is true the page must never ask for another agent. `find_by_token` on the server only
+ * reattaches an *unreleased* claim, so a second POST after teardown does not return the finished
+ * claim — it deploys a second funded buyer and replaces the purchase on screen with a fresh
+ * `provisioning`. The visitor watching their settled purchase would see it vanish.
+ */
+function purchased(claim: Claim): boolean {
+  if (claim.txHash) return true;
+  if (PURCHASED.has(claim.state)) return true;
+  return claim.history.some(([state]) => PURCHASED.has(state));
+}
+
+/**
+ * Whether this item is the richest form of itself the page will ever be handed.
+ *
+ * For a voucher that means the private key is present. The API holds the key in memory only and
+ * drops it when the claim is released — roughly 30s after delivery, once the collector's linger
+ * expires — after which every poll returns the same claim with a *redacted* voucher. Overwriting
+ * a complete item with that redacted one is what made the QR code vanish while the visitor was
+ * still looking at it.
+ *
+ * A non-voucher item is complete as soon as its content is present: there is no second, richer
+ * form of it to wait for.
+ */
+function isCompleteItem(item: ClaimItem | null | undefined): boolean {
+  if (!item || item.content === null) return false;
+  const voucher = parseVoucher(item.content);
+  return voucher ? Boolean(voucher.privateKey) : true;
+}
 
 /**
  * A stable per-browser token, so a refresh or a re-scan reattaches to the same agent rather than
@@ -76,6 +120,20 @@ export default function useClaim(): ClaimResult {
   const claimRef = useRef<Claim>();
   claimRef.current = claim;
 
+  // Latches once this page's agent has bought something, and is never cleared. Guards every path
+  // that would ask for a new agent, so a completed purchase stays on screen for as long as the
+  // tab is open.
+  const purchasedRef = useRef(false);
+
+  // The delivered item in its complete form, held for as long as the tab is open. The server
+  // deliberately forgets the voucher's private key when the claim is released, so this tab is the
+  // only place it still exists — losing it to a later poll would mean losing the wallet.
+  //
+  // Memory only, never localStorage: "shown once, in this browser, stored nowhere" is the
+  // guarantee the page makes, and writing the key to disk would break it. A reload therefore
+  // still shows the redacted voucher, which is the intended trade.
+  const deliveredItemRef = useRef<ClaimItem>();
+
   const retry = useCallback(() => {
     setError(undefined);
     setErrorCode(undefined);
@@ -97,12 +155,25 @@ export default function useClaim(): ClaimResult {
       setLoading(false);
     };
 
+    // Keeps the delivered item at its high-water mark. Every other field on the claim is taken
+    // from the response as usual — only the item is held back from regressing, so the page still
+    // shows `released` and the closing message while the item above it stays intact.
+    const keepItem = (next: Claim): Claim => {
+      if (isCompleteItem(next.item)) {
+        deliveredItemRef.current = next.item ?? undefined;
+        return next;
+      }
+      const held = deliveredItemRef.current;
+      return held ? { ...next, item: held } : next;
+    };
+
     const poll = async (claimId: string) => {
       if (stopped) return;
       try {
         const next = await getClaim(base, claimId, token, controller.signal);
         if (stopped) return;
-        setClaim(next);
+        if (purchased(next)) purchasedRef.current = true;
+        setClaim(keepItem(next));
         setLoading(false);
         // Keep polling a settled-but-unreleased claim: `delivered` still lingers server-side, and
         // seeing it flip to released is how the page knows the agent has actually gone.
@@ -112,7 +183,10 @@ export default function useClaim(): ClaimResult {
       } catch (err) {
         if (stopped || controller.signal.aborted) return;
         if (err instanceof DevconError && err.status === 404) {
-          // The claim was cleared and forgotten. Asking again is the right move, not an error.
+          // The claim was cleared and forgotten. Asking again is the right move, not an error —
+          // unless this page already showed a purchase, in which case the last known claim stays
+          // rendered and nothing further is deployed behind it.
+          if (purchasedRef.current) return;
           void start();
           return;
         }
@@ -125,12 +199,15 @@ export default function useClaim(): ClaimResult {
     };
 
     const start = async () => {
+      // A finished purchase is the end of this page's life. Never ask for a second agent.
+      if (purchasedRef.current) return;
       try {
         // Safe to call twice: the server is idempotent per session token, which is what makes
         // React 18 StrictMode's double mount in dev harmless here.
         const first = await createClaim(base, token, controller.signal);
         if (stopped) return;
-        setClaim(first);
+        if (purchased(first)) purchasedRef.current = true;
+        setClaim(keepItem(first));
         setError(undefined);
         setErrorCode(undefined);
         setLoading(false);
@@ -147,6 +224,10 @@ export default function useClaim(): ClaimResult {
     // heartbeat or 404s into a fresh claim.
     const onVisible = () => {
       if (document.visibilityState !== 'visible' || stopped) return;
+      // Returning to a tab that already holds a purchase: there is nothing to revive and nothing
+      // to claim. Leaving this unguarded is the likeliest way to deploy a second agent, because
+      // the claim is released moments after delivery and `start()` below would not reattach.
+      if (purchasedRef.current) return;
       const current = claimRef.current;
       if (timer) clearTimeout(timer);
       if (current && !current.released) void poll(current.claimId);

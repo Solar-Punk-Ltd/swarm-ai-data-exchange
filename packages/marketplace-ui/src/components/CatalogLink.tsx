@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Address } from 'viem';
 import { useMarketplace } from '../context/MarketplaceContext';
 import { config } from '../config/env';
@@ -5,12 +6,16 @@ import { catalogUrl } from '../lib/agents';
 import styles from './styles.module.css';
 
 /**
- * Link out to this seller's Swarm catalog.
+ * Link out to this seller's Swarm catalog: `<gateway>/bzz/<manifest root>/catalog.jsonld`.
  *
  * The feed owner comes from the Agent Card's `swarm-ai-catalog` service entry, so this depends on
- * the same best-effort card fetch as the agent name — no card, no link. It renders nothing rather
- * than a dead link: a seller can legitimately hold a splitter and publish no catalog, and an
- * unfetchable card is indistinguishable from that here.
+ * the same best-effort card fetch as the agent name — no card, no link. The manifest root then
+ * costs a second gateway read, because the feed holds the root rather than being the catalog. So
+ * the link appears a beat after the row, the way the agent name does.
+ *
+ * It renders nothing rather than a dead link: a seller can legitimately hold a splitter and
+ * publish no catalog, and neither an unfetchable card nor an unpublished feed is distinguishable
+ * from that here.
  */
 
 function CatalogIcon() {
@@ -34,9 +39,20 @@ export default function CatalogLink({ splitter }: { splitter: Address }) {
   const { agentLinks } = useMarketplace();
 
   const owner = agentLinks.bySplitter.get(splitter.toLowerCase())?.card?.catalogFeedOwner;
-  if (!owner) return null;
+  const [href, setHref] = useState<string>();
 
-  const href = catalogUrl(owner, config.catalogueBrowserUrl, config.swarmGateway);
+  useEffect(() => {
+    if (!owner) return;
+    let live = true;
+    void catalogUrl(owner, config.swarmGateway).then((url) => {
+      if (live) setHref(url);
+    });
+    return () => {
+      live = false;
+    };
+  }, [owner]);
+
+  if (!owner || !href) return null;
 
   return (
     <a

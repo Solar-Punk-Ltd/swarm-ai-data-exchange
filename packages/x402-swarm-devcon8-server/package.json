@@ -1,0 +1,40 @@
+{
+  "name": "@solarpunk/x402-swarm-devcon8-server",
+  "version": "0.1.0",
+  "description": "Devcon8 voucher variant of the x402 Swarm server: every settled purchase mints and funds a Gnosis wallet and returns the private key in the response, storing only the address",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ethersphere/bee-js": "12.0.0",
+    "@noble/curves": "^1.4.0",
+    "@solarpunk/swarm-catalog": "workspace:*",
+    "@x402/core": "latest",
+    "@x402/evm": "latest",
+    "@x402/express": "latest",
+    "@x402/fetch": "latest",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.0.0",
+    "@types/express": "^4.17.0",
+    "@types/jest": "^29.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}

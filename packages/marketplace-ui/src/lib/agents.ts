@@ -349,21 +349,74 @@ export async function enrichWithCards(
   return { bySplitter, partial: index.partial };
 }
 
+/** A Swarm reference as the catalog feed carries it — a bare 64-char hex string (§4.1). */
+const SWARM_REFERENCE_RE = /^[0-9a-f]{64}$/i;
+
+/** `catalog.jsonld`. Mirrors CATALOG_MANIFEST_PATH in swarm-catalog/src/paths.ts. */
+const CATALOG_MANIFEST_PATH = 'catalog.jsonld';
+
+/**
+ * Read the catalog feed and return the Mantaray root it points at.
+ *
+ * Bee answers `GET /feeds/<owner>/<topic>` with the feed's latest payload as the body, and the
+ * catalog feed payload is nothing but the root reference as utf-8 hex — not JSON, not an
+ * envelope. Anything else is treated as no catalog: undefined, never a guess.
+ */
+async function readCatalogFeedRoot(
+  gateway: string,
+  catalogFeedOwner: Address,
+  timeoutMs: number,
+): Promise<string | undefined> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(
+      `${gateway}/feeds/${catalogFeedOwner}/${CATALOG_FEED_TOPIC.slice(2)}`,
+      { signal: controller.signal },
+    );
+    if (!response.ok) return undefined;
+    const root = (await response.text()).trim();
+    return SWARM_REFERENCE_RE.test(root) ? root.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * In-flight and resolved catalog URLs, keyed by gateway + owner. One feed read per catalog, not
+ * per row — the same agent can hold several clones. Failures are evicted so a catalog published
+ * after the dashboard loaded still turns up on a later mount.
+ */
+const catalogUrlCache = new Map<string, Promise<string | undefined>>();
+
 /**
  * Where to send someone who wants to browse this agent's catalog.
  *
- * Prefers the catalogue-feed-browser, which renders items and handles the purchase flow. Falls
- * back to the raw Swarm feed, which at least resolves to the catalog's Mantaray root — readable,
- * if not friendly.
+ * Two hops, both on the gateway. The feed URL is not itself a destination: it resolves to the
+ * Mantaray root, not to the catalog, so the root has to be read before a link exists. The
+ * collection document then sits at `/catalog.jsonld` under that root, giving
+ * `<gateway>/bzz/<root>/catalog.jsonld`.
+ *
+ * Resolves to undefined on any failure, like the card fetch above — the gateway is not ours, and
+ * a seller can hold a splitter and have never published a catalog.
  */
 export function catalogUrl(
   catalogFeedOwner: Address,
-  browserBase: string | undefined,
   gateway: string,
-): string {
-  if (browserBase) {
-    const base = browserBase.replace(/\/+$/, '');
-    return `${base}/?owner=${catalogFeedOwner}`;
-  }
-  return `${gateway.replace(/\/+$/, '')}/feeds/${catalogFeedOwner}/${CATALOG_FEED_TOPIC.slice(2)}`;
+  timeoutMs = 8000,
+): Promise<string | undefined> {
+  const base = gateway.replace(/\/+$/, '');
+  const key = `${base}|${catalogFeedOwner.toLowerCase()}`;
+
+  const cached = catalogUrlCache.get(key);
+  if (cached) return cached;
+
+  const pending = readCatalogFeedRoot(base, catalogFeedOwner, timeoutMs).then((root) => {
+    if (!root) catalogUrlCache.delete(key);
+    return root ? `${base}/bzz/${root}/${CATALOG_MANIFEST_PATH}` : undefined;
+  });
+  catalogUrlCache.set(key, pending);
+  return pending;
 }

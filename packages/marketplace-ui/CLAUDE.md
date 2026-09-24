@@ -638,15 +638,31 @@ The same card fetch yields the catalog link. The feed owner is the `endpoint` of
 `swarm-ai-catalog` service entry — a bare EOA, deliberately a different key from the card's own
 feed signer, so it cannot be derived from the card's location.
 
-`catalogUrl()` points at `VITE_CATALOGUE_FEED_BROWSER_URL` (default `http://localhost:3001`,
-matching `erc8004-dashboard/src/constants.ts`) and falls back to the raw Swarm feed
-`<gateway>/feeds/<owner>/<CATALOG_FEED_TOPIC>` when that is unset. `CATALOG_FEED_TOPIC` is the
-fixed protocol constant `keccak256("swarm-ai-catalog.v1")`, mirroring
+The link is `<gateway>/bzz/<manifest root>/catalog.jsonld` — the collection document itself, on
+`VITE_SWARM_GATEWAY_URL`. Getting there takes two hops, and only the second is a destination:
+
+1. `GET <gateway>/feeds/<owner>/<CATALOG_FEED_TOPIC>` returns the feed's payload, which is the
+   Mantaray root and nothing else — a bare 64-char hex string, per the spec's §4.1 invariant.
+   Anything that does not match that shape is treated as no catalog rather than interpolated.
+2. `/catalog.jsonld` under that root is the collection document (`CATALOG_MANIFEST_PATH` in
+   `swarm-catalog/src/paths.ts`).
+
+Do not link at the feed URL: it resolves to the root hex string, not to a catalog. Do not link at
+`catalogue-feed-browser` either — `?owner=` was the old shape, and it presumes a second server is
+running next to the dashboard.
+
+`CATALOG_FEED_TOPIC` is the fixed protocol constant `keccak256("swarm-ai-catalog.v1")`, mirroring
 `swarm-catalog/src/feeds.ts` — do not derive it per chain or per agent.
 
-`CatalogLink` renders **nothing** when no feed owner resolved, rather than a dead link. A seller
-can legitimately hold a splitter and publish no catalog, and from here that is indistinguishable
-from a card that failed to fetch.
+Because hop 1 is a fetch, `catalogUrl()` is async and `CatalogLink` resolves it in an effect, so
+the link arrives a beat after the row — same rule as the agent name: never block a row on a
+gateway. Results are cached per gateway+owner (one read per catalog, not per row) and failures are
+evicted so a later publish still turns up. A local Bee usually has to be the gateway here: a
+catalog published locally does not exist on `api.gateway.ethswarm.org`.
+
+`CatalogLink` renders **nothing** when no feed owner resolved or the feed does not resolve, rather
+than a dead link. A seller can legitimately hold a splitter and publish no catalog, and from here
+that is indistinguishable from a card that failed to fetch.
 
 ## Explorer links
 

@@ -19,13 +19,12 @@ export interface AppConfig {
   rpcUrl: string;
   refreshIntervalMs: number;
   currencies: Currency[];
-  /** Gateway used to resolve `bzz://` Agent Card URIs. Cards are fetched best-effort. */
-  swarmGateway: string;
   /**
-   * catalogue-feed-browser base URL, used for the per-seller catalog link. Undefined falls back
-   * to the raw Swarm feed URL, which resolves but does not render items.
+   * Gateway used to resolve `bzz://` Agent Card URIs and the per-seller catalog link. Both are
+   * fetched best-effort. A catalog only resolves on a node that holds it, so a local Bee
+   * (`http://localhost:1633`) is usually the right value while developing.
    */
-  catalogueBrowserUrl?: string;
+  swarmGateway: string;
   /**
    * Devcon demo pages (`/devcon`, `/claim-wallet`). Off by default — they are demo scaffolding,
    * not product surface, so the nav item and both routes disappear when this is false.
@@ -67,8 +66,6 @@ const DEFAULT_CHAIN_ID = 84532;
 const DEFAULT_RPC_URL = 'https://sepolia.base.org';
 const DEFAULT_REFRESH_MS = 5000;
 const DEFAULT_SWARM_GATEWAY = 'https://api.gateway.ethswarm.org';
-// Matches CATALOGUE_FEED_BROWSER_URL in erc8004-dashboard/src/constants.ts.
-const DEFAULT_CATALOGUE_BROWSER = 'http://localhost:3001';
 
 function requireAddress(raw: string | undefined, name: string, problems: string[]): Address {
   if (!raw) {
@@ -206,7 +203,6 @@ function parseConfig(): AppConfig {
     refreshIntervalMs,
     currencies: currencies!,
     swarmGateway: env.VITE_SWARM_GATEWAY_URL || DEFAULT_SWARM_GATEWAY,
-    catalogueBrowserUrl: env.VITE_CATALOGUE_FEED_BROWSER_URL || DEFAULT_CATALOGUE_BROWSER,
     showDemoFlow,
     demoFlowBaseUrl,
     devconApiUrl,
