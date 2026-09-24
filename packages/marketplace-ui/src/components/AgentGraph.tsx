@@ -15,7 +15,7 @@
  * read CSS custom properties. That is the sanctioned form of "never inline a hex", not an escape
  * from it.
  */
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import type { ForceGraphMethods } from 'react-force-graph-2d';
@@ -38,14 +38,38 @@ const BASE_RADIUS = 4;
  * the same size.
  */
 const AVATAR_MIN_RADIUS = 9;
+/**
+ * Floor on the treasury's radius, so the hub is drawn as one.
+ *
+ * Size is area-proportional to `txCount`, and `txCount` is purchases-only by design — a payout's
+ * treasury half is recorded on the node but never counted as a transaction (`graph.ts`). A
+ * treasury that only collects tax therefore sits at `BASE_RADIUS` forever, rendering the one node
+ * every payout edge converges on as the smallest dot on the canvas. It is exempt from the size
+ * encoding rather than folded into it: it is not an agent, so "how active is it" is not the
+ * question its dot answers.
+ */
+const TREASURY_MIN_RADIUS = 20;
 /** Side of the pre-scaled sprite, in device pixels. */
 const AVATAR_SPRITE_PX = 96;
+/**
+ * Smallest hit target, in *screen* pixels rather than graph units.
+ *
+ * The drawn radius is in graph units, so it shrinks with the zoom — and `zoomToFit` frames the
+ * whole network, which on a spread-out layout leaves a one-purchase buyer a ~3px dot. Dividing by
+ * `globalScale` converts a screen-pixel floor back into the graph units the pointer canvas is
+ * painted in, so the target stays the same physical size however far out the view is framed.
+ */
+const MIN_HIT_RADIUS_PX = 10;
 
 function radiusOf(node: GraphNode): number {
   // Area-proportional to activity, so a busy agent reads as busier without dwarfing the rest.
   // Floored so an agent that has never traded is still a visible, clickable dot.
   const base = BASE_RADIUS * Math.sqrt(1 + node.txCount);
-  return node.avatarUrl ? Math.max(base, AVATAR_MIN_RADIUS) : base;
+  const floor = Math.max(
+    node.avatarUrl ? AVATAR_MIN_RADIUS : 0,
+    node.roles.has('treasury') ? TREASURY_MIN_RADIUS : 0,
+  );
+  return Math.max(base, floor);
 }
 
 /** Shared with the legend, so the two can never drift apart. */
@@ -183,11 +207,26 @@ function toSprite(image: HTMLImageElement): HTMLCanvasElement | null {
 }
 
 /**
+ * URLs that will never produce a sprite, so the node can fall back to an identicon rather than
+ * waiting forever on an image that is not coming.
+ *
+ * Separate from `sprites` because the two nulls in that map mean different things: still loading
+ * (draw the plain dot, an image may yet land) and permanently failed (draw the identicon). There
+ * is still no retry — a card's image is third-party and may simply not be there.
+ */
+const failedSprites = new Set<string>();
+
+function spriteFailed(url: string): boolean {
+  return failedSprites.has(url);
+}
+
+/**
  * Cache hit, or start one load and report back when it lands. Safe to call from a paint loop:
  * everything after the first call for a URL is a map lookup.
  *
- * There is no error branch and no retry. A card's image is third-party and may simply not be
- * there; leaving the null in place is the whole failure path, and the node keeps its dot.
+ * `onLoad` fires on failure as well as success. It is a repaint nudge, not a success callback,
+ * and the fallback needs painting exactly as much as the sprite does — `autoPauseRedraw` means a
+ * settled canvas would otherwise keep the dot until the next drag or zoom.
  */
 function spriteFor(url: string, onLoad: () => void): HTMLCanvasElement | null {
   const cached = sprites.get(url);
@@ -197,12 +236,85 @@ function spriteFor(url: string, onLoad: () => void): HTMLCanvasElement | null {
   const image = new Image();
   image.onload = () => {
     const sprite = toSprite(image);
-    if (!sprite) return;
-    sprites.set(url, sprite);
+    // A decode that yields no drawable sprite — an SVG with no intrinsic size, a zero-byte
+    // response — is a failure like any other, not a permanent "still loading".
+    if (!sprite) failedSprites.add(url);
+    else sprites.set(url, sprite);
+    onLoad();
+  };
+  image.onerror = () => {
+    failedSprites.add(url);
     onLoad();
   };
   image.src = url;
   return null;
+}
+
+/**
+ * Deterministic fallback face, derived from the node's address.
+ *
+ * Every Agent Card `createAgentCard` writes carries `DEFAULT_AGENT_IMAGE`, a single Swarm
+ * reference (`erc8004-adapter/src/constants.ts`) that is currently unretrievable — the manifest
+ * root 404s on the public gateway and on a local Bee alike. One dead reference therefore takes
+ * every face on the map with it, which is not a failure mode worth carrying into a demo on
+ * conference wifi.
+ *
+ * An identicon is a picture *of an address*, not a portrait the agent claims, so it does not
+ * inherit the "verified only" argument that governs real avatars — but it is still drawn only
+ * where a real avatar would have been, so the map makes no identity claim it did not make before.
+ *
+ * Monochrome on purpose. Hue is spoken for: amber is a seller, green a buyer, warning both, and
+ * an identicon in an arbitrary colour would read as a role. Identity lives in the pattern.
+ */
+const identicons = new Map<string, HTMLCanvasElement>();
+
+/** FNV-1a. Not a security boundary — just a cheap, stable spread over the address space. */
+function hashSeed(seed: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+/** Side of the identicon grid. Mirrored down the middle, so only 3 columns are drawn. */
+const IDENTICON_CELLS = 5;
+
+function identiconFor(seed: string): HTMLCanvasElement | null {
+  const cached = identicons.get(seed);
+  if (cached) return cached;
+
+  const sprite = document.createElement('canvas');
+  sprite.width = AVATAR_SPRITE_PX;
+  sprite.height = AVATAR_SPRITE_PX;
+  const ctx = sprite.getContext('2d');
+  if (!ctx) return null;
+
+  const half = AVATAR_SPRITE_PX / 2;
+  // Clipped to the same circle as a real sprite, so the ring and the radius floor fit it exactly.
+  ctx.beginPath();
+  ctx.arc(half, half, half, 0, 2 * Math.PI);
+  ctx.clip();
+  ctx.fillStyle = theme.border;
+  ctx.fillRect(0, 0, AVATAR_SPRITE_PX, AVATAR_SPRITE_PX);
+
+  const hash = hashSeed(seed);
+  const cell = AVATAR_SPRITE_PX / IDENTICON_CELLS;
+  const mid = Math.ceil(IDENTICON_CELLS / 2);
+  ctx.fillStyle = theme.textMuted;
+  for (let column = 0; column < mid; column += 1) {
+    for (let row = 0; row < IDENTICON_CELLS; row += 1) {
+      // One bit per cell of the half-grid; 15 cells against 32 bits, so no reuse.
+      if (((hash >>> (column * IDENTICON_CELLS + row)) & 1) === 0) continue;
+      ctx.fillRect(column * cell, row * cell, cell, cell);
+      const mirrored = IDENTICON_CELLS - 1 - column;
+      if (mirrored !== column) ctx.fillRect(mirrored * cell, row * cell, cell, cell);
+    }
+  }
+
+  identicons.set(seed, sprite);
+  return sprite;
 }
 
 /**
@@ -276,6 +388,26 @@ function AgentGraph({ nodes, links, selectedId, onSelect }: AgentGraphProps) {
   const fitted = useRef(false);
 
   /**
+   * Memoised because an object literal here is a new `graphData` on every render, and
+   * re-applying `graphData` is the one prop change that restarts the layout — colour tracker
+   * reset, d3 re-seeded, nodes thrown across the canvas.
+   *
+   * `memo` on this component stops the parent's 5s tick, but not a render this component causes
+   * itself: `avatarEpoch` and `layoutEpoch` both set state here, and with a literal each bump
+   * reset the layout, which then settled, which bumped again. Identity has to be stable against
+   * renders from *either* direction.
+   */
+  const graphData = useMemo(() => ({ nodes, links }), [nodes, links]);
+
+  /**
+   * Whether force-graph has stopped its own painting since the last data change.
+   *
+   * A ref, not state: it gates a repaint nudge from inside an animation frame, and making it
+   * state would re-render on every layout run for something nothing renders.
+   */
+  const enginePaused = useRef(false);
+
+  /**
    * Layout tuning, which has to go through the instance because force-graph exposes no props for
    * it. The defaults (charge -30, link distance 30) are sized for small unlabelled dots; with
    * labelled nodes whose radius grows with activity they pack the whole network into a knot in
@@ -293,9 +425,17 @@ function AgentGraph({ nodes, links, selectedId, onSelect }: AgentGraphProps) {
     instance.d3ReheatSimulation();
   }, [width]);
 
-  // Fit once per layout run rather than continuously: a view that re-frames itself on every
-  // refresh is harder to read than one that stays where the reader left it.
+  /**
+   * Fit once per layout run rather than continuously: a view that re-frames itself on every
+   * refresh is harder to read than one that stays where the reader left it.
+   *
+   * Also the point where force-graph stops painting, so the hit test needs one last resync: the
+   * shadow canvas is refreshed on a throttle (`HOVER_CANVAS_THROTTLE_DELAY`, 800ms), and the last
+   * refresh before the engine quiets down can be that far behind the final positions.
+   */
   const handleEngineStop = useCallback(() => {
+    enginePaused.current = true;
+    setLayoutEpoch((epoch) => epoch + 1);
     if (fitted.current) return;
     fitted.current = true;
     graph.current?.zoomToFit(400, 60);
@@ -313,12 +453,23 @@ function AgentGraph({ nodes, links, selectedId, onSelect }: AgentGraphProps) {
   const [avatarEpoch, setAvatarEpoch] = useState(0);
   const onAvatarLoad = useCallback(() => setAvatarEpoch((epoch) => epoch + 1), []);
 
+  /**
+   * Bumped when the separation loop settles, to resync both canvases with the positions it
+   * moved nodes to after force-graph stopped painting. See the loop below.
+   */
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
+
   const drawNode = useCallback(
     (node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const x = node.x ?? 0;
       const y = node.y ?? 0;
       const radius = radiusOf(node);
-      const sprite = node.avatarUrl ? spriteFor(node.avatarUrl, onAvatarLoad) : null;
+      // An avatar that failed to load falls back to an identicon rather than to a bare dot: the
+      // shared default image is one dead Swarm reference away from blanking every face at once,
+      // and it currently is. A URL still loading stays a dot — it may yet arrive.
+      const loaded = node.avatarUrl ? spriteFor(node.avatarUrl, onAvatarLoad) : null;
+      const sprite =
+        loaded ?? (node.avatarUrl && spriteFailed(node.avatarUrl) ? identiconFor(node.id) : null);
 
       if (sprite) {
         // Pre-clipped to a circle, so this needs no save/clip/restore of its own.
@@ -363,25 +514,33 @@ function AgentGraph({ nodes, links, selectedId, onSelect }: AgentGraphProps) {
       ctx.fillStyle = node.id === selectedId ? theme.text : theme.textMuted;
       ctx.fillText(node.label, x, y + radius + 2 / globalScale);
     },
-    [selectedId, onAvatarLoad, avatarEpoch],
+    [selectedId, onAvatarLoad, avatarEpoch, layoutEpoch],
   );
 
   /**
    * Hit area follows the drawn circle, generously, so small nodes stay clickable.
    *
+   * Floored in screen pixels, not graph units: at the zoom `zoomToFit` picks, a buyer with one
+   * purchase is a ~3px dot, and a 3px target is one nobody can reliably hit. See
+   * `MIN_HIT_RADIUS_PX`.
+   *
    * Plain circles only — never the avatar. This paints to force-graph's shadow canvas, whose
    * pixels are read back with `getImageData` to resolve the node under the cursor; a cross-origin
    * sprite would taint it and turn every hit test into a `SecurityError`. See the note on
    * `sprites` above.
+   *
+   * `layoutEpoch` is in the dependencies to force a resync, not because the painting depends on
+   * it — see the separation loop below.
    */
   const paintPointerArea = useCallback(
-    (node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+    (node: GraphNode, color: string, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const radius = Math.max(radiusOf(node) + 3, MIN_HIT_RADIUS_PX / globalScale);
       ctx.beginPath();
-      ctx.arc(node.x ?? 0, node.y ?? 0, radiusOf(node) + 3, 0, 2 * Math.PI);
+      ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI);
       ctx.fillStyle = color;
       ctx.fill();
     },
-    [],
+    [layoutEpoch],
   );
 
   const handleClick = useCallback(
@@ -397,12 +556,43 @@ function AgentGraph({ nodes, links, selectedId, onSelect }: AgentGraphProps) {
    * Restarts whenever the node set changes and stops once the layout has been overlap-free for
    * roughly as long as force-graph's own cooldown, so a settled page is not animating for
    * nothing.
+   *
+   * **Moving a node behind force-graph's back desynchronises the hit test, so every run has to
+   * end in a resync.** Pointer hits are resolved off a second, hidden canvas, and that canvas is
+   * only repainted on a frame that is already redrawing (`force-graph.mjs:1653`) — with
+   * `autoPauseRedraw` on, both stop once the engine cools down. This loop outlives that: it runs
+   * for up to `SETTLE_FRAMES` past the last d3 tick, so whatever it moves in that window moves on
+   * neither canvas. The dot stays painted where it was, its hit area stays where it was, and the
+   * node is now somewhere else — unclickable, with a dead zone left behind. Buyers get hit
+   * hardest because they are what the loop exists to push apart, and they are still moving when
+   * the engine quiets down.
+   *
+   * Bumping `layoutEpoch` on the first quiet frame after that re-identifies `drawNode` and
+   * `paintPointerArea`; force-graph repaints on the former (`onChange: notifyRedraw`) and flushes
+   * the shadow canvas on the latter.
+   *
+   * Only while the engine is paused, and only once per settle. While it is still running both
+   * canvases are already being repainted, so a nudge would buy nothing and cost a React render —
+   * and d3 pulling nodes back together as fast as this pushes them apart makes "corrections
+   * stopped" a state the layout passes through many times a second.
    */
   useEffect(() => {
     let frame = 0;
     let settledFrames = 0;
+    let moved = false;
+    // New data means force-graph re-applies `graphData` and the engine runs again.
+    enginePaused.current = false;
     const step = () => {
-      settledFrames = separateOverlaps(nodes) === 0 ? settledFrames + 1 : 0;
+      if (separateOverlaps(nodes) > 0) {
+        moved = true;
+        settledFrames = 0;
+      } else {
+        if (moved && enginePaused.current) {
+          moved = false;
+          setLayoutEpoch((epoch) => epoch + 1);
+        }
+        settledFrames += 1;
+      }
       if (settledFrames < SETTLE_FRAMES) frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
@@ -414,7 +604,7 @@ function AgentGraph({ nodes, links, selectedId, onSelect }: AgentGraphProps) {
       {width > 0 && (
         <ForceGraph2D<GraphNode, GraphLink>
           ref={graph}
-          graphData={{ nodes, links }}
+          graphData={graphData}
           width={width}
           height={HEIGHT}
           backgroundColor={theme.surface}

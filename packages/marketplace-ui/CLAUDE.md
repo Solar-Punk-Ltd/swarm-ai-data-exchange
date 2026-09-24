@@ -162,9 +162,17 @@ for an id already on screen, and `graphSignature` gates the derivation so a tick
 nothing does not re-derive at all. Both are load-bearing — the context hands out a new value every
 5s whether or not anything changed.
 
-**Every canvas accessor must be stable.** `react-force-graph-2d` diffs props by reference, so an
-inline lambda is re-applied on every render. Module-level constants or `useCallback`, and
-`AgentGraph` is memoised so the balance tick stops at its boundary.
+**Every canvas prop must be stable — `graphData` most of all.** `react-force-graph-2d` diffs props
+by reference, so an inline lambda is re-applied on every render. Module-level constants or
+`useCallback`, and `AgentGraph` is memoised so the balance tick stops at its boundary.
+
+`graphData={{ nodes, links }}` is the trap inside that rule: an object literal is a new value every
+render, and `graphData` is the one prop whose re-application restarts the layout. It must be
+`useMemo`'d on `[nodes, links]`. `memo` is not enough on its own — it stops renders from the
+parent, not renders this component causes itself, and it sets state in two places (`avatarEpoch`,
+`layoutEpoch`). With a literal, a `layoutEpoch` bump reset the layout, which settled, which bumped
+again: a visible flicker that never converged. Any new state in this component inherits that
+hazard.
 
 **Keeping nodes apart is ours, not force-graph's.** Charge cannot separate buyers: each pays
 several sellers, so they share a barycentre and pile up there however hard the sellers are pushed
@@ -174,6 +182,21 @@ force-graph extension points were tried first and **both fail silently** — a f
 `onEngineTick` is applied once and never replaced, so under StrictMode's double mount the
 surviving callback is the discarded first instance's, frozen on the node array from before any
 buyer existed. Charge and link distance still go through `d3Force`, which does work for those.
+
+**Owning the loop means owning the resync.** Pointer hits are read off a hidden second canvas that
+force-graph only repaints on a frame that is already redrawing (`force-graph.mjs:1653`), and with
+`autoPauseRedraw` on, both canvases stop once the engine cools down. `separateOverlaps` outlives
+that by design, so anything it moves afterwards moves on neither canvas: the dot stays where it was
+painted, the hit area stays where it was painted, and the node is somewhere else — unclickable,
+with a dead zone left behind. Buyers suffer most, being what the loop exists to push apart. The
+loop therefore bumps `layoutEpoch` on its first quiet frame, re-identifying `drawNode` (which
+notifies a redraw) and `paintPointerArea` (which flushes the shadow canvas). Once per settle, never
+per frame.
+
+**Hit targets are floored in screen pixels, not graph units.** The drawn radius is in graph units
+and shrinks with the zoom, and `zoomToFit` frames the whole network — which leaves a one-purchase
+buyer around 3px. `paintPointerArea` divides `MIN_HIT_RADIUS_PX` by `globalScale` so the target
+keeps its physical size however far out the view is framed.
 
 **Escape anything from an Agent Card.** Node tooltips are injected as HTML and card names are
 third-party strings — anyone can register an agent called anything.
@@ -202,6 +225,28 @@ Three more consequences of putting a face on a node, all deliberate:
   it; neither is free. A late sprite still needs a repaint nudge, because `autoPauseRedraw` is on
   by default and a settled canvas has stopped painting — re-identifying `nodeCanvasObject` is that
   nudge, and unlike re-applying `graphData` it does not restart the layout.
+
+**A failed avatar falls back to an identicon, not to a dot.** `createAgentCard` defaults `image`
+to `DEFAULT_AGENT_IMAGE` (`erc8004-adapter/src/constants.ts`) — one Swarm reference shared by
+every agent it has ever registered. That reference is currently unretrievable: the manifest root
+404s on `api.gateway.ethswarm.org` and on a local Bee alike, so one dead upload blanks every face
+on the map at once. Three things follow:
+
+- **Failed and loading are different states.** `sprites` holding null used to mean both; a URL
+  still in flight keeps its dot, a URL in `failedSprites` gets the identicon. `spriteFor` needs a
+  real `onerror` branch for that distinction to exist, and a decode that yields no drawable sprite
+  (an SVG with no intrinsic size, a zero-byte response) counts as failed too.
+- **`onLoad` is a repaint nudge, not a success callback.** It has to fire on failure as well, or
+  the fallback waits for the next drag on a canvas that has stopped painting.
+- **The identicon is monochrome, and that is not a style choice.** Hue is spoken for — amber is a
+  seller, green a buyer, warning both — so a coloured identicon would read as a role. Identity is
+  in the pattern, drawn in `border` and `textMuted`. It is a picture _of an address_, not a
+  portrait the agent claims, so it sidesteps the "verified only" argument above; it is still drawn
+  only where a real avatar would have been, so the map claims nothing new.
+
+The fallback is not a reason to leave the image broken. Re-uploading the identical bytes would
+reproduce that exact reference and fix every published card at once, since Swarm addresses by
+content.
 
 ## Routing
 
