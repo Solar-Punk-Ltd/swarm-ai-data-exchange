@@ -7,7 +7,7 @@ import {
 } from '@solarpunk/swarm-catalog';
 import { parseChainId, type ServerConfig } from './config.js';
 import { PurchaseError, sendError } from './errors.js';
-import { lookupItem, type CatalogLookup } from './catalog.js';
+import { CatalogCache, type CatalogLookup } from './catalog.js';
 import { decodeXPayment, verifyPurchaseIntent } from './intent.js';
 import { grantActAccess } from './act.js';
 import { FacilitatorClient } from './facilitator.js';
@@ -68,6 +68,7 @@ interface Deps {
   facilitator: FacilitatorClient;
   config: ServerConfig;
   funder: VoucherFunder;
+  catalog: CatalogCache;
 }
 
 // The devcon8 response: the standard ActGrantResult plus `data`, a JSON string carrying the
@@ -119,18 +120,15 @@ function buildChallenge(lookup: CatalogLookup, resource: string, config: ServerC
 
 // POST /v1/items/:itemId/purchase — three-phase flow (§10.1) with the 12-step verification (§11.5).
 export function purchaseHandler(deps: Deps) {
-  const { bee, store, facilitator, config, funder } = deps;
+  const { bee, store, facilitator, config, funder, catalog } = deps;
 
   return async (req: Request, res: Response): Promise<void> => {
     const itemId = req.params.itemId;
     try {
       // Catalog lookup prerequisite — runs before the X-Payment branch; early return on any miss.
-      const lookup = await lookupItem(
-        bee,
-        config.catalogFeedOwner,
-        itemId,
-        config.itemStateFeedOwner,
-      );
+      // Memoised: this is the second time a paying buyer pays for it, the first being the 402
+      // challenge it just received. See CatalogCache.
+      const lookup = await catalog.lookup(itemId);
       const resource = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
 
       const xPayment = req.header('X-Payment');
@@ -204,6 +202,18 @@ export function purchaseHandler(deps: Deps) {
       }
       const grantedAt = new Date().toISOString();
 
+      // Step 11's payload, built here rather than after the response because the in-memory
+      // state has to advance NOW: the voucher funding below spends ~9s on Gnosis, and a
+      // purchase arriving inside that window must chain its grant from these refs, not from
+      // the ones this request started with. The feed write itself still happens post-response.
+      const newState: CatalogItemState = {
+        ...lookup.state,
+        actHistoryRef: grant.actHistoryRef,
+        granteeRef: grant.granteeRef,
+        dateModified: grantedAt,
+      };
+      catalog.noteGrant(itemId, newState);
+
       // ── devcon8 voucher: mint + fund a wallet for this settlement ──────────────────────
       // Runs AFTER the money moved (nothing to vend before that) and BEFORE the response
       // (the visitor must only ever be shown a key that is already worth something). The
@@ -227,13 +237,12 @@ export function purchaseHandler(deps: Deps) {
 
       // Step 11: advance the state feed after responding — non-fatal for the grant but MUST
       // converge (§14.1), so retry with backoff. Runs post-response; retries never block the
-      // consumer. `...lookup.state` carries `catalogRootAtUpdate`/`version`/`lifecycle` forward.
-      const newState: CatalogItemState = {
-        ...lookup.state,
-        actHistoryRef: grant.actHistoryRef,
-        granteeRef: grant.granteeRef,
-        dateModified: grantedAt,
-      };
+      // consumer. The value was built above, where `...lookup.state` carried
+      // `catalogRootAtUpdate`/`version`/`lifecycle` forward.
+      //
+      // This is now purely for external readers — buyers checking the item is purchasable
+      // before they bid. This server's own next grant reads the in-memory cell, so a feed
+      // write that is still retrying no longer holds up the sale behind it.
       await persistStateWithRetry(bee, config, newState);
     } catch (err) {
       sendError(res, err);

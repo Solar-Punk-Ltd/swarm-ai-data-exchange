@@ -41,6 +41,32 @@
   justify-content: flex-end;
 }
 
+/* ---- keyframes ---------------------------------------------------------- */
+
+/* These must stay in this module, never in index.css: CSS Modules rewrites `animation-name` to a
+   hashed local name, which only resolves against keyframes compiled in the same module. */
+
+@keyframes mp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Indeterminate progress: a segment sweeping the whole track, left to right. The 250% end offset
+   is 40% (the segment's width) × 2.5 = one full track width, so it leaves exactly at the edge. */
+@keyframes mp-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
 /* ---- cards + sections -------------------------------------------------- */
 
 .card {
@@ -1062,6 +1088,39 @@
   color: var(--mp-text);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+
+/* Indeterminate progress, sitting beside the section title while the agent is still working.
+   `margin-right: auto` keeps it next to the title rather than letting .sectionHead's
+   space-between throw it to the far edge; .sectionHead aligns on the baseline, which a 3px bar
+   has none of, hence the explicit centring. No percentage is shown because none exists — the
+   claim advances by state, not by fraction. */
+.claimProgress {
+  flex: 1 1 auto;
+  align-self: center;
+  max-width: 180px;
+  height: 3px;
+  margin-right: auto;
+  border-radius: 2px;
+  background: var(--mp-border);
+  overflow: hidden;
+}
+
+.claimProgressBar {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--mp-accent);
+  animation: mp-indeterminate 1.3s ease-in-out infinite;
+}
+
+/* A sweep is motion for its own sake; pulse the full track instead. */
+@media (prefers-reduced-motion: reduce) {
+  .claimProgressBar {
+    width: 100%;
+    animation: mp-pulse 1.4s ease-in-out infinite;
+  }
 }
 
 /* A step not yet reached: dimmed, so the checklist reads as a journey with a remainder

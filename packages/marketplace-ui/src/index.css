@@ -24,12 +24,6 @@ button {
   color: inherit;
 }
 
-@keyframes mp-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
+/* Keyframes live in components/styles.module.css, not here. CSS Modules rewrites every
+   `animation-name` it compiles to a hashed local name, so a keyframe declared in this plain
+   stylesheet is never found by the rule that names it — the animation silently does not run. */

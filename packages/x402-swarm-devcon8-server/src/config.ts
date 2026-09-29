@@ -23,6 +23,11 @@ export interface ServerConfig {
   // State-feed write retry (§14.1: the publisher MUST retry until the on-Swarm record converges).
   // Bounded in-memory exponential backoff; durable retry across restarts is out of prototype scope.
   stateFeedRetry: { attempts: number; baseDelayMs: number; maxDelayMs: number };
+  // How long a cached catalog entry (price terms, description, lifecycle) stays usable. It is
+  // NOT a staleness window in the usual sense: catalog entries are content-addressed, so an
+  // edited item gets a new itemId and a new cache key. This only bounds how long after an item
+  // is published this server can still fail to see it. See CatalogCache.
+  catalogEntryTtlMs: number;
   // ── devcon8 voucher funding ────────────────────────────────────────────────────────────
   // This server IS the voucher vendor — there is no enable flag. Every settled purchase mints
   // a wallet in memory, funds it from the funder below, and returns the private key in the
@@ -76,6 +81,7 @@ export function loadConfig(): ServerConfig {
       baseDelayMs: Number(process.env.STATE_FEED_RETRY_BASE_MS ?? 500),
       maxDelayMs: Number(process.env.STATE_FEED_RETRY_MAX_MS ?? 30_000),
     },
+    catalogEntryTtlMs: Number(process.env.CATALOG_ENTRY_TTL_MS ?? 300_000),
     giftRpcUrl: process.env.GIFT_RPC_URL ?? 'https://rpc.gnosischain.com',
     giftChainId: Number(process.env.GIFT_CHAIN_ID ?? 100),
     giftFunderPk: required('GIFT_FUNDER_PK'),

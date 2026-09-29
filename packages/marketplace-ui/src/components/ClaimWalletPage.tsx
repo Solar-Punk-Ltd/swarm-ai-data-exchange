@@ -179,7 +179,12 @@ function Steps({ claim }: { claim: Claim }) {
       reached.add(index);
     }
   }
-  const furthest = reached.size > 0 ? Math.max(...reached) : 0;
+  // `delivered` implies every step, whatever the history says. The server can reach it without
+  // recording each one — its fallback path reads the agent's bought file rather than its progress
+  // file — and a finished claim showing "Purchase finalized" and "Downloading purchased item" as
+  // never reached reads as the demo having broken at the last moment.
+  const furthest =
+    claim.state === 'delivered' ? STEPS.length - 1 : reached.size > 0 ? Math.max(...reached) : 0;
   const current = mapped ?? furthest;
 
   return (
@@ -306,18 +311,39 @@ function DeliveredItem({ item }: { item: ClaimItem }) {
   );
 }
 
+/**
+ * The title row. The bar is indeterminate because nothing here knows a fraction — the claim
+ * advances by state, and the two long steps (booting the agent, settling the payment) report no
+ * progress of their own. It renders only while something is actually running: a bar still sweeping
+ * after the item is delivered, or under a failure with a Retry button, reads as a hang.
+ */
+function Head({ busy }: { busy: boolean }) {
+  return (
+    <div className={styles.sectionHead}>
+      <h2 className={styles.sectionTitle}>Claim wallet</h2>
+      {busy && (
+        <div
+          className={styles.claimProgress}
+          role="progressbar"
+          aria-label="Your buyer agent is working"
+        >
+          <span className={styles.claimProgressBar} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ClaimWalletPage() {
   const { claim, error, errorCode, loading, configured, retry } = useClaim();
 
   const counting = Boolean(claim && !claim.released && claim.state !== 'delivered');
   const remaining = useCountdown(claim?.expiresAt, counting);
 
-  const heading = <h2 className={styles.sectionTitle}>Claim wallet</h2>;
-
   if (!configured) {
     return (
       <section className={styles.section}>
-        <div className={styles.sectionHead}>{heading}</div>
+        <Head busy={false} />
         <div className={styles.empty}>
           No agent orchestration API configured. Set <code>VITE_DEVCON_API_URL</code> to the address
           of <code>agent-orchestration-api</code> and reload.
@@ -331,7 +357,7 @@ export default function ClaimWalletPage() {
     const capacity = errorCode === 'at_capacity';
     return (
       <section className={styles.section}>
-        <div className={styles.sectionHead}>{heading}</div>
+        <Head busy={false} />
         <div className={`${styles.banner} ${capacity ? styles.bannerWarn : styles.bannerDanger}`}>
           {error}
         </div>
@@ -351,7 +377,7 @@ export default function ClaimWalletPage() {
   if (loading || !claim) {
     return (
       <section className={styles.section}>
-        <div className={styles.sectionHead}>{heading}</div>
+        <Head busy />
         <div className={styles.claimCard}>
           <p className={styles.claimLead}>Creating a buyer agent for you…</p>
         </div>
@@ -365,7 +391,7 @@ export default function ClaimWalletPage() {
 
   return (
     <section className={styles.section}>
-      <div className={styles.sectionHead}>{heading}</div>
+      <Head busy={!broke && !gone && !delivered} />
 
       {/* A failed poll while the agent is still running: worth showing, not worth erasing the page. */}
       {error && !broke && <div className={`${styles.banner} ${styles.bannerWarn}`}>{error}</div>}

@@ -68,6 +68,10 @@ export class VoucherFunder {
     this.publicClient = createPublicClient({
       chain: this.chain,
       transport: http(config.giftRpcUrl),
+      // viem defaults to 4s when the chain carries no blockTime, which showed up as ~2.5s of
+      // dead time between a funding transfer landing and this server noticing. Gnosis blocks
+      // are ~5s, so polling every second costs a few extra RPC calls per sale and nothing else.
+      pollingInterval: 1_000,
     });
     this.walletClient = createWalletClient({
       account: this.account,
@@ -119,15 +123,31 @@ export class VoucherFunder {
       );
     }
 
-    // Two plain transfers, each awaited to its receipt before the next is sent — sequential
-    // sends from one EOA must not race their own nonces.
+    // Two plain transfers from one EOA. They used to be fully sequential — each awaited to its
+    // receipt before the next was even broadcast — which meant the second could never share a
+    // block with the first: measured 5s apart, in consecutive Gnosis blocks, for no reason
+    // beyond viem picking the nonce implicitly and two concurrent sends therefore colliding on
+    // it. Naming the nonces removes that constraint.
+    //
+    // One read, not a counter: `queue` guarantees no other funding is in flight and fundOne
+    // awaits both receipts before releasing it, so the pending count is accurate here — and
+    // unlike an in-process counter it re-syncs by itself after a dropped transaction.
+    const nonce = await this.publicClient.getTransactionCount({
+      address: this.account.address,
+      blockTag: 'pending',
+    });
+
+    // Broadcast stays ordered even though confirmation does not. A send is ~200ms, so
+    // serialising the two costs nothing measurable, and it rules out the one real hazard of
+    // firing them together: a node that sees nonce+1 first can reject it outright rather than
+    // holding it as a future nonce.
     const xdaiTx = await this.walletClient.sendTransaction({
       account: this.account,
       chain: this.chain,
       to: recipient,
       value: this.xdaiWei,
+      nonce,
     });
-    await this.waitOk(xdaiTx, 'xDAI transfer');
 
     const xbzzTx = await this.walletClient.writeContract({
       account: this.account,
@@ -136,8 +156,19 @@ export class VoucherFunder {
       abi: erc20Abi,
       functionName: 'transfer',
       args: [recipient, this.bzzUnits],
+      nonce: nonce + 1,
     });
-    await this.waitOk(xbzzTx, 'xBZZ transfer');
+
+    // Consecutive nonces, so the protocol orders them and a validator building the next block
+    // takes both. Waiting on them together is what lets that happen.
+    //
+    // The trade: both are already broadcast, so a reverted xDAI transfer no longer cancels the
+    // xBZZ one, and the recipient could end up holding tokens with no gas to move them. A
+    // native transfer to a fresh EOA does not revert in practice and the balance precheck above
+    // covers the insufficient-funds case, so the reachable failure is a *stuck* first
+    // transaction — and there the nonce gap stalls the second anyway, surfacing as the same
+    // timeout it would have before.
+    await Promise.all([this.waitOk(xdaiTx, 'xDAI transfer'), this.waitOk(xbzzTx, 'xBZZ transfer')]);
 
     return { xdaiTx, xbzzTx };
   }

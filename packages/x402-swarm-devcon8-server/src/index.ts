@@ -5,6 +5,7 @@ import { Store } from './db.js';
 import { FacilitatorClient } from './facilitator.js';
 import { purchaseHandler } from './purchase.js';
 import { VoucherFunder } from './voucher.js';
+import { CatalogCache } from './catalog.js';
 
 const config = loadConfig();
 
@@ -12,13 +13,19 @@ const bee = new Bee(config.beeApiUrl);
 const store = new Store(config.dbPath);
 const facilitator = new FacilitatorClient(config.facilitatorUrl);
 const funder = new VoucherFunder(config);
+const catalog = new CatalogCache(
+  bee,
+  config.catalogFeedOwner,
+  config.itemStateFeedOwner,
+  config.catalogEntryTtlMs,
+);
 
 const app = express();
 app.use(express.json());
 
 app.post(
   '/v1/items/:itemId/purchase',
-  purchaseHandler({ bee, store, facilitator, config, funder }),
+  purchaseHandler({ bee, store, facilitator, config, funder, catalog }),
 );
 
 app.listen(config.port, () => {
