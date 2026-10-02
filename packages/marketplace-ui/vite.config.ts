@@ -13,6 +13,16 @@ export default defineConfig({
    * path through `import.meta.env.BASE_URL`.
    */
   appType: 'spa',
+  /**
+   * Relative asset URLs, so one build works at a root AND under a sub-path. A Swarm deploy is
+   * served at `/bzz/<reference>/`, and that prefix cannot be baked in here: changing `base`
+   * changes the bundle, which changes the content, which changes the reference it is addressed
+   * by. Absolute `/assets/…` paths would 404 the whole bundle there.
+   *
+   * These resolve against the `<base href>` that `index.html`'s inline script sets at load, so
+   * the two are a pair — neither works without the other. See "Deploying to Swarm" in CLAUDE.md.
+   */
+  base: './',
   // erc8004-dashboard occupies the default 5173, and root `pnpm dev` runs both in parallel.
   server: { port: 5174 },
   resolve: {

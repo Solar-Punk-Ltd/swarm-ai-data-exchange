@@ -134,6 +134,25 @@ function StepDetail({
       </span>
     );
   }
+  if (step === 'purchase' && active && claim.retry) {
+    // The buyer is between payment attempts. Say so, with the countdown it reported, rather
+    // than leaving "Paying over x402" up for a minute — at a stand that reads as broken, when
+    // it is the shared facilitator losing a nonce race and the same payment going through on
+    // the next try. The reason is an error code, so it is shown as a tooltip, not as prose.
+    const next = claim.retry.nextInSeconds;
+    const when = typeof next === 'number' && next > 0 ? ` in ${next}s` : '';
+    const attempt =
+      typeof claim.retry.attempt === 'number' ? ` · attempt ${claim.retry.attempt}` : '';
+    return (
+      <span
+        className={`${styles.claimStepDetail} ${styles.claimStepRetry}`}
+        title={claim.retry.reason ?? undefined}
+      >
+        Payment network busy, retrying{when}
+        {attempt}
+      </span>
+    );
+  }
   if (step === 'purchase' && claim.itemId) {
     return (
       <span className={styles.claimStepDetail} title={claim.itemId}>

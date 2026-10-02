@@ -18,6 +18,7 @@
 import { erc20Abi, parseAbiItem } from 'viem';
 import type { Address, PublicClient } from 'viem';
 import { erc20Currencies, type Currency } from '../config/currencies';
+import { chunkRangesNewestFirst, LOG_SWEEP_CONCURRENCY, sweepStart } from '../config/registry';
 
 const DISTRIBUTED_EVENT = parseAbiItem(
   'event Distributed(address indexed token, uint256 sellerAmount, uint256 treasuryAmount)',
@@ -90,33 +91,61 @@ export async function loadHistory(
 
   const head = await client.getBlockNumber();
   const entries: HistoryEntry[] = [];
-  let cursor = fromBlock;
-  let chunks = 0;
+  // Spend the chunk budget on the newest blocks, not the oldest — see `sweepStart`.
+  const { start, truncated } = sweepStart(head, fromBlock, chunkBlocks, maxChunks);
+  let partial = truncated;
 
-  while (cursor <= head) {
-    if (chunks >= maxChunks)
-      return { entries: sortNewestFirst(entries).slice(0, limit), partial: true };
-    const to = cursor + chunkBlocks - 1n > head ? head : cursor + chunkBlocks - 1n;
+  // **Backward, from head**, in parallel groups. Not a style preference: the reasons a chunk
+  // fails all live at the old end of the range. Public nodes prune logs (publicnode answers
+  // `pruned history unavailable: … earliest available 46000000`), and a forward sweep meets that
+  // wall on its FIRST request and aborts having read nothing — which is how this page rendered an
+  // empty map and blamed the chunk size. Going backward, the newest data is already collected by
+  // the time the wall is reached, and hitting it simply bounds how far back the view goes.
+  const { ranges, exhausted } = chunkRangesNewestFirst(head, start, chunkBlocks, maxChunks);
+  if (exhausted) partial = true;
 
-    try {
-      const [transfers, distributions] = await Promise.all([
-        // `to` is indexed, so one filter covers every clone.
-        client.getLogs({
-          address: tokens.map((c) => c.address),
-          event: TRANSFER_EVENT,
-          args: { to: splitters },
-          fromBlock: cursor,
-          toBlock: to,
-        }),
-        client.getLogs({
-          address: splitters,
-          event: DISTRIBUTED_EVENT,
-          fromBlock: cursor,
-          toBlock: to,
-        }),
-      ]);
+  for (let i = 0; i < ranges.length; i += LOG_SWEEP_CONCURRENCY) {
+    const group = ranges.slice(i, i + LOG_SWEEP_CONCURRENCY);
+    const settledGroup = await Promise.all(
+      group.map(([from, to]) =>
+        Promise.all([
+          // `to` is indexed, so one filter covers every clone.
+          client.getLogs({
+            address: tokens.map((c) => c.address),
+            event: TRANSFER_EVENT,
+            args: { to: splitters },
+            fromBlock: from,
+            toBlock: to,
+          }),
+          client.getLogs({
+            address: splitters,
+            event: DISTRIBUTED_EVENT,
+            fromBlock: from,
+            toBlock: to,
+          }),
+        ]).then(
+          ([transfers, distributions]) => ({ ok: true as const, transfers, distributions }),
+          (err: unknown) => ({ ok: false as const, err, from, to }),
+        ),
+      ),
+    );
 
-      for (const log of transfers) {
+    let stop = false;
+    for (const result of settledGroup) {
+      if (!result.ok) {
+        // The node's own message is the diagnosis: an over-wide chunk names its exact ceiling, a
+        // pruned node names its earliest retained block. Swallowing it left the banner's generic
+        // advice as the only signal, which is how an invalid chunk size went unnoticed.
+        console.warn(
+          `[history] log sweep stopped at blocks ${result.from}-${result.to}: ` +
+            (result.err instanceof Error ? result.err.message : String(result.err)),
+        );
+        partial = true;
+        stop = true;
+        continue;
+      }
+
+      for (const log of result.transfers) {
         const currency = byAddress.get(log.address.toLowerCase());
         const to_ = log.args.to;
         const value = log.args.value;
@@ -134,7 +163,7 @@ export async function loadHistory(
         });
       }
 
-      for (const log of distributions) {
+      for (const log of result.distributions) {
         const token = log.args.token;
         const sellerAmount = log.args.sellerAmount;
         const treasuryAmount = log.args.treasuryAmount;
@@ -151,15 +180,11 @@ export async function loadHistory(
           txHash: log.transactionHash,
         });
       }
-    } catch {
-      return { entries: sortNewestFirst(entries).slice(0, limit), partial: true };
     }
-
-    cursor = to + 1n;
-    chunks += 1;
+    if (stop) break;
   }
 
-  return { entries: sortNewestFirst(entries).slice(0, limit), partial: false };
+  return { entries: sortNewestFirst(entries).slice(0, limit), partial };
 }
 
 /**

@@ -16,7 +16,13 @@
  */
 import { isAddress, getAddress, keccak256, parseAbiItem, toBytes } from 'viem';
 import type { Address, PublicClient } from 'viem';
-import { DEFAULT_LOG_CHUNK_BLOCKS, MAX_LOG_CHUNKS } from '../config/registry';
+import {
+  chunkRangesNewestFirst,
+  DEFAULT_LOG_CHUNK_BLOCKS,
+  LOG_SWEEP_CONCURRENCY,
+  MAX_LOG_CHUNKS,
+  sweepStart,
+} from '../config/registry';
 
 /** Must match AGENT_SPLITTER in erc8004-adapter/src/constants.ts. */
 export const AGENT_SPLITTER_KEY = 'agent_splitter';
@@ -112,44 +118,77 @@ async function readClaims(
   chunkBlocks: bigint,
 ): Promise<{ claims: Map<bigint, Address>; partial: boolean }> {
   const head = await client.getBlockNumber();
-  // Latest claim per agent. Logs arrive in ascending block order, so later writes overwrite.
   const claims = new Map<bigint, Address>();
 
-  let cursor = fromBlock;
-  let chunks = 0;
+  // Newest blocks get the chunk budget, and the sweep runs **backward from head** — same reasons
+  // as `loadHistory`: pruned nodes and range limits fail at the old end, and a forward sweep hits
+  // that wall before reading anything. A link written outside the window is missed, which is why
+  // `partial` must keep suppressing "No agent linked": absence proves nothing here.
+  //
+  // Backward means logs arrive newest-first, inverting the old "later writes overwrite" rule.
+  // `settled` records every agent whose most recent claim has been seen, so an older write can
+  // never clobber a newer one — including the delete case, where the newest claim being garbage
+  // must leave the agent unlinked rather than fall back to a previous address.
+  const { start, truncated } = sweepStart(head, fromBlock, chunkBlocks, MAX_LOG_CHUNKS);
+  const settled = new Set<bigint>();
+  let partial = truncated;
 
-  while (cursor <= head) {
-    if (chunks >= MAX_LOG_CHUNKS) return { claims, partial: true };
-    const to = cursor + chunkBlocks - 1n > head ? head : cursor + chunkBlocks - 1n;
+  const { ranges, exhausted } = chunkRangesNewestFirst(head, start, chunkBlocks, MAX_LOG_CHUNKS);
+  if (exhausted) partial = true;
 
-    try {
-      const logs = await client.getLogs({
-        address: registry,
-        event: METADATA_SET_EVENT,
-        // viem hashes an indexed string arg to keccak256 for the topic filter.
-        args: { indexedMetadataKey: AGENT_SPLITTER_KEY },
-        fromBlock: cursor,
-        toBlock: to,
-      });
+  for (let g = 0; g < ranges.length; g += LOG_SWEEP_CONCURRENCY) {
+    const group = ranges.slice(g, g + LOG_SWEEP_CONCURRENCY);
+    const results = await Promise.all(
+      group.map(([from, to]) =>
+        client
+          .getLogs({
+            address: registry,
+            event: METADATA_SET_EVENT,
+            // viem hashes an indexed string arg to keccak256 for the topic filter.
+            args: { indexedMetadataKey: AGENT_SPLITTER_KEY },
+            fromBlock: from,
+            toBlock: to,
+          })
+          .then(
+            (logs) => ({ ok: true as const, logs }),
+            (err: unknown) => ({ ok: false as const, err, from, to }),
+          ),
+      ),
+    );
 
-      for (const log of logs) {
+    let stop = false;
+    // `results` is newest-chunk-first, matching `ranges`, so processing it in order keeps the
+    // whole sweep strictly newest-first.
+    for (const result of results) {
+      if (!result.ok) {
+        // Surface the node's own message: an over-wide chunk names its ceiling, a pruned node
+        // names its earliest retained block.
+        console.warn(
+          `[agents] claim sweep stopped at blocks ${result.from}-${result.to}: ` +
+            (result.err instanceof Error ? result.err.message : String(result.err)),
+        );
+        partial = true;
+        stop = true;
+        continue;
+      }
+      // Within a chunk, logs are ascending — walk it in reverse.
+      for (let i = result.logs.length - 1; i >= 0; i--) {
+        const log = result.logs[i];
         const agentId = log.args.agentId;
         const value = log.args.metadataValue;
         if (agentId === undefined || value === undefined) continue;
+        if (settled.has(agentId)) continue;
+        settled.add(agentId);
+        // An agent can clear its link by writing garbage; leave it unlinked rather than keep a
+        // stale one.
         const address = decodeAddress(value);
-        // An agent can clear its link by writing garbage; drop the entry rather than keep a stale one.
         if (address) claims.set(agentId, address);
-        else claims.delete(agentId);
       }
-    } catch {
-      return { claims, partial: true };
     }
-
-    cursor = to + 1n;
-    chunks += 1;
+    if (stop) break;
   }
 
-  return { claims, partial: false };
+  return { claims, partial };
 }
 
 /** `ownerOf` / `getAgentWallet` both revert for some agents; absence is normal, not an error. */

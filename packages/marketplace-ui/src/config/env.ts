@@ -63,7 +63,14 @@ export class ConfigError extends Error {
 }
 
 const DEFAULT_CHAIN_ID = 84532;
-const DEFAULT_RPC_URL = 'https://sepolia.base.org';
+/**
+ * Not `https://sepolia.base.org`, which was the default until it was measured: it is fronted by
+ * QuickNode with a 25-calls-per-second cap that counts each element of a JSON-RPC batch
+ * separately, so every tick lost exactly the calls past 25 and the dashboard never refreshed.
+ * Reads are aggregated through Multicall3 now and fit comfortably either way, but there is no
+ * reason to default to the endpoint with the tightest cap.
+ */
+const DEFAULT_RPC_URL = 'https://base-sepolia-rpc.publicnode.com';
 const DEFAULT_REFRESH_MS = 5000;
 const DEFAULT_SWARM_GATEWAY = 'https://api.gateway.ethswarm.org';
 

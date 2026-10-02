@@ -8,11 +8,17 @@ export type Route = 'dashboard' | 'map' | 'devcon' | 'claim-wallet';
 const DEMO_ROUTES: string[] = ['devcon', 'claim-wallet'];
 
 /**
- * Vite's configured base, always with a trailing slash — `/` unless the app is served from a
- * sub-path. Every path this module reads or writes goes through it, so a sub-path deploy needs
- * `base` in `vite.config.ts` and nothing else.
+ * The path this app is served from, always with a trailing slash — `/` on a normal host,
+ * `/bzz/<reference>/` on a Swarm gateway. Every path this module reads or writes goes through
+ * it, which is what lets one build work at either.
+ *
+ * Read from `document.baseURI`, not `import.meta.env.BASE_URL`. A Swarm deploy's sub-path
+ * cannot be known at build time — setting Vite's `base` to the reference would change the
+ * bundle, which changes the content, which changes the reference it is addressed by. The inline
+ * script in `index.html` resolves it from the URL at load and sets `<base href>`; this reads
+ * back the same answer, so there is still exactly one definition of the base.
  */
-const BASE = import.meta.env.BASE_URL;
+const BASE = new URL(document.baseURI).pathname;
 
 /** The part of a pathname after the base, with surrounding slashes stripped. */
 function slugOf(pathname: string): string {

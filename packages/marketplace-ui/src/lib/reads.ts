@@ -7,12 +7,12 @@
  * These are plain async functions rather than hooks on purpose: MarketplaceContext is the single
  * fetch owner, and rows must never poll independently.
  */
-import { erc20Abi } from 'viem';
+import { erc20Abi, multicall3Abi } from 'viem';
 import type { Address, PublicClient } from 'viem';
 import {
   factoryConfig,
-  pending,
-  splitterTerms,
+  pendingMany,
+  splitterTermsMany,
   splittersSlice,
   MAX_UINT256,
   type FactoryConfig,
@@ -64,82 +64,115 @@ export async function loadRegistry(client: PublicClient, factory: Address): Prom
     splittersSlice(client, factory, 0n, MAX_UINT256),
   ]);
 
-  const sellers = await Promise.all(
-    splitters.map(async (splitter): Promise<SellerRecord> => {
-      const terms = await splitterTerms(client, splitter);
-      return { splitter, seller: terms.seller, taxBps: terms.taxBps };
-    }),
-  );
+  // `splitterTermsMany` aggregates on-chain: `3N` reads become one. Per-clone `splitterTerms` in
+  // a loop is what this used to be, and at N=8 that alone was 24 calls in a single second.
+  const terms = await splitterTermsMany(client, splitters);
+  const sellers: SellerRecord[] = splitters.map((splitter, i) => ({
+    splitter,
+    seller: terms[i].seller,
+    taxBps: terms[i].taxBps,
+  }));
 
   return { sellers, factory: cfg };
 }
 
-async function balancesFor(
-  client: PublicClient,
-  address: Address,
-  currencies: Currency[],
-): Promise<BalanceMap> {
-  const entries = await Promise.all(
-    currencies.map(async (currency): Promise<[string, bigint]> => {
-      const amount = currency.address
-        ? await client.readContract({
-            address: currency.address,
-            abi: erc20Abi,
-            functionName: 'balanceOf',
-            args: [address],
-          })
-        : await client.getBalance({ address });
-      return [currency.symbol, amount];
-    }),
+/**
+ * Every balance on screen, as Multicall3 contract entries.
+ *
+ * Native balances go through Multicall3's own `getEthBalance` rather than `eth_getBalance`, which
+ * is the only way to fold them into the same aggregated call — this is exactly the case the
+ * package CLAUDE.md flagged as the reason to prefer the transport batch, and it stops being true
+ * the moment the endpoint meters calls instead of requests.
+ *
+ * `erc20Abi` and `multicall3Abi` are viem's own, so no ABI is declared in this package. The
+ * splitter side goes through `pendingMany` in the SDK for the same reason.
+ */
+function balanceContracts(multicall3: Address, address: Address, currencies: Currency[]) {
+  return currencies.map((currency) =>
+    currency.address
+      ? ({
+          address: currency.address,
+          abi: erc20Abi,
+          functionName: 'balanceOf',
+          args: [address],
+        } as const)
+      : ({
+          address: multicall3,
+          abi: multicall3Abi,
+          functionName: 'getEthBalance',
+          args: [address],
+        } as const),
   );
-  return Object.fromEntries(entries);
-}
-
-async function pendingFor(
-  client: PublicClient,
-  splitter: Address,
-  currencies: Currency[],
-): Promise<PendingMap> {
-  const entries = await Promise.all(
-    erc20Currencies(currencies).map(async (currency): Promise<[string, PendingSplit]> => {
-      const split = await pending(client, splitter, currency.address);
-      return [currency.symbol, split];
-    }),
-  );
-  return Object.fromEntries(entries);
 }
 
 /**
- * One tick's worth of balances for every address on screen.
+ * One tick's worth of balances for every address on screen, in **two** `eth_call`s regardless of
+ * how many sellers there are: one aggregating every balance, one aggregating every `pending`.
  *
- * Fired as a single `Promise.all` so viem's JSON-RPC batching collapses the whole tick into one
- * HTTP round trip — a naive per-row fetch is `3N + 3` requests every few seconds, which public
- * Base Sepolia rate-limits hard.
+ * This used to be `3N + 3` JSON-RPC calls relying on viem's transport batching to collapse them
+ * into a single HTTP request. That defends against nothing on a public endpoint, because the
+ * endpoint meters *calls*: Base Sepolia's public node caps at 25/second and counts each element
+ * of a JSON-RPC batch separately, so at N=8 exactly two of the 27 failed on every tick, forever.
+ * Batching made it worse, not better — it guaranteed all 27 landed in the same second.
+ *
+ * `allowFailure: false` throughout, so a reverting call rejects the tick rather than reporting a
+ * zero. The dashboard renders a real zero and an unread value differently, and collapsing the two
+ * would be a worse bug than the stale banner.
  */
 export async function readBalances(
   client: PublicClient,
   params: { treasury: Address; sellers: SellerRecord[]; currencies: Currency[] },
 ): Promise<BalanceSnapshot> {
   const { treasury, sellers, currencies } = params;
+  const multicall3 = client.chain?.contracts?.multicall3?.address;
+  if (!multicall3) {
+    throw new Error(
+      `No Multicall3 address configured for chain ${client.chain?.id ?? 'unknown'}. ` +
+        'Every balance read is aggregated through it; add it to the viem chain definition.',
+    );
+  }
 
-  const [treasuryBalances, sellerBalances, splitterPending] = await Promise.all([
-    balancesFor(client, treasury, currencies),
+  const holders: Address[] = [treasury, ...sellers.map((s) => s.seller)];
+  const erc20s = erc20Currencies(currencies);
+
+  const [balanceResults, pendingResults] = await Promise.all([
+    client.multicall({
+      allowFailure: false,
+      contracts: holders.flatMap((holder) => balanceContracts(multicall3, holder, currencies)),
+    }),
+    // One aggregated call per ERC-20. With USDC as the only one in the currency config, one call.
     Promise.all(
-      sellers.map(
-        async (s) => [s.seller, await balancesFor(client, s.seller, currencies)] as const,
-      ),
-    ),
-    Promise.all(
-      sellers.map(
-        async (s) => [s.splitter, await pendingFor(client, s.splitter, currencies)] as const,
+      erc20s.map((currency) =>
+        pendingMany(
+          client,
+          sellers.map((s) => s.splitter),
+          currency.address,
+        ),
       ),
     ),
   ]);
 
+  // Results come back positionally, in the order the entries were built.
+  const perHolder = currencies.length;
+  const balanceFor = (index: number): BalanceMap =>
+    Object.fromEntries(
+      currencies.map((currency, c) => [
+        currency.symbol,
+        balanceResults[index * perHolder + c] as bigint,
+      ]),
+    );
+
   return {
-    treasury: treasuryBalances,
-    sellers: Object.fromEntries(sellerBalances),
-    splitters: Object.fromEntries(splitterPending),
+    treasury: balanceFor(0),
+    sellers: Object.fromEntries(sellers.map((s, i) => [s.seller, balanceFor(i + 1)])),
+    splitters: Object.fromEntries(
+      sellers.map((s, i) => [
+        s.splitter,
+        Object.fromEntries(
+          erc20s.map((currency, c) => [currency.symbol, pendingResults[c][i] as PendingSplit]),
+        ) as PendingMap,
+      ]),
+    ),
   };
 }
 

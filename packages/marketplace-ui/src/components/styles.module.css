@@ -1029,6 +1029,12 @@
   color: var(--mp-text-muted);
 }
 
+/* A retry caption is a status, not a failure: it stays in the muted detail colour so the step
+   does not look like an error, and the ellipsis-style italic is all that marks it as transient. */
+.claimStepRetry {
+  font-style: italic;
+}
+
 /* A tx hash in a step detail is the same chip the dashboard uses for addresses, sized down to
    the step line it sits on. Only the scale changes — truncation, copy and the explorer icon are
    whatever AddressLink renders everywhere else. */

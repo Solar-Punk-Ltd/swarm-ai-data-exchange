@@ -5,8 +5,10 @@ treasury, every seller, every seller's `RevenueSplitter` clone, their balances, 
 **Distribute** action that sweeps a clone's accrued revenue to seller + treasury.
 
 This is an **operator/demo surface**, not a consumer surface. It answers "who is selling, what has
-accrued, and has it been paid out" — it does not browse catalogs, purchase, or touch Swarm. There
-is no Bee dependency in this package.
+accrued, and has it been paid out" — it does not browse catalogs, purchase, or touch Swarm. No Bee
+code reaches the browser: `@ethersphere/bee-js` is a **devDependency** used by
+`scripts/deploy-swarm.mjs` and by nothing under `src/`. Keep it that way — a Bee import in app code
+is the thing this rule exists to prevent, and Vite would happily bundle it.
 
 Two views, behind a top nav: **Dashboard** (the above, and the home route) and **Map of Agents**, a
 force-directed view of the same purchases and payouts as a network — agents are nodes, the payments
@@ -267,8 +269,27 @@ content.
 - **Only the route lives in the URL.** Filter state stays in component state — writing it to the
   URL would push a history entry per click, so Back would step through filter changes instead of
   returning to the previous page.
-- **Everything goes through `import.meta.env.BASE_URL`.** A sub-path deploy needs `base` in
-  `vite.config.ts` and no other change, including in the QR builder.
+- **Everything goes through `BASE` in `useRoute.ts`.** One build works at a root and under a
+  sub-path, because `BASE` is resolved at load from `document.baseURI` rather than baked in as
+  `import.meta.env.BASE_URL`. A Swarm deploy is served at `/bzz/<reference>/`, and that prefix
+  cannot be a build-time constant: setting Vite's `base` to the reference would change the bundle,
+  which changes the content, which changes the reference it is addressed by.
+
+  Three pieces, and none works alone:
+  1. `vite.config.ts` sets `base: './'`, so assets are emitted relative.
+  2. An inline script at the top of `index.html`'s `<head>` derives the root from
+     `location.pathname` and sets `<base href>`. It must stay inline, and ahead of Vite's
+     generated tags: a relative URL resolves when its element is parsed, so a later `<base>` is
+     too late. It is also the only code that can run before the bundle loads — which is the whole
+     problem, since the failure it prevents is the bundle 404ing.
+  3. `useRoute.ts` reads that same answer back out of `document.baseURI`, so there is still
+     exactly one definition of the base.
+
+  The route slugs are duplicated in that inline script and **must** match `Route`. Add a route,
+  add it there too, or a deep link to it will resolve its assets one directory too deep.
+
+  The QR builder needs no special handling: it composes `origin + href(route)`, so it inherits
+  whatever `BASE` resolved to.
 
 ### Chain traffic is route-scoped
 
@@ -313,6 +334,54 @@ missing rule — it fails first on the deployed build.
 | S3 + CloudFront             | error document `index.html`, or a CloudFront function |
 | `npx serve`                 | `-s`                                                  |
 | GitHub Pages                | no real support — the `404.html` copy trick           |
+| Swarm                       | `pnpm run deploy` — see below                         |
+
+### Deploying to Swarm
+
+`pnpm run deploy` builds and uploads `dist/` as one collection via `scripts/deploy-swarm.mjs`, then
+prints the URLs. Use `pnpm run deploy`, not bare `pnpm deploy` — the latter is pnpm's own built-in
+command, which does something entirely different.
+
+Four things it gets right that a hand-rolled `curl` upload does not:
+
+- **`indexDocument` and `errorDocument` both point at `index.html`.** That is Swarm's `try_files`,
+  and it is what makes a cold GET on `/claim-wallet` resolve instead of 404ing in front of an
+  audience.
+- **It prints the subdomain URL, `https://<cid>.bzz.link/`,** which is the only shareable shape:
+  the path form (`<gateway>/bzz/<ref>/`) serves from a sub-path while the built `index.html`
+  references `/assets/…` absolutely, so the bundle 404s before the router even loads. Setting
+  `base` to the reference instead is circular — changing `base` changes the content, which changes
+  the reference. The subdomain takes the **CID**, not the hex reference, because a DNS label caps
+  at 63 characters and a hex reference is 64; `Reference.toCid('manifest')` converts.
+
+  **The Foundation's public gateways allowlist raw hashes, and they share one list.** A fresh
+  deploy shows "This hash is not yet approved for retrieval" until it is cleared through their
+  form; `api.gateway.ethswarm.org` does not merely refuse, it `302`s to
+  `bzz.link/forbidden?hash=…`, so the path form is gated exactly like the subdomain form. Approval
+  is **per hash** and permanent once granted — which means every redeploy mints a new hash and
+  needs another approval.
+
+  Three consequences, none of which the sub-path work above changes:
+  - A hash reached through an **ENS name** is never gated. That is the gateways' own documented
+    bypass and the only free route to an ungated public URL.
+  - Your **own Bee node has no allowlist** ("run your own Bee node for unrestricted access"), so
+    it is the only thing that can verify a deploy the moment it lands. Verify there, always.
+  - Iterating against a public gateway is not viable: you would be filling in an approval form per
+    build. Iterate on the local node and approve once, at the end, if a raw hash is the plan.
+
+- **Uploads are synchronous by default.** A deferred upload returns once the local node holds the
+  data, before any of it has reached the network, so the script would report success on content a
+  public gateway cannot resolve yet — a failure that surfaces only when someone else scans the code.
+- **It warns before freezing a value that will not outlive the deploy.** A keyed `VITE_RPC_URL`, or
+  a tunnel/LAN `VITE_DEVCON_API_URL` with the demo flag on, are compiled into the bundle and stay at
+  that address permanently. Warnings, never blocks — a LAN URL is correct for a demo on the LAN.
+
+Deploy config (`BEE_API_URL`, `POSTAGE_BATCH_ID`, the `SWARM_*` vars) lives in the same `.env` but
+**without a `VITE_` prefix**, so Vite never exposes it. A postage batch id is a spending credential;
+naming it `VITE_POSTAGE_BATCH_ID` would publish it, permanently.
+
+A deploy is immutable and content-addressed: re-deploying mints a new address rather than replacing
+the old one, and the old one stays retrievable for as long as its stamp lives. There is no unpublish.
 
 **`/claim-wallet` is the one that must not 404.** It is reached by a phone scanning a QR code: a
 cold GET straight at a deep path, with no client-side code running to recover, in front of an
@@ -433,17 +502,36 @@ Every `VITE_REFRESH_INTERVAL_MS` (default 5000), re-read all balances. The regis
 (`splittersSlice` + `splitterTerms`) changes rarely — re-read it on a slower cadence or only on
 mount plus post-transaction, not every tick.
 
-**Batch the reads.** A naive tick is `3N + 3` RPC requests (N = sellers), and public Base Sepolia
-rate-limits hard — `erc8004-dashboard/.env.example` already carries a warning about exactly this.
-Construct the client with JSON-RPC batching so a whole tick is one HTTP round trip:
+**Aggregate the reads on-chain — transport batching is not enough.** A naive tick is `3N + 3` RPC
+calls (N = sellers). This package used to rely on viem's JSON-RPC batching to collapse those into
+one HTTP round trip, on the theory that one request is one unit of rate limit. **That theory is
+wrong, and it was measured.** Public endpoints meter _calls_, not requests:
+`https://sepolia.base.org` is fronted by QuickNode with a 25-calls-per-second cap that counts each
+element of a batch separately, so at N=8 exactly two of the 27 calls failed with
+`-32007 … 25/second request limit reached` on **every** tick. Batching made it strictly worse — it
+guaranteed all 27 landed in the same second — and since `readBalances` is one `Promise.all`, two
+failures killed the whole refresh.
 
-```typescript
-createPublicClient({ chain, transport: http(rpcUrl, { batch: true }) });
-```
+So every read goes through **Multicall3**, which aggregates on-chain and is the only thing that
+lowers the counted call count:
 
-This covers `eth_getBalance` too, which Multicall3 aggregation would not without explicitly calling
-Multicall3's own `getEthBalance`. Prefer the transport batch; reach for `client.multicall` only if
-the configured RPC rejects batched requests.
+- `readBalances` is **two** `eth_call`s regardless of N — one aggregating every balance, one per
+  ERC-20 aggregating `pending`.
+- `loadRegistry` is three: `factoryConfig`, `splittersSlice`, `splitterTermsMany`.
+- Native balances fold into the same call via Multicall3's own `getEthBalance`. The old note here
+  claimed this was a reason to prefer the transport batch; it is a two-line helper, and not a
+  reason to keep a scheme that does not work.
+- The splitter-side batching lives in the SDK (`splitterTermsMany`, `pendingMany`) rather than
+  here, per _extend the SDK rather than reaching around it_. Only `erc20Abi` and `multicall3Abi` —
+  both viem's own — are used directly in this package.
+
+`allowFailure: false` everywhere: a reverting call must reject the tick, not report a zero. A real
+zero and an unread value must never look the same.
+
+The transport keeps `batch: true`, which is now a harmless latency win over a handful of calls
+rather than the load-bearing defence it was mistaken for. Any configured RPC must have Multicall3
+at `0xcA11bde05977b3631167028862bE2a173976CA11`; `readBalances` throws a named error if the viem
+chain carries no `contracts.multicall3`.
 
 Also pause the interval when `document.hidden` — a backgrounded demo tab should not burn quota.
 

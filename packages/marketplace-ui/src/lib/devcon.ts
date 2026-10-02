@@ -42,6 +42,22 @@ export interface ClaimSeller {
 }
 
 /**
+ * Set while the buyer is between payment attempts. A settlement the x402 server reports as
+ * retryable (most often the public facilitator's relayer losing a nonce race when two buyers pay
+ * at once) is retried by the buyer itself with backoff; this is what it says in the meantime, so
+ * "Purchase initiated" can explain itself instead of sitting there. Cleared once a payment settles.
+ */
+export interface ClaimRetry {
+  attempt?: number | null;
+  /** The server's error code (e.g. `payment_settle_failed`), never its full message. */
+  reason?: string | null;
+  nextInSeconds?: number | null;
+  /** True when in-iteration retries ran out and the next attempt is a whole interval away. */
+  exhausted?: boolean;
+  at?: string | null;
+}
+
+/**
  * The purchased item, captured onto the claim record before its container is torn down — so it
  * outlives the agent rather than vanishing with it.
  *
@@ -110,6 +126,7 @@ export interface Claim {
   txHash: string | null;
   item: ClaimItem | null;
   error: string | null;
+  retry?: ClaimRetry | null;
   /**
    * `[state, iso]` pairs, one per transition. The page renders a cumulative checklist from this
    * rather than from `state` alone, so nothing is lost when two steps land between two polls.

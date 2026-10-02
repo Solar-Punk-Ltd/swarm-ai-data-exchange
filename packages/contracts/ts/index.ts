@@ -96,6 +96,71 @@ export async function splitterTerms(
   return { seller, treasury, taxBps };
 }
 
+/**
+ * `splitterTerms` for many clones, aggregated through Multicall3 into a single `eth_call`.
+ *
+ * Exists because the per-clone form is three reads, so a registry of N clones is `3N` JSON-RPC
+ * calls. That is not merely slow: public endpoints meter *calls*, not HTTP requests, so a
+ * JSON-RPC batch does nothing to reduce the counted rate — Base Sepolia's public node caps at
+ * 25/second and simply fails the excess. Aggregating on-chain is the only thing that actually
+ * lowers the count, and it takes `3N` to one.
+ *
+ * `allowFailure: false`, so a reverting clone rejects the whole call rather than surfacing as a
+ * zero. A zero is a meaningful value here and must never stand in for a failed read.
+ */
+export async function splitterTermsMany(
+  client: PublicClient,
+  splitters: readonly Address[],
+): Promise<SplitterTerms[]> {
+  if (splitters.length === 0) return [];
+  const addresses = splitters.map((s) => getAddress(s));
+  const results = await client.multicall({
+    allowFailure: false,
+    contracts: addresses.flatMap((address) => [
+      { address, abi: REVENUE_SPLITTER_ABI, functionName: 'seller' } as const,
+      { address, abi: REVENUE_SPLITTER_ABI, functionName: 'treasury' } as const,
+      { address, abi: REVENUE_SPLITTER_ABI, functionName: 'taxBps' } as const,
+    ]),
+  });
+  return addresses.map((_, i) => ({
+    seller: results[i * 3] as Address,
+    treasury: results[i * 3 + 1] as Address,
+    taxBps: results[i * 3 + 2] as number,
+  }));
+}
+
+/**
+ * `pending` for many clones against one token, aggregated into a single `eth_call`.
+ *
+ * Same motivation as {@link splitterTermsMany}: one call per clone per tick is what pushes a
+ * dashboard over a public endpoint's per-second call cap. Returns results positionally, aligned
+ * with `splitters`.
+ */
+export async function pendingMany(
+  client: PublicClient,
+  splitters: readonly Address[],
+  token: Address,
+): Promise<Array<{ sellerAmount: bigint; treasuryAmount: bigint }>> {
+  if (splitters.length === 0) return [];
+  const tokenAddress = getAddress(token);
+  const results = await client.multicall({
+    allowFailure: false,
+    contracts: splitters.map(
+      (splitter) =>
+        ({
+          address: getAddress(splitter),
+          abi: REVENUE_SPLITTER_ABI,
+          functionName: 'pending',
+          args: [tokenAddress],
+        }) as const,
+    ),
+  });
+  return results.map((result) => {
+    const [sellerAmount, treasuryAmount] = result as readonly [bigint, bigint];
+    return { sellerAmount, treasuryAmount };
+  });
+}
+
 export interface FactoryConfig {
   /** Treasury applied to clones created from now on. Existing clones keep their frozen terms. */
   treasury: Address;
@@ -117,12 +182,21 @@ export async function factoryConfig(
   factory: Address,
 ): Promise<FactoryConfig> {
   const address = getAddress(factory);
-  const [treasury, defaultTaxBps, implementation] = await Promise.all([
-    client.readContract({ address, abi: SPLITTER_FACTORY_ABI, functionName: 'treasury' }),
-    client.readContract({ address, abi: SPLITTER_FACTORY_ABI, functionName: 'defaultTaxBps' }),
-    client.readContract({ address, abi: SPLITTER_FACTORY_ABI, functionName: 'implementation' }),
-  ]);
-  return { treasury, defaultTaxBps, implementation };
+  // One aggregated call rather than three. Three is small, but it shares a tick with the rest of
+  // a dashboard's reads and public endpoints meter calls per second — see `splitterTermsMany`.
+  const [treasury, defaultTaxBps, implementation] = await client.multicall({
+    allowFailure: false,
+    contracts: [
+      { address, abi: SPLITTER_FACTORY_ABI, functionName: 'treasury' } as const,
+      { address, abi: SPLITTER_FACTORY_ABI, functionName: 'defaultTaxBps' } as const,
+      { address, abi: SPLITTER_FACTORY_ABI, functionName: 'implementation' } as const,
+    ],
+  });
+  return {
+    treasury: treasury as Address,
+    defaultTaxBps: defaultTaxBps as number,
+    implementation: implementation as Address,
+  };
 }
 
 /** Total number of splitter clones the factory has created. */

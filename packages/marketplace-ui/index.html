@@ -4,6 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Swarm AI Data Exchange — Marketplace</title>
+    <script>
+      /*
+       * Resolve the path this app is served from, and publish it as <base href>.
+       *
+       * The app is deployed to Swarm at `/bzz/<reference>/`, which cannot be baked in at build
+       * time: setting Vite's `base` to the reference would change the bundle, which changes the
+       * content, which changes the reference. So it is worked out here, at load, from the URL.
+       *
+       * This has to be an inline script in <head>, and it has to come before Vite's generated
+       * tags. Those are emitted with a relative base (`base: './'` in vite.config.ts) so that
+       * they resolve against <base> — and a relative URL is resolved when the element is
+       * parsed, so a <base> inserted any later would be too late to affect them.
+       *
+       * Without this, a deep path served through the manifest's error document would resolve
+       * `./assets/…` against the wrong directory: `/bzz/<ref>/claim-wallet/` would look for
+       * `/bzz/<ref>/claim-wallet/assets/…` and 404 the whole bundle before any of our code
+       * runs. `/claim-wallet` is reached by scanning a QR code, so that failure has no recovery.
+       *
+       * The slug list MUST match `Route` in src/hooks/useRoute.ts. It is duplicated here
+       * because this is the only code that can run before the bundle has loaded, which is
+       * exactly the problem being solved.
+       */
+      (function () {
+        var root = location.pathname.replace(/(?:map|devcon|claim-wallet)\/?$/, '');
+        if (root.charAt(root.length - 1) !== '/') root += '/';
+        var base = document.createElement('base');
+        base.setAttribute('href', root);
+        document.head.appendChild(base);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
