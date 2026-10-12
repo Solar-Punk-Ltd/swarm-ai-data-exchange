@@ -32,6 +32,27 @@ export const CURRENCIES: Record<number, Currency[]> = {
       address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     },
   ],
+  // Celo Sepolia. CELO is the native token of the L2; USDC is Circle's native testnet deployment
+  // (6 decimals, EIP-3009), the only asset Celo's x402 facilitator settles on this network.
+  11142220: [
+    { symbol: 'CELO', decimals: 18, displayDecimals: 4 },
+    {
+      symbol: 'USDC',
+      decimals: 6,
+      displayDecimals: 4,
+      address: '0x01C5C0122039549AD1493B8220cABEdD739BC44E',
+    },
+  ],
+  // Celo mainnet.
+  42220: [
+    { symbol: 'CELO', decimals: 18, displayDecimals: 4 },
+    {
+      symbol: 'USDC',
+      decimals: 6,
+      displayDecimals: 4,
+      address: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C',
+    },
+  ],
 };
 
 /** The ERC-20 subset — the only currencies a splitter can hold or distribute. */

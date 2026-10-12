@@ -24,6 +24,7 @@ runs = 512
 
 [rpc_endpoints]
 base-sepolia = "${RPC_URL}"
+celo-sepolia = "${CELO_SEPOLIA_RPC_URL}"
 
 [etherscan]
 base-sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 84532 }

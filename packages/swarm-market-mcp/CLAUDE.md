@@ -63,12 +63,17 @@ export interface BuildCatalogItem {
 3. `await builder.publish()` and return its result as structured content.
 
 **payTo resolution.** Before staging, each payment entry's `payTo` is resolved to the seller's
-`RevenueSplitter` clone via `src/splitter.ts` (`resolvePayTo`), read from the factory's
-`splitterOf` mapping. With `SPLITTER_FACTORY_ADDRESS` + `AGENT_PAYMENT_ADDRESS` set, `payTo` may be
-omitted and is filled in. Two **hard errors**, not warnings:
+`RevenueSplitter` clone **on that entry's `chainId`** via `src/splitter.ts` (`resolvePayTo`), read
+from that rail's factory `splitterOf` mapping. Rails are keyed by CAIP-2: with
+`SPLITTER_FACTORY_ADDRESSES=eip155:84532=0x…,eip155:11142220=0x…` + `AGENT_PAYMENT_ADDRESS` set,
+`payTo` may be omitted and is filled in per rail, so one item can sell on Base Sepolia and Celo
+Sepolia with a different clone on each. Three **hard errors**, not warnings:
 
-- the seller has no clone yet → run `register_agent` first. There is no address to publish;
-  clone addresses are ordinary CREATE addresses and cannot be derived off-chain.
+- the entry's `chainId` has no factory configured → add it to `SPLITTER_FACTORY_ADDRESSES` or drop
+  the rail. A listing on a chain with no splitter is untaxed.
+- the seller has no clone yet on that rail → run `register_agent` first (it deploys on every
+  configured rail). There is no address to publish; clone addresses are ordinary CREATE addresses
+  and cannot be derived off-chain.
 - a supplied `payTo` is not the seller's clone → publishing it would silently create an untaxed
   listing that earns the seller no Proof-of-Purchase, and the mistake would only surface much
   later at purchase time.
@@ -85,9 +90,22 @@ registered.
 
 **Args** (`src/tools/register_agent/models.ts`): `name` and `description` are required; the rest
 are `image`, `version`, `x402`, `capabilities`, `catalogFeedOwner`, `postageBatchId`, `seller`,
-`refreshCard`, `fromBlock`, `dryRun`, `skipSplitter`.
+`refreshCard`, `fromBlock` (primary chain), `fromBlocks` (per CAIP-2 chain), `dryRun`, `skipSplitter`.
 
-**Return:** `{ feedOwner, signer, chain, dryRun, identity, splitter, link, warnings, message }`.
+**Return:** `{ feedOwner, signer, chain, dryRun, identity, splitter, splitters, link, identities, warnings, message }`.
+`identity`/`link`/`chain` are the primary chain's; `identities[]` has `{ chain, chainId, identity, link }` for every
+chain in `ERC8004_CHAINS`, primary first.
+
+**Several chains, one card.** The seller is registered on every chain in `ERC8004_CHAINS` (e.g.
+`base-sepolia,celo-sepolia`). All registrations share ONE Agent Card (one tokenURI) whose
+`registrations[]` names each `(agentRegistry, agentId)` pair — the spec's model (catalog spec §2).
+The Base and Celo registries share an address, so agentIds collide across chains: entries are
+always matched on the CAIP-10 `agentRegistry` **and** the id, discovery on a chain only classifies
+that registry's entries, and every card write re-reads the card and upserts only its own entry
+(`upsertRegistration` from the adapter). Chains converge sequentially; step F links each chain's
+agent to **that chain's** splitter clone. The never-error invariant holds across chains: once any
+chain has an agentId, a failure on another chain is reported in its `identities[]` entry and in
+`warnings`, never as a tool error.
 
 Three steps with deliberately different failure semantics, which is why each is reported
 separately rather than collapsed into one success flag:
@@ -186,6 +204,11 @@ verify — see `packages/marketplace-ui/CLAUDE.md` § Agent identity.
 
 Resolves an ERC-8004 agent id to its on-chain Agent Card (read-only — RPC + Swarm fetch, no signer). Optionally enumerates the agent's catalog.
 
+`get_agent`, `find_agents_by_metadata`, `get_split_contract` and `link_split_contract` all take an
+optional `chainId` (CAIP-2, e.g. `eip155:11142220`) selecting which chain's registry / factory to
+use; it defaults to the primary `ERC8004_CHAIN`. An agent registered on several chains has a
+different agentId on each, so the id and the chain always travel together.
+
 **Args** (`src/tools/get_agent/models.ts`):
 
 ```typescript
@@ -218,17 +241,26 @@ The tool throws if any priced item is missing its `actSeed` (the builder enforce
 
 ## Environment variables
 
-| Variable                   | Purpose                                                                           |
-| -------------------------- | --------------------------------------------------------------------------------- |
-| `BEE_API_URL`              | Bee node endpoint, default `http://localhost:1633`                                |
-| `BEE_FEED_PK`              | Catalog feed signer private key (cold key)                                        |
-| `ITEM_STATE_FEED_PK`       | Per-item state feed signer private key (hot key) — MUST differ from `BEE_FEED_PK` |
-| `POSTAGE_BATCH_ID`         | Postage stamp batch ID for uploads                                                |
-| `RPC_URL`                  | EVM RPC endpoint for `get_agent` reads (default `https://sepolia.base.org`)       |
-| `ERC8004_CHAIN`            | Chain key for the ERC-8004 client (default `base-sepolia`)                        |
-| `SPLITTER_FACTORY_ADDRESS` | `SplitterFactory` address used to resolve a seller's splitter clone               |
-| `AGENT_PAYMENT_ADDRESS`    | Seller whose clone becomes `payment[].payTo` in `build_catalog`                   |
-| `PRIVATE_KEY`              | Signs `register_agent` and `link_split_contract`; must own the agent NFT          |
+| Variable                     | Purpose                                                                                                               |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `BEE_API_URL`                | Bee node endpoint, default `http://localhost:1633`                                                                    |
+| `BEE_FEED_PK`                | Catalog feed signer private key (cold key)                                                                            |
+| `ITEM_STATE_FEED_PK`         | Per-item state feed signer private key (hot key) — MUST differ from `BEE_FEED_PK`                                     |
+| `POSTAGE_BATCH_ID`           | Postage stamp batch ID for uploads                                                                                    |
+| `RPC_URL`                    | EVM RPC endpoint for the identity chain (default `https://sepolia.base.org`)                                          |
+| `ERC8004_CHAIN`              | Primary ERC-8004 chain (default `base-sepolia`); read tools default to it                                             |
+| `ERC8004_CHAINS`             | Comma list of every chain the seller registers on, e.g. `base-sepolia,celo-sepolia`; primary is always included first |
+| `RPC_URLS`                   | `<caip2>=<url>,...` RPC per payment rail other than the identity chain                                                |
+| `SPLITTER_FACTORY_ADDRESSES` | `<caip2>=<address>,...` one `SplitterFactory` per payment rail (legacy `SPLITTER_FACTORY_ADDRESS` = identity chain)   |
+| `AGENT_PAYMENT_ADDRESS`      | Seller whose clone becomes `payment[].payTo` in `build_catalog`, per rail                                             |
+| `PRIVATE_KEY`                | Signs `register_agent` and `link_split_contract`; must own the agent NFT; pays clone gas on every rail                |
+| `BUYER_WALLET_PK`            | Buyer wallet for `purchase_catalog_item` (signs intent + ERC-3009 authorization)                                      |
+| `PAYMENT_RPC_URLS`           | `<caip2>=<url>,...` RPC per rail for the token EIP-712 domain read (`PAYMENT_RPC_URL` = single-rail fallback)         |
+| `X402_ENDPOINT`              | Seller x402 base URL (with `/v1`) when a purchase omits `x402Endpoint`                                                |
+
+Chain spellings: `ERC8004_CHAIN` uses the adapter's name form (`base-sepolia`, `celo-sepolia`);
+every per-rail map uses CAIP-2 (`eip155:84532`, `eip155:11142220`), matching `payment[].chainId`
+and the x402 challenge. `src/chains.ts` is the one translation table.
 
 ## Package skeleton (match `swarm-mcp`)
 

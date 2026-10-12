@@ -520,7 +520,7 @@ Factory function. Returns `{ identity, reputation, aggregate }`.
 interface ERC8004Config {
   provider: Provider;
   signer?: Signer; // required for write operations
-  chain: 'base-sepolia' | 'base' | 'mainnet' | string;
+  chain: 'base-sepolia' | 'base' | 'mainnet' | 'celo-sepolia' | 'celo' | string;
   contracts?: {
     identityRegistry?: string; // override deployed address
     reputationRegistry?: string;
@@ -528,7 +528,7 @@ interface ERC8004Config {
 }
 ```
 
-Only `base-sepolia` has pre-configured contract addresses. For other chains, pass addresses via `config.contracts`.
+`base-sepolia`, `celo-sepolia` and `celo` have pre-configured contract addresses. For other chains, pass addresses via `config.contracts`.
 
 ---
 
@@ -688,6 +688,8 @@ interface AgentRegistration {
 | Chain            | Network | Identity Registry                            | Reputation Registry                          |
 | ---------------- | ------- | -------------------------------------------- | -------------------------------------------- |
 | Base Sepolia     | Testnet | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| Celo Sepolia     | Testnet | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| Celo Mainnet     | Mainnet | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` |
 | Base Mainnet     | —       | not configured                               | not configured                               |
 | Ethereum Mainnet | —       | not configured                               | not configured                               |
 

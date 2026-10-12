@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import useClaim from '../hooks/useClaim';
 import { parseVoucher, type Claim, type ClaimItem, type ClaimState } from '../lib/devcon';
+import { config } from '../config/env';
 import AddressLink from './AddressLink';
 import QrCode from './QrCode';
 import styles from './styles.module.css';
@@ -54,7 +55,9 @@ const STEPS: Step[] = [
     key: 'settled',
     states: ['settled'],
     label: 'Purchase finalized',
-    detail: 'Settling on Base Sepolia',
+    // Names the chain at render time — see `StepDetail`. `config` is undefined at import when the
+    // env is invalid, and reading it here would crash before App can render ConfigFailure.
+    detail: 'Settling on-chain',
   },
   {
     key: 'download',
@@ -116,11 +119,15 @@ function StepDetail({
   if (step === 'funded' && claim.funding.amount) {
     return (
       <span className={styles.claimStepDetail}>
-        {claim.funding.amount} USDC
+        {claim.funding.amount} USDC{claim.chainName ? ` on ${claim.chainName}` : ''}
         {claim.funding.txHash && (
           <>
             {' · '}
-            <AddressLink address={claim.funding.txHash} kind="tx" />
+            <AddressLink
+              address={claim.funding.txHash}
+              kind="tx"
+              explorerHref={claim.funding.explorerUrl ?? undefined}
+            />
           </>
         )}
       </span>
@@ -163,13 +170,20 @@ function StepDetail({
   if (step === 'settled' && claim.txHash) {
     return (
       <span className={styles.claimStepDetail}>
-        <AddressLink address={claim.txHash} kind="tx" />
+        <AddressLink
+          address={claim.txHash}
+          kind="tx"
+          explorerHref={claim.settlementExplorerUrl ?? undefined}
+        />
       </span>
     );
   }
 
   if (active) {
-    return <span className={styles.claimStepDetail}>{fallback}</span>;
+    // The API knows which chain this claim settles on; the build's selected chain is only a guess.
+    const text =
+      step === 'settled' ? `Settling on ${claim.chainName ?? config.chain.name}` : fallback;
+    return <span className={styles.claimStepDetail}>{text}</span>;
   }
 
   return null;

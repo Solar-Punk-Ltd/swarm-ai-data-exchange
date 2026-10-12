@@ -24,6 +24,26 @@ export const getToolErrorResponse = (text: string): ToolResponse => ({
   isError: true,
 });
 
+/**
+ * "k1=v1,k2=v2" → { k1: v1, k2: v2 }. Keys are CAIP-2 networks, which contain ':', so only the
+ * FIRST '=' splits key from value. Blank entries are skipped; an entry without both halves is a
+ * configuration error, surfaced with the variable's name.
+ */
+export const parseChainMap = (raw: string | undefined, name = 'map'): Record<string, string> => {
+  const out: Record<string, string> = {};
+  if (!raw) return out;
+  for (const entry of raw.split(',')) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0 || eq === trimmed.length - 1) {
+      throw new Error(`Invalid ${name} entry "${trimmed}": expected <key>=<value>`);
+    }
+    out[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+  }
+  return out;
+};
+
 export const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 

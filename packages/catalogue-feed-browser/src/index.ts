@@ -81,7 +81,11 @@ app.get('/api/catalog/:owner/items/:itemId/sample', async (req, res) => {
 
 // Trigger the consumer purchase flow (§10.1 / §11.4).
 app.post('/api/purchase', async (req, res) => {
-  const { publisherUrl, itemId } = req.body as { publisherUrl?: string; itemId?: string };
+  const { publisherUrl, itemId, network } = req.body as {
+    publisherUrl?: string;
+    itemId?: string;
+    network?: string; // CAIP-2 rail chosen in the UI; omitted means the publisher's first rail
+  };
   if (!publisherUrl || !itemId) {
     res.status(400).json({ error: 'publisherUrl and itemId are required' });
     return;
@@ -97,7 +101,13 @@ app.post('/api/purchase', async (req, res) => {
     const publisherBase = publisherUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
     const publisherEndpoint = `${publisherBase}/v1/items/${itemId}/purchase`;
 
-    const result = await purchase({ publisherEndpoint, itemId, granteePublicKey, walletSigner });
+    const result = await purchase({
+      publisherEndpoint,
+      itemId,
+      granteePublicKey,
+      walletSigner,
+      network,
+    });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: errMessage(err) });

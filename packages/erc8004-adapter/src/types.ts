@@ -3,7 +3,7 @@ import type { Signer, Provider } from 'ethers';
 export interface ERC8004Config {
   provider: Provider;
   signer?: Signer;
-  chain: 'base-sepolia' | 'base' | 'mainnet' | (string & {});
+  chain: 'base-sepolia' | 'base' | 'mainnet' | 'celo-sepolia' | 'celo' | (string & {});
   contracts?: {
     identityRegistry?: string;
     reputationRegistry?: string;

@@ -5,6 +5,8 @@ export interface GetAgentArgs {
   agentId: string;
   // When true, also resolve the agent's "swarm-ai-catalog" feed and enumerate its items.
   includeCatalog?: boolean;
+  // CAIP-2 chain to read (e.g. "eip155:11142220"). Defaults to the primary ERC8004_CHAIN.
+  chainId?: string;
 }
 
 // One item as enumerated from the agent's catalog Mantaray (list view, §13.2).

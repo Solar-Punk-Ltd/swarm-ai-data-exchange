@@ -3,7 +3,7 @@ import type { AgentCard } from '@solarpunk/erc8004-adapter';
 import { useAgents } from '../hooks/useAgents';
 import type { Agent } from '../context/AgentsContext';
 import AddAgentModal from './AddAgentModal';
-import { CATALOGUE_FEED_BROWSER_URL } from '../constants';
+import { CATALOGUE_FEED_BROWSER_URL, CHAIN } from '../constants';
 
 // ────────────────────────────────────────────────────────────────────
 // Design tokens — orange / warm-dark-grey / off-white
@@ -535,7 +535,7 @@ export default function AgentList() {
         </button>
       </div>
 
-      {loading && <p style={{ color: C.text2 }}>Loading agents from Base Sepolia…</p>}
+      {loading && <p style={{ color: C.text2 }}>Loading agents from {CHAIN.name}…</p>}
 
       {error && (
         <div
@@ -567,7 +567,7 @@ export default function AgentList() {
           }}
         >
           {sortedDescending(agents).map((agent) => (
-            <AgentCardView key={agent.agentId} agent={agent} />
+            <AgentCardView key={`${agent.chainId}:${agent.agentId}`} agent={agent} />
           ))}
         </ul>
       )}

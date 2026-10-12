@@ -14,6 +14,11 @@ export interface RegistryDeployment {
 export const IDENTITY_REGISTRIES: Record<number, RegistryDeployment> = {
   84532: { address: '0x8004A818BFB912233c491871b3d84c89A494BD9e', deployBlock: 40400000 },
   8453: { address: '', deployBlock: 0 },
+  // Celo Sepolia: same proxy addresses as Base Sepolia, created at block 17,013,547.
+  11142220: { address: '0x8004A818BFB912233c491871b3d84c89A494BD9e', deployBlock: 17013547 },
+  // Celo mainnet. deployBlock is unknown — look it up before pointing the dashboard here, or the
+  // sweep window falls back to "recent blocks only" (see sweepStart).
+  42220: { address: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432', deployBlock: 0 },
 };
 
 /**

@@ -1,6 +1,15 @@
 // JSON-Schema tool descriptions advertised to MCP clients in ListTools.
 // Keep in sync with the Zod schemas in ./zod-schemas.ts (runtime validation).
 
+// Optional per-chain argument on the identity/splitter read tools.
+const chainIdProperty = {
+  type: 'string',
+  description:
+    'CAIP-2 chain to use, e.g. "eip155:84532" (Base Sepolia) or "eip155:11142220" (Celo ' +
+    'Sepolia). Defaults to the primary ERC8004_CHAIN. An agent registered on several chains has a ' +
+    'different agentId on each.',
+};
+
 const paymentRequirementsSchema = {
   type: 'object',
   properties: {
@@ -11,9 +20,10 @@ const paymentRequirementsSchema = {
     payTo: {
       type: 'string',
       description:
-        "0x payee address. Omit to use the seller's split contract (requires " +
-        'SPLITTER_FACTORY_ADDRESS + AGENT_PAYMENT_ADDRESS). Supplying any other address is rejected: ' +
-        'settling outside the splitter is untaxed and earns no Proof-of-Purchase.',
+        "0x payee address. Omit to use the seller's split contract on this entry's chainId " +
+        '(requires SPLITTER_FACTORY_ADDRESSES for that rail + AGENT_PAYMENT_ADDRESS). Supplying ' +
+        'any other address is rejected: settling outside the splitter is untaxed and earns no ' +
+        'Proof-of-Purchase.',
     },
     facilitator: { type: 'string', description: 'Facilitator URL.' },
     description: { type: 'string' },
@@ -192,6 +202,7 @@ export const SwarmMarketToolsSchema = [
     inputSchema: {
       type: 'object',
       properties: {
+        chainId: chainIdProperty,
         agentId: {
           type: 'string',
           description: 'ERC-8004 NFT token id of the agent.',
@@ -376,8 +387,13 @@ export const SwarmMarketToolsSchema = [
       'back-reference; falls back to a swarm_agent_id MetadataSet scan. Mints ONLY when no ' +
       'candidate exists and discovery itself succeeded. Repairs a card that fails only the ' +
       "back-reference check instead of minting a duplicate. Then ensures the seller's " +
-      'RevenueSplitter clone exists and binds it to the agent under the agent_splitter ' +
-      'registry key. Replaces create_agent and create_split_contract. Reports per-step ' +
+      'RevenueSplitter clone exists on every configured payment rail (SPLITTER_FACTORY_ADDRESSES, ' +
+      'e.g. Base Sepolia and Celo Sepolia — the seller pays gas on each). The identity is ' +
+      'converged on EVERY chain in ERC8004_CHAINS (primary ERC8004_CHAIN first), all sharing ' +
+      "one Agent Card whose registrations[] names each (registry, agentId) pair; each chain's " +
+      "agent is bound to that chain's clone under the agent_splitter registry key. Per-chain " +
+      'outcomes are in identities[]; identity/link are the primary chain. Replaces ' +
+      'create_agent and create_split_contract. Reports per-step ' +
       'outcomes in identity/splitter/link: identity failures are fatal, splitter failures are ' +
       'reported, link failures are always non-fatal. Set dryRun true to report what would ' +
       'happen without spending gas.',
@@ -425,7 +441,14 @@ export const SwarmMarketToolsSchema = [
           type: 'number',
           description:
             'Explicit start block for the fallback MetadataSet scan. Without it the adapter only ' +
-            'looks back RECENT_BLOCK_COUNT (~13 days on Base Sepolia).',
+            'looks back RECENT_BLOCK_COUNT (~13 days on Base Sepolia, ~6 on Celo). Primary chain only.',
+        },
+        fromBlocks: {
+          type: 'object',
+          additionalProperties: { type: 'number' },
+          description:
+            'Per-chain start blocks for the fallback MetadataSet scan, keyed by CAIP-2 ' +
+            '(e.g. {"eip155:11142220": 52000000}). Wins over fromBlock for that chain.',
         },
         dryRun: {
           type: 'boolean',
@@ -489,6 +512,7 @@ export const SwarmMarketToolsSchema = [
         },
         splitter: {
           type: 'object',
+          description: 'The clone on the identity chain — the one `link` binds.',
           properties: {
             status: {
               type: 'string',
@@ -497,12 +521,51 @@ export const SwarmMarketToolsSchema = [
             address: { type: ['string', 'null'], description: 'Clone address to use as payTo.' },
             seller: { type: ['string', 'null'] },
             factory: { type: ['string', 'null'] },
+            chainId: { type: 'string', description: 'CAIP-2 rail the clone lives on.' },
             treasury: { type: 'string' },
             taxBps: { type: 'number' },
             txHash: { type: 'string' },
             error: { type: 'string' },
           },
           required: ['status', 'address', 'seller', 'factory'],
+        },
+        splitters: {
+          type: 'array',
+          description:
+            'One entry per configured payment rail, identity rail first. Each address is the ' +
+            "payTo for listings on that entry's chainId.",
+          items: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              address: { type: ['string', 'null'] },
+              seller: { type: ['string', 'null'] },
+              factory: { type: ['string', 'null'] },
+              chainId: { type: 'string' },
+              treasury: { type: 'string' },
+              taxBps: { type: 'number' },
+              txHash: { type: 'string' },
+              error: { type: 'string' },
+            },
+            required: ['status', 'address', 'seller', 'factory'],
+          },
+        },
+        identities: {
+          type: 'array',
+          description:
+            'One entry per ERC8004_CHAINS chain, primary first: { chain, chainId (CAIP-2), ' +
+            'identity, link }. Each chain has its own agentId. An error on one chain is reported ' +
+            'here, never as a tool error, once any chain has an agentId.',
+          items: {
+            type: 'object',
+            properties: {
+              chain: { type: 'string' },
+              chainId: { type: 'string' },
+              identity: { type: 'object' },
+              link: { type: 'object' },
+            },
+            required: ['chain', 'chainId', 'identity', 'link'],
+          },
         },
         link: {
           type: 'object',
@@ -524,7 +587,17 @@ export const SwarmMarketToolsSchema = [
         warnings: { type: 'array', items: { type: 'string' } },
         message: { type: 'string' },
       },
-      required: ['feedOwner', 'signer', 'chain', 'dryRun', 'identity', 'splitter', 'link'],
+      required: [
+        'feedOwner',
+        'signer',
+        'chain',
+        'dryRun',
+        'identity',
+        'splitter',
+        'splitters',
+        'link',
+        'identities',
+      ],
     },
     execution: {
       taskSupport: 'forbidden',
@@ -543,6 +616,7 @@ export const SwarmMarketToolsSchema = [
     inputSchema: {
       type: 'object',
       properties: {
+        chainId: chainIdProperty,
         catalogFeedOwner: {
           type: 'string',
           description:
@@ -596,9 +670,12 @@ export const SwarmMarketToolsSchema = [
       "Buy an ACT-protected catalog item via the seller's x402 server. Runs the two-phase " +
       'x402 flow: fetches the 402 payment challenge, signs an EIP-712 PurchaseIntent plus an ' +
       'ERC-3009 TransferWithAuthorization (shared nonce + time window) with the buyer wallet ' +
-      '(BUYER_WALLET_PK), and settles with an X-Payment envelope. The grantee defaults to this ' +
+      '(BUYER_WALLET_PK), and settles with an X-Payment envelope. A seller may advertise several ' +
+      'payment rails in the challenge (e.g. Base Sepolia and Celo Sepolia); pass network to pick ' +
+      'one, else the first is used. The grantee defaults to this ' +
       "Bee node's ACT publisher key so the granted content is decryptable by the same node. " +
-      'Returns { txHash, actHistoryRef, grantorPublicKey } for a subsequent download_files_act.',
+      'Returns { txHash, explorerTxUrl, network, actHistoryRef, grantorPublicKey } for a ' +
+      'subsequent download_files_act.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -616,6 +693,12 @@ export const SwarmMarketToolsSchema = [
           description:
             "Override the grantee public key; defaults to this node's ACT publisher key.",
         },
+        network: {
+          type: 'string',
+          description:
+            'CAIP-2 rail to pay on, e.g. "eip155:11142220" for Celo Sepolia or "eip155:84532" ' +
+            'for Base Sepolia. Must be one the seller advertises; defaults to the first.',
+        },
       },
       required: ['itemId'],
     },
@@ -624,7 +707,12 @@ export const SwarmMarketToolsSchema = [
       properties: {
         itemId: { type: 'string' },
         granteePublicKey: { type: 'string' },
+        network: { type: 'string', description: 'CAIP-2 rail the payment settled on.' },
         txHash: { type: 'string', description: 'Settlement transaction hash.' },
+        explorerTxUrl: {
+          type: 'string',
+          description: "Block explorer link for txHash on the rail's chain, when known.",
+        },
         actHistoryRef: { type: 'string', description: 'ACT history reference of the grant.' },
         grantorPublicKey: {
           type: 'string',
@@ -649,6 +737,7 @@ export const SwarmMarketToolsSchema = [
     inputSchema: {
       type: 'object',
       properties: {
+        chainId: chainIdProperty,
         seller: {
           type: 'string',
           description: '0x seller address. Defaults to AGENT_PAYMENT_ADDRESS.',
@@ -690,6 +779,7 @@ export const SwarmMarketToolsSchema = [
     inputSchema: {
       type: 'object',
       properties: {
+        chainId: chainIdProperty,
         agentId: {
           type: 'string',
           description: 'ERC-8004 agent id (NFT token id). The signer must own this NFT.',

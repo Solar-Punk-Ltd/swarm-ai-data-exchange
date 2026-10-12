@@ -9,6 +9,8 @@ export {
   uploadAgentCard,
   downloadAgentCard,
   agentCardFeedUrl,
+  normaliseRegistrations,
+  upsertRegistration,
 } from './agent-card';
 
 export { IdentityModule } from './modules/identity';

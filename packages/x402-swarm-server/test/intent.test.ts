@@ -82,7 +82,6 @@ async function signedEnvelope(): Promise<PurchasePayload> {
 
 const baseOpts = {
   pathItemId: ITEM,
-  chainId: CHAIN_ID,
   domainContract: CONTRACT,
   itemPayments: ITEM_PAYMENTS,
   isNonceUsed: () => false,
@@ -182,16 +181,24 @@ describe('verifyPurchaseIntent — rejections (§11.5)', () => {
 });
 
 describe('verifyPurchaseIntent — settlement destination guard', () => {
-  it('accepts a payment whose payTo is the configured split contract', async () => {
+  const GUARD = { 'eip155:84532': PAYTO };
+
+  it('accepts a payment whose payTo is the split contract for its rail', async () => {
     const env = await signedEnvelope();
-    const { matched } = await verifyPurchaseIntent(env, { ...baseOpts, expectedPayTo: PAYTO });
+    const { matched } = await verifyPurchaseIntent(env, {
+      ...baseOpts,
+      expectedPayToByChain: GUARD,
+    });
     expect(matched.payTo).toBe(PAYTO);
   });
 
   it('matches the split contract case-insensitively', async () => {
     const env = await signedEnvelope();
     await expect(
-      verifyPurchaseIntent(env, { ...baseOpts, expectedPayTo: PAYTO.toLowerCase() }),
+      verifyPurchaseIntent(env, {
+        ...baseOpts,
+        expectedPayToByChain: { 'eip155:84532': PAYTO.toLowerCase() },
+      }),
     ).resolves.toBeDefined();
   });
 
@@ -202,13 +209,121 @@ describe('verifyPurchaseIntent — settlement destination guard', () => {
     await expect(
       verifyPurchaseIntent(env, {
         ...baseOpts,
-        expectedPayTo: '0x0000000000000000000000000000000000000009',
+        expectedPayToByChain: { 'eip155:84532': '0x0000000000000000000000000000000000000009' },
       }),
     ).rejects.toThrow(/split contract/);
+  });
+
+  // The guard is on, but only for another rail: the catalog advertises a chain the seller has
+  // no clone on, so nothing there can collect the tax.
+  it('payment_destination_untaxed when the matched rail has no split contract configured', async () => {
+    const env = await signedEnvelope();
+    await expect(
+      verifyPurchaseIntent(env, {
+        ...baseOpts,
+        expectedPayToByChain: { 'eip155:11142220': PAYTO },
+      }),
+    ).rejects.toThrow(/No split contract is configured/);
   });
 
   it('accepts any payTo when no split contract is configured', async () => {
     const env = await signedEnvelope();
     await expect(verifyPurchaseIntent(env, baseOpts)).resolves.toBeDefined();
+    await expect(
+      verifyPurchaseIntent(env, { ...baseOpts, expectedPayToByChain: {} }),
+    ).resolves.toBeDefined();
+  });
+});
+
+describe('verifyPurchaseIntent — multi-rail items', () => {
+  const CELO_ASSET = 'eip155:11142220/erc20:0x01C5C0122039549AD1493B8220cABEdD739BC44E';
+  const CELO_PAYTO = '0x000000000000000000000000000000000000ce10';
+  const CELO_FACILITATOR = 'https://api.x402.sepolia.celo.org';
+  const TWO_RAILS: PaymentRequirements[] = [
+    ...ITEM_PAYMENTS,
+    {
+      scheme: 'exact',
+      chainId: 'eip155:11142220',
+      asset: CELO_ASSET,
+      amount: '5000000',
+      payTo: CELO_PAYTO,
+      facilitator: CELO_FACILITATOR,
+    },
+  ];
+
+  async function celoEnvelope(): Promise<PurchasePayload> {
+    const env = await signedEnvelope();
+    const celoDomain = { ...domain, chainId: 11142220 };
+    const message = {
+      ...env.payload.purchaseIntent.message,
+      payment: { ...PAYMENT, asset: CELO_ASSET, payTo: CELO_PAYTO },
+    };
+    const signature = await account.signTypedData({
+      domain: celoDomain,
+      types: {
+        PurchaseIntent: PURCHASE_INTENT_TYPES.PurchaseIntent,
+        Payment: PURCHASE_INTENT_TYPES.Payment,
+      },
+      primaryType: 'PurchaseIntent',
+      message: {
+        ...message,
+        granteePublicKey: GRANTEE as `0x${string}`,
+        payment: {
+          scheme: 'exact',
+          asset: CELO_ASSET,
+          amount: 5000000n,
+          payTo: CELO_PAYTO as `0x${string}`,
+        },
+        nonce: NONCE as `0x${string}`,
+        validAfter: BigInt(message.validAfter),
+        validBefore: BigInt(message.validBefore),
+      },
+    });
+    return {
+      ...env,
+      network: 'eip155:11142220',
+      payload: {
+        purchaseIntent: { ...env.payload.purchaseIntent, domain: celoDomain, message, signature },
+        authorization: { ...env.payload.authorization, to: CELO_PAYTO },
+      },
+    };
+  }
+
+  it('selects the rail whose chainId matches the signed domain and returns its facilitator', async () => {
+    const env = await celoEnvelope();
+    const { matched } = await verifyPurchaseIntent(env, {
+      ...baseOpts,
+      itemPayments: TWO_RAILS,
+      expectedPayToByChain: { 'eip155:84532': PAYTO, 'eip155:11142220': CELO_PAYTO },
+    });
+    expect(matched).toEqual({
+      network: 'eip155:11142220',
+      asset: CELO_ASSET,
+      amount: '5000000',
+      payTo: CELO_PAYTO,
+      facilitator: CELO_FACILITATOR,
+    });
+  });
+
+  it('a Base-signed intent against the same item still matches the Base rail', async () => {
+    const env = await signedEnvelope();
+    const { matched } = await verifyPurchaseIntent(env, {
+      ...baseOpts,
+      itemPayments: TWO_RAILS,
+      expectedPayToByChain: { 'eip155:84532': PAYTO, 'eip155:11142220': CELO_PAYTO },
+    });
+    expect(matched.network).toBe('eip155:84532');
+    expect(matched.facilitator).toBeUndefined();
+  });
+
+  it('a Celo-signed intent is rejected when the Celo rail has no split contract', async () => {
+    const env = await celoEnvelope();
+    await expect(
+      verifyPurchaseIntent(env, {
+        ...baseOpts,
+        itemPayments: TWO_RAILS,
+        expectedPayToByChain: { 'eip155:84532': PAYTO },
+      }),
+    ).rejects.toThrow(/No split contract is configured/);
   });
 });

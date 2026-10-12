@@ -110,6 +110,21 @@ PRIVATE_KEY=0x... TREASURY_ADDRESS=0x... DEFAULT_TAX_BPS=500 \
 Writes `deployments/<DEPLOYMENT_NAME>.json` (default `base-sepolia`). Copy the factory address into
 `SPLITTER_FACTORY_ADDRESS` (swarm-market-mcp) and record it in `ts/addresses.ts`.
 
+### Celo Sepolia
+
+The `celo-sepolia` RPC alias in `foundry.toml` reads `CELO_SEPOLIA_RPC_URL`. Celo Sepolia is
+verified on Blockscout rather than Etherscan, so pass the verifier on the command line:
+
+```bash
+CELO_SEPOLIA_RPC_URL=https://forno.celo-sepolia.celo-testnet.org \
+PRIVATE_KEY=0x... TREASURY_ADDRESS=0x... DEFAULT_TAX_BPS=500 DEPLOYMENT_NAME=celo-sepolia \
+  forge script script/Deploy.s.sol:Deploy --rpc-url celo-sepolia --broadcast \
+    --verify --verifier blockscout --verifier-url https://celo-sepolia.blockscout.com/api
+```
+
+The deployer pays gas in CELO (chain id 11142220); get testnet CELO from the Celo Sepolia faucet.
+Writes `deployments/celo-sepolia.json`; record the factory under `'celo-sepolia'` in `ts/addresses.ts`.
+
 ## TypeScript SDK
 
 ```ts

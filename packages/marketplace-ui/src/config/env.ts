@@ -4,6 +4,13 @@
  *
  * Everything here is a Vite build-time var and public by definition — there is no secret in this
  * package.
+ *
+ * Several chains can be configured at once (`VITE_CHAIN_IDS`), each with its own factory,
+ * treasury and RPC under a chain-id-suffixed var (`VITE_SPLITTER_FACTORY_ADDRESS_11142220`).
+ * Every listed chain is validated at boot, but `config` describes exactly one of them: the chain
+ * the viewer selected (`?chain=`, then localStorage, then the default). Switching reloads the
+ * page — `config` is a module singleton read by every component, so a live swap would mean
+ * threading a context through all of them for a sub-second saving.
  */
 import { isAddress, getAddress } from 'viem';
 import type { Address, Chain } from 'viem';
@@ -17,6 +24,8 @@ export interface AppConfig {
   factory: Address;
   chain: Chain;
   rpcUrl: string;
+  /** Every chain the dropdown offers, in `VITE_CHAIN_IDS` order. Always contains `chain`. */
+  chains: { id: number; name: string }[];
   refreshIntervalMs: number;
   currencies: Currency[];
   /**
@@ -64,15 +73,44 @@ export class ConfigError extends Error {
 
 const DEFAULT_CHAIN_ID = 84532;
 /**
- * Not `https://sepolia.base.org`, which was the default until it was measured: it is fronted by
- * QuickNode with a 25-calls-per-second cap that counts each element of a JSON-RPC batch
- * separately, so every tick lost exactly the calls past 25 and the dashboard never refreshed.
- * Reads are aggregated through Multicall3 now and fit comfortably either way, but there is no
- * reason to default to the endpoint with the tightest cap.
+ * Per-chain RPC defaults. Chains absent here fall back to viem's `rpcUrls.default`.
+ *
+ * Base Sepolia is not `https://sepolia.base.org`, which was the default until it was measured: it
+ * is fronted by QuickNode with a 25-calls-per-second cap that counts each element of a JSON-RPC
+ * batch separately, so every tick lost exactly the calls past 25 and the dashboard never
+ * refreshed. Reads are aggregated through Multicall3 now and fit comfortably either way, but there
+ * is no reason to default to the endpoint with the tightest cap.
  */
-const DEFAULT_RPC_URL = 'https://base-sepolia-rpc.publicnode.com';
+const DEFAULT_RPC_URLS: Record<number, string> = {
+  84532: 'https://base-sepolia-rpc.publicnode.com',
+  11142220: 'https://forno.celo-sepolia.celo-testnet.org',
+};
 const DEFAULT_REFRESH_MS = 5000;
 const DEFAULT_SWARM_GATEWAY = 'https://api.gateway.ethswarm.org';
+
+/** Where the viewer's chain choice lives between visits. Read by `ChainSelect`, too. */
+export const CHAIN_STORAGE_KEY = 'marketplace.chainId';
+/** Query parameter that pins a chain in a link. Wins over localStorage. */
+export const CHAIN_QUERY_PARAM = 'chain';
+
+/** `import.meta.env` is typed with fixed keys; suffixed lookups need the open form. */
+type Env = Record<string, string | undefined>;
+
+/**
+ * A per-chain var: `VITE_X_<chainId>`, falling back to the unsuffixed `VITE_X` for the default
+ * chain only. Keeps a single-chain `.env` working unchanged, without letting the default chain's
+ * factory silently stand in for a chain that has none.
+ */
+function envFor(env: Env, name: string, chainId: number, isDefault: boolean): string | undefined {
+  const suffixed = env[`${name}_${chainId}`];
+  if (suffixed) return suffixed;
+  return isDefault ? env[name] : undefined;
+}
+
+/** The var name a problem should cite, so the fix is a copy-paste. */
+function envName(name: string, chainId: number, isDefault: boolean): string {
+  return isDefault ? `${name}_${chainId} (or ${name})` : `${name}_${chainId}`;
+}
 
 function requireAddress(raw: string | undefined, name: string, problems: string[]): Address {
   if (!raw) {
@@ -122,21 +160,29 @@ function parseDemoUrl(
  * Identity Registry for agent labelling. Optional everywhere: an unset or unknown registry means
  * seller rows show no agent, which is a degraded view rather than a broken one.
  */
-function parseRegistry(chainId: number, problems: string[]): AppConfig['identityRegistry'] {
-  const env = import.meta.env;
+function parseRegistry(
+  env: Env,
+  chainId: number,
+  isDefault: boolean,
+  problems: string[],
+): AppConfig['identityRegistry'] {
   const known = IDENTITY_REGISTRIES[chainId];
-  const raw = env.VITE_IDENTITY_REGISTRY_ADDRESS || known?.address;
+  const raw = envFor(env, 'VITE_IDENTITY_REGISTRY_ADDRESS', chainId, isDefault) || known?.address;
   if (!raw) return undefined;
 
   if (!isAddress(raw)) {
-    problems.push(`VITE_IDENTITY_REGISTRY_ADDRESS is not a valid address: "${raw}"`);
+    problems.push(
+      `${envName('VITE_IDENTITY_REGISTRY_ADDRESS', chainId, isDefault)} is not a valid address: "${raw}"`,
+    );
     return undefined;
   }
 
-  const fromBlockRaw = env.VITE_IDENTITY_REGISTRY_FROM_BLOCK;
+  const fromBlockRaw = envFor(env, 'VITE_IDENTITY_REGISTRY_FROM_BLOCK', chainId, isDefault);
   const fromBlock = fromBlockRaw ? Number(fromBlockRaw) : (known?.deployBlock ?? 0);
   if (!Number.isInteger(fromBlock) || fromBlock < 0) {
-    problems.push(`VITE_IDENTITY_REGISTRY_FROM_BLOCK must be a non-negative integer.`);
+    problems.push(
+      `${envName('VITE_IDENTITY_REGISTRY_FROM_BLOCK', chainId, isDefault)} must be a non-negative integer.`,
+    );
     return undefined;
   }
 
@@ -154,28 +200,130 @@ function parseRegistry(chainId: number, problems: string[]): AppConfig['identity
   };
 }
 
-function parseConfig(): AppConfig {
-  const problems: string[] = [];
-  const env = import.meta.env;
+/** Everything that differs per chain. One is built per `VITE_CHAIN_IDS` entry. */
+interface ChainSettings {
+  chain: Chain;
+  factory: Address;
+  treasury: Address;
+  rpcUrl: string;
+  currencies: Currency[];
+  identityRegistry?: AppConfig['identityRegistry'];
+}
 
-  const treasury = requireAddress(env.VITE_TREASURY_ADDRESS, 'VITE_TREASURY_ADDRESS', problems);
-  const factory = requireAddress(
-    env.VITE_SPLITTER_FACTORY_ADDRESS,
-    'VITE_SPLITTER_FACTORY_ADDRESS',
+/**
+ * The chains offered: `VITE_CHAIN_IDS` as a comma list, else just the default chain. Unknown ids
+ * are reported, not skipped — a dropdown entry that cannot be rendered is a config bug, not a
+ * preference.
+ */
+function parseChainIds(env: Env, defaultChainId: number, problems: string[]): number[] {
+  const raw = env.VITE_CHAIN_IDS;
+  if (!raw) return [defaultChainId];
+  const ids: number[] = [];
+  for (const part of raw.split(',')) {
+    const text = part.trim();
+    if (!text) continue;
+    const id = Number(text);
+    if (!Number.isInteger(id) || !chainById(id)) {
+      problems.push(
+        `VITE_CHAIN_IDS entry "${text}" is not supported. Expected one of ${SUPPORTED_CHAIN_IDS.join(', ')}.`,
+      );
+      continue;
+    }
+    if (!ids.includes(id)) ids.push(id);
+  }
+  if (ids.length === 0) problems.push('VITE_CHAIN_IDS lists no supported chain.');
+  return ids;
+}
+
+function parseChainSettings(
+  env: Env,
+  chainId: number,
+  isDefault: boolean,
+  problems: string[],
+): ChainSettings | undefined {
+  const chain = chainById(chainId);
+  if (!chain) return undefined;
+
+  const currencies = CURRENCIES[chainId];
+  if (!currencies) {
+    problems.push(`No currency config for chain ${chainId}. Add one to src/config/currencies.ts.`);
+  }
+
+  const treasury = requireAddress(
+    envFor(env, 'VITE_TREASURY_ADDRESS', chainId, isDefault),
+    envName('VITE_TREASURY_ADDRESS', chainId, isDefault),
     problems,
   );
+  const factory = requireAddress(
+    envFor(env, 'VITE_SPLITTER_FACTORY_ADDRESS', chainId, isDefault),
+    envName('VITE_SPLITTER_FACTORY_ADDRESS', chainId, isDefault),
+    problems,
+  );
+  const rpcUrl =
+    envFor(env, 'VITE_RPC_URL', chainId, isDefault) ||
+    DEFAULT_RPC_URLS[chainId] ||
+    chain.rpcUrls.default.http[0];
 
-  const chainId = env.VITE_CHAIN_ID ? Number(env.VITE_CHAIN_ID) : DEFAULT_CHAIN_ID;
-  const chain = chainById(chainId);
-  if (!chain) {
+  return {
+    chain,
+    factory,
+    treasury,
+    rpcUrl,
+    currencies: currencies ?? [],
+    identityRegistry: parseRegistry(env, chainId, isDefault, problems),
+  };
+}
+
+/**
+ * The viewer's chain: `?chain=` in the URL, then the remembered choice, then the default. Anything
+ * unknown falls back rather than failing boot — a stale link or a localStorage value from before a
+ * chain was removed must not blank the dashboard.
+ */
+export function selectChainId(offered: number[], defaultChainId: number): number {
+  if (typeof window === 'undefined') return defaultChainId;
+  const candidates: (string | null | undefined)[] = [];
+  try {
+    candidates.push(new URL(window.location.href).searchParams.get(CHAIN_QUERY_PARAM));
+  } catch {
+    // An unparsable location is not worth more than the default.
+  }
+  try {
+    candidates.push(window.localStorage.getItem(CHAIN_STORAGE_KEY));
+  } catch {
+    // Private windows and blocked storage throw on access; the default is the right answer.
+  }
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const id = Number(raw);
+    if (offered.includes(id)) return id;
+  }
+  return defaultChainId;
+}
+
+function parseConfig(): AppConfig {
+  const problems: string[] = [];
+  const env = import.meta.env as unknown as Env;
+
+  const defaultRaw = env.VITE_CHAIN_ID;
+  const defaultChainId = defaultRaw ? Number(defaultRaw) : DEFAULT_CHAIN_ID;
+  if (!chainById(defaultChainId)) {
     problems.push(
-      `VITE_CHAIN_ID ${env.VITE_CHAIN_ID} is not supported. Expected one of ${SUPPORTED_CHAIN_IDS.join(', ')}.`,
+      `VITE_CHAIN_ID ${defaultRaw} is not supported. Expected one of ${SUPPORTED_CHAIN_IDS.join(', ')}.`,
     );
   }
 
-  const currencies = CURRENCIES[chainId];
-  if (chain && !currencies) {
-    problems.push(`No currency config for chain ${chainId}. Add one to src/config/currencies.ts.`);
+  const chainIds = parseChainIds(env, defaultChainId, problems);
+  // An explicit default that is not offered is a contradiction; an implicit one just means the
+  // first listed chain is the default.
+  const effectiveDefault = chainIds.includes(defaultChainId) ? defaultChainId : chainIds[0];
+  if (defaultRaw && !chainIds.includes(defaultChainId)) {
+    problems.push(`VITE_CHAIN_ID ${defaultRaw} is not in VITE_CHAIN_IDS (${chainIds.join(', ')}).`);
+  }
+
+  const settings = new Map<number, ChainSettings>();
+  for (const id of chainIds) {
+    const parsed = parseChainSettings(env, id, id === effectiveDefault, problems);
+    if (parsed) settings.set(id, parsed);
   }
 
   const refreshRaw = env.VITE_REFRESH_INTERVAL_MS;
@@ -202,18 +350,21 @@ function parseConfig(): AppConfig {
 
   if (problems.length > 0) throw new ConfigError(problems);
 
+  const selected = settings.get(selectChainId(chainIds, effectiveDefault))!;
+
   return {
-    treasury,
-    factory,
-    chain: chain!,
-    rpcUrl: env.VITE_RPC_URL || DEFAULT_RPC_URL,
+    treasury: selected.treasury,
+    factory: selected.factory,
+    chain: selected.chain,
+    rpcUrl: selected.rpcUrl,
+    chains: chainIds.map((id) => ({ id, name: settings.get(id)!.chain.name })),
     refreshIntervalMs,
-    currencies: currencies!,
+    currencies: selected.currencies,
     swarmGateway: env.VITE_SWARM_GATEWAY_URL || DEFAULT_SWARM_GATEWAY,
     showDemoFlow,
     demoFlowBaseUrl,
     devconApiUrl,
-    identityRegistry: parseRegistry(chainId, problems),
+    identityRegistry: selected.identityRegistry,
   };
 }
 

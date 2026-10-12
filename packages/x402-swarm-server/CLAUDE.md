@@ -98,7 +98,8 @@ Steps 1–8 are reversible (no state change on failure). Steps 9–11 are commit
    → 400 intent_payment_mismatch
 
 5b. Check settlement destination (marketplace guard, not a §11.5 step)
-   If SPLITTER_ADDRESS is set, the matched entry's payTo MUST equal it
+   If SPLITTER_ADDRESSES is set, the matched entry's payTo MUST equal the clone listed for
+   the matched rail (CAIP-2); a matched rail with no clone listed is rejected the same way
    → 400 payment_destination_untaxed
    A stale catalog entry advertising a bare EOA would settle untaxed and produce no
    valid Proof-of-Purchase; reject before /settle while the failure is still free.
@@ -199,9 +200,24 @@ CATALOG_FEED_OWNER      — EOA address of the catalog feed signer
 ITEM_STATE_FEED_PK      — private key for per-item state feed signer (hot key)
 PURCHASE_INTENT_DOMAIN_CONTRACT  — verifyingContract address for EIP-712 domain
 DB_PATH                 — path to SQLite DB file (default: ./data/store.db)
-SPLITTER_ADDRESS        — this seller's RevenueSplitter clone; pins the accepted settlement
-                          destination (optional — unset disables the step-5b guard)
+SPLITTER_ADDRESSES      — this seller's RevenueSplitter clone per rail, "<caip2>=<clone>,...";
+                          pins the accepted settlement destination on each rail (optional —
+                          unset disables the step-5b guard; legacy SPLITTER_ADDRESS = the
+                          clone on NETWORK)
+FACILITATOR_URLS        — per-rail facilitator overrides, "<caip2>=<url>,..."; an item's own
+                          payment[].facilitator wins, then this, then FACILITATOR_URL
+FACILITATOR_API_KEYS    — "<facilitator url>=<key>,...", sent as X-API-Key (Celo's hosted
+                          facilitator gates /settle on it)
+RPC_URLS                — "<caip2>=<rpc>,..." for reading the payment token's EIP-712 domain
 ```
+
+## Multi-rail items
+
+A catalog item may carry several `payment[]` entries on different chains. The 402 challenge
+advertises all of them, each with its own `extra.facilitator` and `purchaseIntentDomain.chainId`.
+The buyer picks one by signing the `PurchaseIntent` over that rail's chainId; step 5 matches the
+entry by chainId, and the server then verifies and settles through **that rail's** facilitator —
+never the default one. Each rail needs its own clone in `SPLITTER_ADDRESSES`.
 
 ## Prototype exclusions
 

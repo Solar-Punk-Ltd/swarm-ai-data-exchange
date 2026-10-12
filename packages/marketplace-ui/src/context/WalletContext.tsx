@@ -33,6 +33,27 @@ export interface WalletState {
 
 const WalletContext = createContext<WalletState | undefined>(undefined);
 
+/** EIP-3085's "chain not added" signal: code 4902, or MetaMask's older message-only form. */
+function isUnrecognizedChain(err: unknown): boolean {
+  const e = err as { code?: unknown; data?: { originalError?: { code?: unknown } } } | undefined;
+  if (e?.code === 4902 || e?.data?.originalError?.code === 4902) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /unrecognized chain|unrecognised chain/i.test(message);
+}
+
+/** `wallet_addEthereumChain` payload for the configured chain, per EIP-3085. */
+function addChainParams() {
+  const { chain, rpcUrl } = config;
+  const explorer = chain.blockExplorers?.default.url;
+  return {
+    chainId: numberToHex(chain.id),
+    chainName: chain.name,
+    nativeCurrency: chain.nativeCurrency,
+    rpcUrls: [rpcUrl],
+    ...(explorer ? { blockExplorerUrls: [explorer] } : {}),
+  };
+}
+
 export function WalletProvider({ children }: { children: ReactNode }) {
   const provider = typeof window !== 'undefined' ? window.ethereum : undefined;
   const [account, setAccount] = useState<Address>();
@@ -93,11 +114,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const switchChain = useCallback(async () => {
     if (!provider) return;
     setError(undefined);
+    const switchParams: [{ chainId: `0x${string}` }] = [{ chainId: numberToHex(config.chain.id) }];
     try {
-      await provider.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: numberToHex(config.chain.id) }],
-      });
+      try {
+        await provider.request({ method: 'wallet_switchEthereumChain', params: switchParams });
+      } catch (err) {
+        if (!isUnrecognizedChain(err)) throw err;
+        // The wallet has never seen this chain (Celo Sepolia is not preinstalled anywhere). Add it
+        // from the viem definition and the RPC the dashboard itself reads from, then switch again
+        // — some wallets switch as part of the add, others still need the explicit call.
+        await provider.request({
+          method: 'wallet_addEthereumChain',
+          params: [addChainParams()],
+        });
+        await provider.request({ method: 'wallet_switchEthereumChain', params: switchParams });
+      }
     } catch (err) {
       setError(isUserRejection(err) ? undefined : walletErrorMessage(err));
     }

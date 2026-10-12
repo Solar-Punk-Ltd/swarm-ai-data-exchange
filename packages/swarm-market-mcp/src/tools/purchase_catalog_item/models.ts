@@ -5,6 +5,9 @@ export interface PurchaseCatalogItemArgs {
   x402Endpoint?: string;
   // Override the grantee (buyer) public key. Defaults to this node's ACT publisher key.
   granteePublicKey?: string;
+  // CAIP-2 rail to pay on (e.g. "eip155:11142220") when the seller advertises several.
+  // Defaults to the first accepts entry.
+  network?: string;
 }
 
 // EIP-712 domain the seller quotes for PurchaseIntent signing, carried in

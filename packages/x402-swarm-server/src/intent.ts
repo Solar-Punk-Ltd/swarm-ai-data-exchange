@@ -36,14 +36,14 @@ export interface VerifiedIntent {
 
 interface VerifyOpts {
   pathItemId: string;
-  chainId: number;
   domainContract: string;
   itemPayments: PaymentRequirements[];
   isNonceUsed: (nonce: string) => boolean;
   now: number; // unix seconds
-  // Optional marketplace guard: the seller's split contract. When set, the matched payment's
-  // payTo must equal it.
-  expectedPayTo?: string;
+  // Optional marketplace guard: the seller's split contract per rail, keyed by CAIP-2 network.
+  // When non-empty, the matched payment's payTo must equal the clone for its rail, and a rail
+  // with no clone configured is rejected outright.
+  expectedPayToByChain?: Record<string, string>;
 }
 
 // §11.5 steps 2–7 (reversible checks). Step 1 (decode) runs separately; steps 8–11 are committing.
@@ -161,15 +161,32 @@ export async function verifyPurchaseIntent(
     );
   }
 
-  // Step 5b: settlement destination must be the seller's split contract. A catalog entry that
-  // still advertises a bare EOA would settle untaxed and produce no valid Proof-of-Purchase, so
-  // it is rejected here — before /settle, while the failure is still free.
-  if (opts.expectedPayTo && match.payTo.toLowerCase() !== opts.expectedPayTo.toLowerCase()) {
-    throw new PurchaseError(
-      'payment_destination_untaxed',
-      'Advertised payTo is not this seller’s split contract; republish the item',
-      { expectedPayTo: opts.expectedPayTo, advertisedPayTo: match.payTo },
-    );
+  // Step 5b: settlement destination must be the seller's split contract on the matched rail.
+  // A catalog entry that still advertises a bare EOA would settle untaxed and produce no valid
+  // Proof-of-Purchase, so it is rejected here — before /settle, while the failure is still free.
+  // A rail the server has no clone for is rejected the same way: the catalog advertises it, but
+  // nothing on that chain can collect the tax.
+  const guard = opts.expectedPayToByChain ?? {};
+  if (Object.keys(guard).length > 0) {
+    const expectedPayTo = guard[match.chainId];
+    if (!expectedPayTo) {
+      throw new PurchaseError(
+        'payment_destination_untaxed',
+        'No split contract is configured for the advertised payment rail',
+        {
+          chainId: match.chainId,
+          advertisedPayTo: match.payTo,
+          configuredChains: Object.keys(guard),
+        },
+      );
+    }
+    if (match.payTo.toLowerCase() !== expectedPayTo.toLowerCase()) {
+      throw new PurchaseError(
+        'payment_destination_untaxed',
+        'Advertised payTo is not this seller’s split contract; republish the item',
+        { chainId: match.chainId, expectedPayTo, advertisedPayTo: match.payTo },
+      );
+    }
   }
 
   // Step 6: time window.
@@ -200,6 +217,7 @@ export async function verifyPurchaseIntent(
       asset: match.asset,
       amount: match.amount,
       payTo: match.payTo,
+      facilitator: match.facilitator,
     },
   };
 }

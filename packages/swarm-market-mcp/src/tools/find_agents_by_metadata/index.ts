@@ -9,9 +9,9 @@
  * Wraps IdentityModule.findAgentsWithMetadata and augments each entry with the on-chain
  * owner so a caller can complete a full verification chain in one round trip.
  */
-import { ethers } from 'ethers';
-import { createERC8004Client, SWARM_AGENT_ID } from '@solarpunk/erc8004-adapter';
-import config from '../../config';
+import { SWARM_AGENT_ID } from '@solarpunk/erc8004-adapter';
+import type { ERC8004Client } from '@solarpunk/erc8004-adapter';
+import { erc8004ClientFor } from '../../agent-identity';
 import {
   getErrorMessage,
   getResponseWithStructuredContent,
@@ -35,8 +35,12 @@ export async function findAgentsByMetadata(args: FindAgentsByMetadataArgs): Prom
     return getToolErrorResponse('Provide either catalogFeedOwner or metadataKey.');
   }
 
-  const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const erc8004 = createERC8004Client({ provider, chain: config.chain.chain });
+  let erc8004: ERC8004Client;
+  try {
+    erc8004 = erc8004ClientFor(args.chainId);
+  } catch (err) {
+    return getToolErrorResponse(getErrorMessage(err));
+  }
 
   let entries: { agentId: bigint; uri: string; rawValue: Uint8Array }[];
   try {

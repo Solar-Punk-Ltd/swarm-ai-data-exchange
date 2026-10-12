@@ -21,12 +21,7 @@
  */
 import { ethers } from 'ethers';
 import { getAddress } from 'viem';
-import {
-  AGENT_SPLITTER,
-  createERC8004Client,
-  getAgentSplitter,
-  setAgentSplitter,
-} from '@solarpunk/erc8004-adapter';
+import { AGENT_SPLITTER, getAgentSplitter, setAgentSplitter } from '@solarpunk/erc8004-adapter';
 import config from '../../config';
 import {
   getErrorMessage,
@@ -34,7 +29,8 @@ import {
   getToolErrorResponse,
 } from '../../utils';
 import type { ToolResponse } from '../../utils';
-import { factoryAddress, readSplitter, sellerAddress } from '../../splitter';
+import { chainNameFor, signingClient } from '../../agent-identity';
+import { factoryAddress, identityRail, readSplitter, sellerAddress } from '../../splitter';
 import { LinkSplitContractArgs } from './models';
 
 export async function linkSplitContract(args: LinkSplitContractArgs): Promise<ToolResponse> {
@@ -52,6 +48,17 @@ export async function linkSplitContract(args: LinkSplitContractArgs): Promise<To
     );
   }
 
+  // The chain whose registry gets the link, and whose factory the clone comes from. A clone
+  // address means nothing on another chain, so both always come from the same one.
+  let chainName: string;
+  let rail: string;
+  try {
+    chainName = chainNameFor(args.chainId);
+    rail = args.chainId ?? identityRail();
+  } catch (err) {
+    return getToolErrorResponse(getErrorMessage(err));
+  }
+
   // Resolve which splitter to link: an explicit address, or the seller's clone from the factory.
   let splitter: string;
   let seller: string | undefined;
@@ -64,10 +71,10 @@ export async function linkSplitContract(args: LinkSplitContractArgs): Promise<To
       return getToolErrorResponse(`Invalid splitter address: ${args.splitter}`);
     }
   } else {
-    factory = factoryAddress();
+    factory = factoryAddress(rail);
     if (!factory) {
       return getToolErrorResponse(
-        'No splitter given and SPLITTER_FACTORY_ADDRESS is unset. Pass splitter explicitly.',
+        `No splitter given and no SplitterFactory is configured for ${rail} (SPLITTER_FACTORY_ADDRESSES). Pass splitter explicitly.`,
       );
     }
 
@@ -89,10 +96,11 @@ export async function linkSplitContract(args: LinkSplitContractArgs): Promise<To
       const resolved = await readSplitter({
         factory: factory as `0x${string}`,
         seller: seller as `0x${string}`,
+        chainId: rail,
       });
       if (!resolved.splitter) {
         return getToolErrorResponse(
-          `Seller ${seller} has no split contract on factory ${factory}. ` +
+          `Seller ${seller} has no split contract on ${rail} (factory ${factory}). ` +
             'Run register_agent first — it deploys the clone. There is no address to link yet.',
         );
       }
@@ -103,20 +111,15 @@ export async function linkSplitContract(args: LinkSplitContractArgs): Promise<To
   }
 
   try {
-    const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-    const signerWallet = new ethers.Wallet(privateKey, provider);
-    const erc8004 = createERC8004Client({
-      provider,
-      signer: signerWallet,
-      chain: config.chain.chain,
-    });
+    const erc8004 = signingClient(privateKey, chainName);
+    const signerAddress = new ethers.Wallet(privateKey).address;
 
     // Fail before spending gas if the signer cannot write: the registry gates setMetadata on
     // ownership, and a revert here is far less legible than this message.
     const owner = await erc8004.identity.getOwner(agentId);
-    if (getAddress(owner) !== getAddress(signerWallet.address)) {
+    if (getAddress(owner) !== getAddress(signerAddress)) {
       return getToolErrorResponse(
-        `Signer ${signerWallet.address} does not own agent ${agentId} (owner is ${owner}). ` +
+        `Signer ${signerAddress} does not own agent ${agentId} (owner is ${owner}). ` +
           'Only the agent owner can link a split contract.',
       );
     }

@@ -127,17 +127,21 @@ A single SQLite file (`DB_PATH`, default `./data/store.db`) holds two tables:
 
 Copy `.env.example` → `.env` and fill in:
 
-| Variable                          | Purpose                                                            |
-| --------------------------------- | ------------------------------------------------------------------ |
-| `PORT`                            | HTTP listen port (default `3000`)                                  |
-| `NETWORK`                         | CAIP-2 network id, e.g. `eip155:84532`                             |
-| `FACILITATOR_URL`                 | x402 facilitator endpoint (default `https://x402.org/facilitator`) |
-| `PURCHASE_INTENT_DOMAIN_CONTRACT` | `verifyingContract` for the EIP-712 `PurchaseIntent` domain        |
-| `BEE_API_URL`                     | Bee node endpoint (default `http://localhost:1633`)                |
-| `POSTAGE_BATCH_ID`                | Postage stamp batch for ACT grant + state-feed writes              |
-| `CATALOG_FEED_OWNER`              | EOA address of the catalog feed signer (locates the catalog)       |
-| `ITEM_STATE_FEED_PK`              | Per-item state feed signer private key (hot key)                   |
-| `DB_PATH`                         | SQLite file path (default `./data/store.db`)                       |
+| Variable                          | Purpose                                                                                                               |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                            | HTTP listen port (default `3000`)                                                                                     |
+| `NETWORK`                         | Default rail, CAIP-2, e.g. `eip155:84532`                                                                             |
+| `FACILITATOR_URL`                 | x402 facilitator endpoint (default `https://x402.org/facilitator`)                                                    |
+| `FACILITATOR_URLS`                | Per-rail overrides, `<caip2>=<url>,...` (Celo: `https://api.x402.sepolia.celo.org`)                                   |
+| `FACILITATOR_API_KEYS`            | `<facilitator url>=<key>,...`, sent as `X-API-Key` (Celo gates `/settle` on it)                                       |
+| `RPC_URLS`                        | `<caip2>=<rpc>,...` for the token EIP-712 domain read; viem default otherwise                                         |
+| `SPLITTER_ADDRESSES`              | `<caip2>=<clone>,...`; a rail's advertised `payTo` must be its clone (legacy `SPLITTER_ADDRESS` = clone on `NETWORK`) |
+| `PURCHASE_INTENT_DOMAIN_CONTRACT` | `verifyingContract` for the EIP-712 `PurchaseIntent` domain                                                           |
+| `BEE_API_URL`                     | Bee node endpoint (default `http://localhost:1633`)                                                                   |
+| `POSTAGE_BATCH_ID`                | Postage stamp batch for ACT grant + state-feed writes                                                                 |
+| `CATALOG_FEED_OWNER`              | EOA address of the catalog feed signer (locates the catalog)                                                          |
+| `ITEM_STATE_FEED_PK`              | Per-item state feed signer private key (hot key)                                                                      |
+| `DB_PATH`                         | SQLite file path (default `./data/store.db`)                                                                          |
 
 ## Develop, run, test
 

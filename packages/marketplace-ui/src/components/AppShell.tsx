@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { config } from '../config/env';
 import { linkTo } from '../hooks/useRoute';
 import type { Route } from '../hooks/useRoute';
+import ChainSelect from './ChainSelect';
 import ConnectButton from './ConnectButton';
 import StatusPills from './StatusPills';
 import styles from './styles.module.css';
@@ -39,7 +40,8 @@ export default function AppShell({ route, subtitle, showStatus, children }: AppS
             <span className={styles.titleAccent}>Swarm AI</span> <span>Data Exchange</span>
           </h1>
           <div className={styles.subtitle}>
-            {subtitle} · {config.chain.name}
+            <span>{subtitle} ·</span>
+            <ChainSelect />
           </div>
         </div>
         <div className={styles.headerRight}>

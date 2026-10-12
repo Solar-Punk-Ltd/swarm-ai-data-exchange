@@ -7,16 +7,15 @@
  * catalog's items by traversing its Mantaray (mirrors the §13.2 reader list flow).
  */
 import { Bee, MantarayNode } from '@ethersphere/bee-js';
-import { ethers } from 'ethers';
-import { createERC8004Client, downloadAgentCard } from '@solarpunk/erc8004-adapter';
-import type { AgentCard } from '@solarpunk/erc8004-adapter';
+import { downloadAgentCard } from '@solarpunk/erc8004-adapter';
+import type { AgentCard, ERC8004Client } from '@solarpunk/erc8004-adapter';
+import { chainNameFor, erc8004ClientFor } from '../../agent-identity';
 import {
   readCatalogFeedRoot,
   CATALOG_MANIFEST_PATH,
   type Lifecycle,
   type PaymentRequirements,
 } from '@solarpunk/swarm-catalog';
-import config from '../../config';
 import {
   getErrorMessage,
   getResponseWithStructuredContent,
@@ -34,14 +33,6 @@ const ITEM_JSONLD_PATH_RE = /^\/?items\/([^/]+)\/item\.jsonld$/;
 const RPC_TIMEOUT_MS = 15_000;
 const CARD_TIMEOUT_MS = 15_000;
 const CATALOG_TIMEOUT_MS = 300_000;
-
-// chainId per supported chain key — used to pin the provider's network so ethers skips
-// the eth_chainId auto-detection round-trip on first call.
-const CHAIN_IDS: Record<string, number> = {
-  'base-sepolia': 84532,
-  base: 8453,
-  mainnet: 1,
-};
 
 function hasTarget(node: MantarayNode | null | undefined): node is MantarayNode {
   return !!node?.targetAddress && !node.targetAddress.every((b) => b === 0);
@@ -157,11 +148,14 @@ export async function getAgent(args: GetAgentArgs, bee: Bee): Promise<ToolRespon
     return getToolErrorResponse(`Invalid agentId: ${args.agentId} is not an integer.`);
   }
 
-  const chainId = CHAIN_IDS[config.chain.chain];
-  const provider = chainId
-    ? new ethers.JsonRpcProvider(config.chain.rpcUrl, chainId, { staticNetwork: true })
-    : new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const erc8004 = createERC8004Client({ provider, chain: config.chain.chain });
+  let chainName: string;
+  let erc8004: ERC8004Client;
+  try {
+    chainName = chainNameFor(args.chainId);
+    erc8004 = erc8004ClientFor(args.chainId);
+  } catch (err) {
+    return getToolErrorResponse(getErrorMessage(err));
+  }
 
   let agentURI: string;
   let card: AgentCard;
@@ -169,7 +163,7 @@ export async function getAgent(args: GetAgentArgs, bee: Bee): Promise<ToolRespon
     agentURI = await withTimeout(
       erc8004.identity.getAgentURI(agentIdBn),
       RPC_TIMEOUT_MS,
-      `RPC tokenURI(${args.agentId}) on ${config.chain.chain}`,
+      `RPC tokenURI(${args.agentId}) on ${chainName}`,
     );
     card = await withTimeout(
       downloadAgentCard(agentURI),

@@ -29,10 +29,12 @@ export type ClaimState =
   | 'expired'
   | 'failed';
 
-/** What the buyer's wallet was actually given. USDC on Base Sepolia — see the API's CLAUDE.md. */
+/** What the buyer's wallet was actually given: USDC on the claim's `network`. */
 export interface ClaimFunding {
   amount?: string | null;
   txHash?: string | null;
+  /** Explorer link for `txHash` on the claim's chain. Absent from older API versions. */
+  explorerUrl?: string | null;
 }
 
 export interface ClaimSeller {
@@ -128,6 +130,15 @@ export interface Claim {
   error: string | null;
   retry?: ClaimRetry | null;
   /**
+   * CAIP-2 network the buyer was created for, funded on and pays on (e.g. `eip155:11142220`).
+   * Absent from older API versions, which only know one chain — fall back to `config.chain`.
+   */
+  network?: string | null;
+  /** Display name of `network`, e.g. "Celo Sepolia". */
+  chainName?: string | null;
+  /** Explorer link for `txHash` (the settlement) on the claim's chain. */
+  settlementExplorerUrl?: string | null;
+  /**
    * `[state, iso]` pairs, one per transition. The page renders a cumulative checklist from this
    * rather than from `state` alone, so nothing is lost when two steps land between two polls.
    */
@@ -210,19 +221,26 @@ async function request<T>(url: string, init: RequestInit, signal?: AbortSignal):
 }
 
 /**
- * Ask for a buyer agent. Returns immediately with a claim in `provisioning` — the server does the
+ * Ask for a buyer agent on `network` (CAIP-2). Returns immediately with a claim in `provisioning` — the server does the
  * work in the background, so poll `getClaim` for progress.
  *
  * Idempotent per `sessionToken`: a refresh or a re-scan reattaches to the existing claim instead of
  * deploying a second funded agent.
  */
-export function createClaim(base: string, sessionToken: string, signal?: AbortSignal) {
+export function createClaim(
+  base: string,
+  sessionToken: string,
+  network: string,
+  signal?: AbortSignal,
+) {
   return request<Claim>(
     `${base}/devcon/agents`,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionToken }),
+      // `network` is the chain picked in the header dropdown (carried to the phone by the QR's
+      // `?chain=`): the buyer is created for it and funded with USDC on it.
+      body: JSON.stringify({ sessionToken, network }),
     },
     signal,
   );

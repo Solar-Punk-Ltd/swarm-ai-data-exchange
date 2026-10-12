@@ -4,7 +4,7 @@ description: >
   Use this skill whenever an agent or user wants to register a new ERC-8004 agent on-chain
   using the @solarpunk/erc8004-adapter CLI. Triggers include: any mention of "create-agent",
   "register agent", "mint agent NFT", "ERC-8004 registration", "agent card", "Swarm agent
-  registration", or requests to set up a new provider agent on Base Sepolia. Also trigger
+  registration", or requests to set up a new provider agent on Base Sepolia or Celo Sepolia. Also trigger
   when the user supplies agent metadata (name, description, x402 endpoint, catalog feed
   owner address, capabilities) and wants to register it on-chain. Use this skill proactively — if someone
   describes an agent they want to deploy, assume they want to run the full registration flow.
@@ -14,7 +14,7 @@ description: >
 
 Guides end-to-end agent registration via the `pnpm create-agent` command from
 `@solarpunk/erc8004-adapter`. The command: generates an Agent Card → uploads it to a
-Swarm feed → mints an ERC-8004 NFT on Base Sepolia — all in one shot.
+Swarm feed → mints an ERC-8004 NFT on the configured chain (`CHAIN`: Base Sepolia by default, or Celo Sepolia) — all in one shot.
 
 ---
 
@@ -90,7 +90,7 @@ pnpm --filter @solarpunk/erc8004-adapter create-agent \
 [1/4] Agent Card — builds AgentCard JSON from flags
 [2/4] Uploading to Swarm — uploads card to a Swarm feed; returns a feedUrl
          (immutable per-version bzz:// URL + mutable feed URL)
-[3/4] Registering on-chain — mints ERC-8004 NFT on Base Sepolia with feedUrl as URI
+[3/4] Registering on-chain — mints ERC-8004 NFT on the `CHAIN` registry with feedUrl as URI
 [4/4] Updating Agent Card — writes a registrations[] entry (agentId + CAIP-10
          agentRegistry) back into the card and re-uploads it to the same feed (overwrites)
 ```
@@ -99,8 +99,10 @@ If `BEE_FEED_PK` / `--feedPrivateKey` is absent, step 2 is **skipped** and a pla
 `bzz://` URI is registered instead. The agent is still minted; only the Swarm upload is skipped.
 
 Step 4 makes the persisted Agent Card the single source of truth for on-chain identity:
-`registrations` ends up as `[{ agentId, agentRegistry: "eip155:<chainId>:<contractAddress>" }]`,
-re-signed with the same feed key and written to the same topic.
+this chain's `{ agentId, agentRegistry: "eip155:<chainId>:<contractAddress>" }` is **merged** into
+`registrations[]` (any existing entry for the same registry is replaced, other chains' entries are
+kept), re-signed with the same feed key and written to the same topic. Running the tool once with
+`CHAIN=base-sepolia` and once with `CHAIN=celo-sepolia` therefore leaves one card naming both.
 
 ---
 
@@ -119,7 +121,7 @@ A successful run prints a JSON result block:
 | Field | What it is |
 |-------|-----------|
 | `agentId` | The NFT token ID. Use this for all reputation queries and metadata lookups. |
-| `txHash` | Base Sepolia transaction hash. Verify at `https://sepolia.basescan.org/tx/<txHash>` |
+| `txHash` | Transaction hash on the `CHAIN` network. Verify at `https://sepolia.basescan.org/tx/<txHash>` (Base Sepolia) or `https://celo-sepolia.blockscout.com/tx/<txHash>` (Celo Sepolia) |
 | `agentURI` | Swarm feed URL stored on-chain. Always resolves to the latest Agent Card version — never needs to change even after card updates. |
 
 Newly registered agents are browsable at [8004scan.io](https://8004scan.io).
@@ -157,7 +159,7 @@ pnpm create-agent \
 | `Error: missing required flag --description` | `--description` not supplied | Add `--description "…"` |
 | `No private key` / wallet error | Neither `--privateKey` nor `PRIVATE_KEY` set | Set the flag or env var |
 | Swarm upload skipped / placeholder URI | `BEE_FEED_PK` / `--feedPrivateKey` absent | Set `BEE_FEED_PK` or `--feedPrivateKey` |
-| `insufficient funds` | Wallet has no testnet ETH | Fund from [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia) |
+| `insufficient funds` | Wallet has no testnet ETH | Fund from the [Base Sepolia faucet](https://faucet.quicknode.com/base/sepolia), or the Celo Sepolia faucet for CELO |
 | Bee node unreachable | Bee not running or wrong URL | Start Bee or pass `--beeApiUrl` |
 | No usable postage stamp | Stamp missing or expired | Run `bee stamp buy --depth 20 --amount 100` or pass `--postageBatchId` |
 | Command hangs after "Sending transaction…" | Waiting for block confirmation | Normal — Base Sepolia can take up to ~30 s |
@@ -208,11 +210,16 @@ Once the agent is registered, suggest these follow-up actions based on context:
 
 ---
 
-## Deployed contract addresses (Base Sepolia)
+## Deployed contract addresses
 
-| Registry | Address |
-|----------|---------|
-| Identity Registry | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
-| Reputation Registry | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+The adapter selects the chain from the `CHAIN` env var (`base-sepolia` default, `celo-sepolia`,
+`celo`) with `RPC_URL` pointing at that chain. The Base Sepolia and Celo Sepolia registries share an
+address, so an agentId only means something together with its chain.
 
-Chain: Base Sepolia (testnet). Mainnet contracts are not yet configured.
+| Chain | Identity Registry | Reputation Registry |
+|-------|-------------------|---------------------|
+| Base Sepolia (`eip155:84532`) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| Celo Sepolia (`eip155:11142220`) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| Celo mainnet (`eip155:42220`) | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` |
+
+Base mainnet contracts are not yet configured.

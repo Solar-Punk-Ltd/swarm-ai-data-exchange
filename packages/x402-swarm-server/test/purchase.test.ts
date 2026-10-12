@@ -29,6 +29,8 @@ const CONFIG = {
   chainId: 84532,
   purchaseIntentDomainContract: '0xcontract',
   facilitatorUrl: 'https://fac.example',
+  facilitatorUrls: {},
+  splitterAddresses: {},
   postageBatchId: 'f'.repeat(64),
   itemStateFeedPk: '0xpk',
 };
@@ -85,8 +87,17 @@ function makeStore() {
   };
 }
 
+// The handler reads this node's ACT publisher key once for the ActGrantResult.
+const BEE = { getNodeAddresses: async () => ({ publicKey: { toHex: () => '0x04grantor' } }) };
+
+// `facilitatorFor` hands back the same mock for every URL; tests that care about routing wrap it.
 function deps(facilitator: unknown, store: unknown, configOverride?: Record<string, unknown>) {
-  return { bee: {}, store, facilitator, config: { ...CONFIG, ...configOverride } } as never;
+  return {
+    bee: BEE,
+    store,
+    facilitatorFor: () => facilitator,
+    config: { ...CONFIG, ...configOverride },
+  } as never;
 }
 
 beforeEach(() => {
@@ -126,6 +137,62 @@ describe('purchaseHandler — phase 1 (no X-Payment)', () => {
       chainId: 84532,
       verifyingContract: '0xcontract',
     });
+  });
+
+  it('advertises every rail with its own facilitator and EIP-712 chainId', async () => {
+    lookupItemMock.mockResolvedValue({
+      ...LOOKUP,
+      payments: [
+        ...LOOKUP.payments,
+        {
+          scheme: 'exact',
+          chainId: 'eip155:11142220',
+          asset: 'eip155:11142220/erc20:0xCeloUSDC',
+          amount: '5000000',
+          payTo: '0xCeloPayTo',
+          facilitator: 'https://api.x402.sepolia.celo.org',
+        },
+        {
+          scheme: 'exact',
+          chainId: 'eip155:8453',
+          asset: 'eip155:8453/erc20:0xUSDC',
+          amount: '5000000',
+          payTo: '0xBasePayTo',
+        },
+      ],
+    });
+    const { req, res } = fakeReqRes(undefined);
+    const handler = purchaseHandler(
+      deps({}, makeStore(), {
+        facilitatorUrls: { 'eip155:8453': 'https://base-override.example' },
+      }),
+    );
+
+    await handler(req as never, res as never);
+
+    expect(res.statusCode).toBe(402);
+    const body = res.body as {
+      accepts: Array<{
+        network: string;
+        payTo: string;
+        extra: { facilitator: string; purchaseIntentDomain: { chainId: number } };
+      }>;
+    };
+    expect(
+      body.accepts.map((a) => [
+        a.network,
+        a.payTo,
+        a.extra.facilitator,
+        a.extra.purchaseIntentDomain.chainId,
+      ]),
+    ).toEqual([
+      // No item facilitator, no override → the default.
+      ['eip155:84532', '0xPayTo', 'https://fac.example', 84532],
+      // The item's own facilitator wins.
+      ['eip155:11142220', '0xCeloPayTo', 'https://api.x402.sepolia.celo.org', 11142220],
+      // The per-rail override applies when the item names none.
+      ['eip155:8453', '0xBasePayTo', 'https://base-override.example', 8453],
+    ]);
   });
 });
 
@@ -176,6 +243,7 @@ describe('purchaseHandler — phase 2 (with X-Payment)', () => {
       ITEM,
       '0xtx',
       expect.any(String),
+      '0xPayTo',
     );
     const recordOrder = store.recordPurchase.mock.invocationCallOrder[0];
     const grantOrder = grantMock.mock.invocationCallOrder[0];
@@ -188,6 +256,67 @@ describe('purchaseHandler — phase 2 (with X-Payment)', () => {
       expect.objectContaining({ actHistoryRef: 'new-hist', granteeRef: 'new-grantee' }),
       'f'.repeat(64),
     );
+  });
+
+  it('routes a Celo-rail purchase to the facilitator the matched rail named', async () => {
+    wireVerifiedFlow();
+    verifyMock.mockResolvedValue({
+      consumerAddress: '0xconsumer',
+      matched: {
+        network: 'eip155:11142220',
+        asset: 'eip155:11142220/erc20:0xUSDC',
+        amount: '5000000',
+        payTo: '0xCeloPayTo',
+        facilitator: 'https://api.x402.sepolia.celo.org',
+      },
+    });
+    const store = makeStore();
+    const facilitator = {
+      verify: jest.fn().mockResolvedValue({ isValid: true }),
+      settle: jest.fn().mockResolvedValue({ success: true, transaction: '0xcelotx' }),
+    };
+    const facilitatorFor = jest.fn().mockReturnValue(facilitator);
+    const { req, res } = fakeReqRes('base64header');
+    const handler = purchaseHandler({
+      bee: BEE,
+      store,
+      facilitatorFor,
+      config: CONFIG,
+    } as never);
+
+    await handler(req as never, res as never);
+
+    expect(res.statusCode).toBe(200);
+    expect(facilitatorFor).toHaveBeenCalledWith('https://api.x402.sepolia.celo.org');
+    expect(store.recordPurchase).toHaveBeenCalledWith(
+      '0xconsumer',
+      ITEM,
+      '0xcelotx',
+      expect.any(String),
+      '0xCeloPayTo',
+    );
+  });
+
+  it('falls back to the per-rail facilitator override, then the default', async () => {
+    wireVerifiedFlow();
+    const store = makeStore();
+    const facilitator = {
+      verify: jest.fn().mockResolvedValue({ isValid: true }),
+      settle: jest.fn().mockResolvedValue({ success: true, transaction: '0xtx' }),
+    };
+    const facilitatorFor = jest.fn().mockReturnValue(facilitator);
+    const { req, res } = fakeReqRes('base64header');
+    const handler = purchaseHandler({
+      bee: BEE,
+      store,
+      facilitatorFor,
+      config: { ...CONFIG, facilitatorUrls: { 'eip155:84532': 'https://override.example' } },
+    } as never);
+
+    await handler(req as never, res as never);
+
+    expect(res.statusCode).toBe(200);
+    expect(facilitatorFor).toHaveBeenCalledWith('https://override.example');
   });
 
   it('returns payment_verify_failed and never settles when /verify rejects', async () => {

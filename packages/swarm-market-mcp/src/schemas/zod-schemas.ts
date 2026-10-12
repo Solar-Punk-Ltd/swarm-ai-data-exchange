@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+// A CAIP-2 EVM chain id, e.g. "eip155:11142220". Used for every per-chain tool argument.
+const caip2 = z
+  .string()
+  .regex(/^eip155:\d+$/, { message: 'Expected a CAIP-2 id such as eip155:11142220.' });
+
 // Deep field validation (id === storage.reference, required content fields, IRI checks)
 // is performed by SwarmCatalogBuilder.stageItem. These schemas validate shape only.
 
@@ -81,6 +86,7 @@ export const buildCatalogSchema = z.object({
 export const getAgentSchema = z.object({
   agentId: z.string().min(1, { message: 'Missing required parameter: agentId.' }),
   includeCatalog: z.boolean().optional(),
+  chainId: caip2.optional(),
 });
 
 export const deleteCatalogItemSchema = z.object({
@@ -112,6 +118,8 @@ export const registerAgentSchema = z.object({
   // Explicit start block for the fallback MetadataSet scan. Without it the adapter only looks
   // back RECENT_BLOCK_COUNT (~13 days on Base Sepolia).
   fromBlock: z.number().int().nonnegative().optional(),
+  // Per-chain start blocks for the fallback scan, keyed by CAIP-2. Wins over fromBlock.
+  fromBlocks: z.record(caip2, z.number().int().nonnegative()).optional(),
   // Report what would happen without sending a transaction or writing to Swarm.
   dryRun: z.boolean().optional(),
   // Identity-only registration: skip the splitter and the link.
@@ -124,6 +132,7 @@ export const findAgentsByMetadataSchema = z
     metadataKey: z.string().min(1).optional(),
     metadataValue: z.string().optional(),
     fromBlock: z.number().int().nonnegative().optional(),
+    chainId: caip2.optional(),
   })
   .refine((v) => Boolean(v.catalogFeedOwner || v.metadataKey), {
     message: 'Provide either catalogFeedOwner or metadataKey.',
@@ -131,16 +140,22 @@ export const findAgentsByMetadataSchema = z
 
 export const getSplitContractSchema = z.object({
   seller: z.string().optional(),
+  chainId: caip2.optional(),
 });
 
 export const linkSplitContractSchema = z.object({
   agentId: z.string().min(1, { message: 'Missing required parameter: agentId.' }),
   splitter: z.string().optional(),
   seller: z.string().optional(),
+  chainId: caip2.optional(),
 });
 
 export const purchaseCatalogItemSchema = z.object({
   itemId: z.string().min(1, { message: 'Missing required parameter: itemId.' }),
   x402Endpoint: z.string().optional(),
   granteePublicKey: z.string().optional(),
+  network: z
+    .string()
+    .regex(/^eip155:\d+$/, { message: 'network must be a CAIP-2 id such as eip155:11142220.' })
+    .optional(),
 });

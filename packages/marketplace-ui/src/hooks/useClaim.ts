@@ -107,6 +107,8 @@ export interface ClaimResult {
 
 export default function useClaim(): ClaimResult {
   const base = config.devconApiUrl;
+  // The chain selected in the header dropdown — the QR code carries it to the phone as `?chain=`.
+  const network = `eip155:${config.chain.id}`;
   // Resolved once per mount, not per render: sessionToken() writes to localStorage on first use.
   const [token] = useState(sessionToken);
   const [claim, setClaim] = useState<Claim>();
@@ -204,7 +206,7 @@ export default function useClaim(): ClaimResult {
       try {
         // Safe to call twice: the server is idempotent per session token, which is what makes
         // React 18 StrictMode's double mount in dev harmless here.
-        const first = await createClaim(base, token, controller.signal);
+        const first = await createClaim(base, token, network, controller.signal);
         if (stopped) return;
         if (purchased(first)) purchasedRef.current = true;
         setClaim(keepItem(first));
@@ -241,7 +243,7 @@ export default function useClaim(): ClaimResult {
       if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [base, attempt, token]);
+  }, [base, attempt, token, network]);
 
   // Give the agent back on close. Registered once, and deliberately NOT in the effect above:
   // unmount also fires on an in-app route change and under StrictMode's double mount, and

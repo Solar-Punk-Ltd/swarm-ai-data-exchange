@@ -46,4 +46,5 @@ export const SWARM_AGENT_ID = 'swarm_agent_id';
  */
 export const AGENT_SPLITTER = 'agent_splitter';
 
+// ~13 days on Base Sepolia (2s blocks). Celo has 1s blocks, so the same count is ~6 days there.
 export const RECENT_BLOCK_COUNT = 550000;

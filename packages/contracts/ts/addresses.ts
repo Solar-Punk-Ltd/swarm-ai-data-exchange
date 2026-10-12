@@ -11,9 +11,12 @@ export interface SplitterDeployment {
   chainId: number;
 }
 
+// `factory` / `implementation` are filled from `deployments/<name>.json` after `Deploy.s.sol` runs.
 export const SPLITTER_DEPLOYMENTS: Record<string, SplitterDeployment> = {
   'base-sepolia': { factory: '', implementation: '', chainId: 84532 },
   base: { factory: '', implementation: '', chainId: 8453 },
+  'celo-sepolia': { factory: '', implementation: '', chainId: 11142220 },
+  celo: { factory: '', implementation: '', chainId: 42220 },
 };
 
 /** CAIP-2 ("eip155:84532") → the chain key used by SPLITTER_DEPLOYMENTS. */

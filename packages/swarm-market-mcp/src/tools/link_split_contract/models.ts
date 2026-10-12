@@ -5,6 +5,8 @@ export interface LinkSplitContractArgs {
   splitter?: string;
   // Seller whose clone to resolve when splitter is omitted. Defaults to AGENT_PAYMENT_ADDRESS.
   seller?: string;
+  // CAIP-2 chain to read (e.g. "eip155:11142220"). Defaults to the primary ERC8004_CHAIN.
+  chainId?: string;
 }
 
 export interface LinkSplitContractResult {

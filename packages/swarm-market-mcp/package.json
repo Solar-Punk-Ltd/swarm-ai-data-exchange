@@ -13,7 +13,8 @@
     "serve": "ts-node src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test": "jest --passWithNoTests"
   },
   "license": "ISC",
   "dependencies": {
@@ -31,6 +32,9 @@
     "@types/node": "^22.10.0",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@types/jest": "^29.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0"
   }
 }

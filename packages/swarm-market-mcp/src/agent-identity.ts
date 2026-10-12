@@ -42,12 +42,15 @@ import {
   agentCardFeedUrl,
   createERC8004Client,
   generateAgentCard,
+  normaliseRegistrations,
   parseAgentCard,
   serializeAgentCard,
   uploadAgentCard,
 } from '@solarpunk/erc8004-adapter';
-import type { AgentCard, ERC8004Client } from '@solarpunk/erc8004-adapter';
+import type { AgentCard, AgentRegistration, ERC8004Client } from '@solarpunk/erc8004-adapter';
+import { CHAIN_CAIP2, chainIdFromCaip2, chainNameForCaip2 } from './chains';
 import config from './config';
+import { rpcUrlForChainName } from './rpc';
 import { getErrorMessage, withTimeout } from './utils';
 import {
   CARD_FETCH_TIMEOUT_MS,
@@ -103,11 +106,77 @@ export function identityContext(catalogFeedOwnerOverride?: string): IdentityCont
   };
 }
 
-/** An ethers-backed ERC-8004 client with a signer attached (writes enabled). */
-export function writeClient(ctx: IdentityContext): ERC8004Client {
-  const provider = new ethers.JsonRpcProvider(config.chain.rpcUrl);
-  const signer = new ethers.Wallet(ctx.privateKey, provider);
-  return createERC8004Client({ provider, signer, chain: config.chain.chain });
+// Pinning the network skips ethers' eth_chainId probe on first call, and makes a misconfigured
+// RPC (pointing at the wrong chain) fail loudly instead of silently reading another registry.
+function providerFor(chainName: string): ethers.JsonRpcProvider {
+  const url = rpcUrlForChainName(chainName);
+  const caip2 = CHAIN_CAIP2[chainName];
+  return caip2
+    ? new ethers.JsonRpcProvider(url, chainIdFromCaip2(caip2), { staticNetwork: true })
+    : new ethers.JsonRpcProvider(url);
+}
+
+/** Read-only ERC-8004 client on one chain (adapter spelling), the primary by default. */
+export function readClient(chainName: string = config.chain.chain): ERC8004Client {
+  return createERC8004Client({ provider: providerFor(chainName), chain: chainName });
+}
+
+/** ERC-8004 client with `privateKey` as signer on one chain, the primary by default. */
+export function signingClient(
+  privateKey: string,
+  chainName: string = config.chain.chain,
+): ERC8004Client {
+  const provider = providerFor(chainName);
+  const signer = new ethers.Wallet(privateKey, provider);
+  return createERC8004Client({ provider, signer, chain: chainName });
+}
+
+/** An ethers-backed ERC-8004 client with the PRIVATE_KEY signer attached (writes enabled). */
+export function writeClient(
+  ctx: IdentityContext,
+  chainName: string = config.chain.chain,
+): ERC8004Client {
+  return signingClient(ctx.privateKey, chainName);
+}
+
+/**
+ * The adapter chain name for a tool's optional `chainId` (CAIP-2) argument. Undefined means the
+ * primary chain. Throws a readable error for a chain the adapter does not know.
+ */
+export function chainNameFor(caip2?: string): string {
+  if (!caip2) return config.chain.chain;
+  const name = chainNameForCaip2(caip2);
+  if (!name) {
+    throw new Error(
+      `Unsupported chainId ${caip2}. Expected one of ${Object.values(CHAIN_CAIP2).join(', ')}.`,
+    );
+  }
+  return name;
+}
+
+/** Read-only client for a tool's optional `chainId` argument. */
+export function erc8004ClientFor(caip2?: string): ERC8004Client {
+  return readClient(chainNameFor(caip2));
+}
+
+/** CAIP-10 id of the registry a client talks to: `eip155:<chainId>:<registry>`. */
+export function registryId(erc8004: ERC8004Client): string {
+  return `eip155:${erc8004.identity.networkChainId}:${erc8004.identity.contractAddress}`;
+}
+
+/**
+ * Whether a card's registration entry belongs to this client's registry.
+ *
+ * The Base and Celo registries live at the same address, so agentId numbers collide across
+ * chains and only `agentRegistry` tells two entries apart. An entry without `agentRegistry`
+ * predates multi-chain cards; it can only have come from the primary chain.
+ */
+export function isOwnRegistration(erc8004: ERC8004Client, entry: AgentRegistration): boolean {
+  if (!entry.agentRegistry) {
+    const primary = CHAIN_CAIP2[config.chain.chain];
+    return Boolean(primary) && String(erc8004.identity.networkChainId) === primary.split(':')[1];
+  }
+  return entry.agentRegistry.toLowerCase() === registryId(erc8004).toLowerCase();
 }
 
 export interface BuildCardParams {
@@ -150,9 +219,16 @@ export function buildAgentCard(params: BuildCardParams): AgentCard {
   });
 }
 
-/** Content equality, ignoring key order irrelevance — both sides go through one serializer. */
+/**
+ * Content equality. Both sides go through one serializer, with `registrations[]` in canonical
+ * order: several chains write to the same card, and the order they wrote in is not content.
+ */
 export function cardsEqual(a: AgentCard, b: AgentCard): boolean {
-  return serializeAgentCard(a) === serializeAgentCard(b);
+  const canonical = (c: AgentCard): AgentCard => ({
+    ...c,
+    registrations: normaliseRegistrations(c.registrations),
+  });
+  return serializeAgentCard(canonical(a)) === serializeAgentCard(canonical(b));
 }
 
 export async function publishAgentCard(
@@ -304,8 +380,11 @@ export async function classifyCandidate(
     };
   }
 
-  // Ours, proven. The card back-reference now only decides reuse vs. repair.
-  const named = (card?.registrations ?? []).some((r) => r.agentId?.toString() === id);
+  // Ours, proven. The card back-reference now only decides reuse vs. repair. It must name this
+  // agentId ON THIS REGISTRY: the same number on another chain is a different token.
+  const named = (card?.registrations ?? []).some(
+    (r) => r.agentId?.toString() === id && isOwnRegistration(erc8004, r),
+  );
   if (named) return { ...base, agentURI, verdict: 'verified' };
 
   return {
@@ -339,10 +418,14 @@ export async function discoverCandidates(
 ): Promise<DiscoveryResult> {
   const { card, error: cardError } = await fetchAgentCard(ctx);
   const candidates: Candidate[] = [];
+  // Agent ids already classified, on THIS registry only. Other registries' entries are never
+  // classified here: their agentId means nothing on this chain, and classifying one against
+  // this registry could hit an unrelated token and read it as "owned by someone else".
   const seen = new Set<string>();
 
   for (const reg of card?.registrations ?? []) {
     if (reg.agentId === undefined || reg.agentId === null) continue;
+    if (!isOwnRegistration(erc8004, reg)) continue;
     const id = reg.agentId.toString();
     if (seen.has(id)) continue;
     seen.add(id);
@@ -419,11 +502,8 @@ export async function mintAgent(erc8004: ERC8004Client, ctx: IdentityContext): P
 }
 
 /** The registrations[] entry naming `agentId` on this registry. */
-export function registrationEntry(erc8004: ERC8004Client, agentId: bigint) {
-  return {
-    agentId,
-    agentRegistry: `eip155:${erc8004.identity.networkChainId}:${erc8004.identity.contractAddress}`,
-  };
+export function registrationEntry(erc8004: ERC8004Client, agentId: bigint): AgentRegistration {
+  return { agentId, agentRegistry: registryId(erc8004) };
 }
 
 /**

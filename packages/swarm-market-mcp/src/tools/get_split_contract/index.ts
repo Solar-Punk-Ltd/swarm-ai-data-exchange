@@ -15,13 +15,21 @@ import {
   getToolErrorResponse,
 } from '../../utils';
 import type { ToolResponse } from '../../utils';
-import { factoryAddress, readSplitter, sellerAddress } from '../../splitter';
+import { factoryAddress, identityRail, readSplitter, sellerAddress } from '../../splitter';
 import { GetSplitContractArgs } from './models';
 
 export async function getSplitContract(args: GetSplitContractArgs): Promise<ToolResponse> {
-  const factory = factoryAddress();
+  let rail: string;
+  try {
+    rail = args.chainId ?? identityRail();
+  } catch (err) {
+    return getToolErrorResponse(getErrorMessage(err));
+  }
+  const factory = factoryAddress(rail);
   if (!factory) {
-    return getToolErrorResponse('Splitter is not configured. Set SPLITTER_FACTORY_ADDRESS.');
+    return getToolErrorResponse(
+      `Splitter is not configured for ${rail}. Set SPLITTER_FACTORY_ADDRESSES.`,
+    );
   }
 
   let seller = sellerAddress();
@@ -39,7 +47,7 @@ export async function getSplitContract(args: GetSplitContractArgs): Promise<Tool
   }
 
   try {
-    const result = await readSplitter({ factory, seller });
+    const result = await readSplitter({ factory, seller, chainId: rail });
     return getResponseWithStructuredContent({
       ...result,
       note: result.deployed

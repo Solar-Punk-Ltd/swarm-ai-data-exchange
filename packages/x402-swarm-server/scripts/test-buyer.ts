@@ -8,7 +8,7 @@ import {
 import { registerExactEvmScheme } from '@x402/evm/exact/client';
 import { createPublicClient, http, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { baseSepolia } from 'viem/chains';
+import { chainForCaip2 } from '../src/facilitator.js';
 import { secp256k1 } from '@noble/curves/secp256k1';
 
 async function main() {
@@ -48,10 +48,10 @@ async function main() {
 
   const client = new x402Client();
 
-  const publicClient = createPublicClient({
-    chain: baseSepolia,
-    transport: http(),
-  });
+  // The token's EIP-712 domain must be read on the chain of the requirement being paid (Base
+  // Sepolia, Celo Sepolia, ...), so the client is built per requirement, not once up front.
+  const publicClientFor = (network: string) =>
+    createPublicClient({ chain: chainForCaip2(network), transport: http() });
 
   registerExactEvmScheme(client, { signer });
 
@@ -82,6 +82,7 @@ async function main() {
     const req = context.selectedRequirements as ExtendedRequirements;
     if (req.network?.startsWith('eip155:') && (!req.extra?.name || !req.extra?.version)) {
       try {
+        const publicClient = publicClientFor(req.network);
         const [name, version] = await Promise.all([
           publicClient.readContract({
             address: req.asset as Address,

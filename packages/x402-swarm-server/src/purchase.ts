@@ -5,7 +5,7 @@ import {
   type ActGrantResult,
   type CatalogItemState,
 } from '@solarpunk/swarm-catalog';
-import { parseChainId, type ServerConfig } from './config.js';
+import { facilitatorUrlFor, parseChainId, type ServerConfig } from './config.js';
 import { PurchaseError, sendError } from './errors.js';
 import { lookupItem, type CatalogLookup } from './catalog.js';
 import { decodeXPayment, verifyPurchaseIntent } from './intent.js';
@@ -64,7 +64,10 @@ async function persistStateWithRetry(
 interface Deps {
   bee: Bee;
   store: Store;
-  facilitator: FacilitatorClient;
+  // The client for a given facilitator base URL. Resolved per purchase because each rail may
+  // settle through a different facilitator (a catalog item's `payment[].facilitator`, else the
+  // per-rail override, else the default).
+  facilitatorFor: (url: string) => FacilitatorClient;
   config: ServerConfig;
 }
 
@@ -97,7 +100,7 @@ function buildChallenge(lookup: CatalogLookup, resource: string, config: ServerC
       mimeType: 'application/json',
       maxTimeoutSeconds: 600,
       extra: {
-        facilitator: p.facilitator ?? config.facilitatorUrl,
+        facilitator: p.facilitator ?? facilitatorUrlFor(config, p.chainId),
         purchaseIntentVersion: '1',
         purchaseIntentDomain: {
           name: DOMAIN_NAME,
@@ -112,7 +115,7 @@ function buildChallenge(lookup: CatalogLookup, resource: string, config: ServerC
 
 // POST /v1/items/:itemId/purchase — three-phase flow (§10.1) with the 12-step verification (§11.5).
 export function purchaseHandler(deps: Deps) {
-  const { bee, store, facilitator, config } = deps;
+  const { bee, store, facilitatorFor, config } = deps;
 
   return async (req: Request, res: Response): Promise<void> => {
     const itemId = req.params.itemId;
@@ -138,13 +141,17 @@ export function purchaseHandler(deps: Deps) {
       const envelope = decodeXPayment(xPayment);
       const { consumerAddress, matched } = await verifyPurchaseIntent(envelope, {
         pathItemId: itemId,
-        chainId: config.chainId,
         domainContract: config.purchaseIntentDomainContract,
         itemPayments: lookup.payments,
         isNonceUsed: (n) => store.isNonceUsed(n),
         now: Math.floor(Date.now() / 1000),
-        expectedPayTo: config.splitterAddress,
+        expectedPayToByChain: config.splitterAddresses,
       });
+
+      // The facilitator for the matched rail — the same one the 402 challenge advertised.
+      const facilitator = facilitatorFor(
+        matched.facilitator ?? facilitatorUrlFor(config, matched.network),
+      );
 
       // Step 8: Facilitator /verify.
       const verifyResult = await facilitator.verify(envelope, matched, resource);

@@ -31,8 +31,12 @@ import {
   generateAgentCard,
   serializeAgentCard,
   config,
+  agentCardFeedUrl,
+  downloadAgentCard,
   uploadAgentCard,
+  upsertRegistration,
 } from '../../src';
+import type { AgentRegistration } from '../../src';
 import { AGENT_CARD_TOPIC, SWARM_AI_CAPABLE } from '../../src/constants';
 import {
   name,
@@ -74,6 +78,17 @@ async function main() {
 
   console.log('\n[2/3] Uploading to Swarm…');
 
+  // One card is shared by every registry this agent is minted on, so carry forward whatever
+  // registrations the feed already holds (e.g. a Base entry when now registering on Celo).
+  // Read BEFORE the upload below, which would otherwise replace them.
+  let existing: AgentRegistration[] = [];
+  try {
+    existing = (await downloadAgentCard(agentCardFeedUrl(feedPk))).registrations ?? [];
+  } catch {
+    // No prior card (or the gateway has not caught up): nothing to preserve.
+  }
+  if (existing.length > 0) card.registrations = existing;
+
   const { feedUrl: agentURI } = await uploadAgentCard(
     card,
     AGENT_CARD_TOPIC,
@@ -100,14 +115,16 @@ async function main() {
 
   console.log('\n[4/4] Updating Agent Card with registration…');
 
-  card.registrations = [
+  // Merge this registration in rather than overwriting, so the other chains' entries survive.
+  const merged = upsertRegistration(
+    { ...card, registrations: existing },
     {
       agentId,
       agentRegistry: `eip155:${erc8004.identity.networkChainId}:${erc8004.identity.contractAddress}`,
     },
-  ];
+  );
 
-  await uploadAgentCard(card, AGENT_CARD_TOPIC, beeApiUrl, batchId, feedPk);
+  await uploadAgentCard(merged, AGENT_CARD_TOPIC, beeApiUrl, batchId, feedPk);
 
   // ── Result ─────────────────────────────────────────────────────────────────
 

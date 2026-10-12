@@ -1,9 +1,11 @@
-import { base, baseSepolia } from 'viem/chains';
+import { base, baseSepolia, celo, celoSepolia } from 'viem/chains';
 import type { Chain } from 'viem';
 
 const CHAINS: Record<number, Chain> = {
   [baseSepolia.id]: baseSepolia,
   [base.id]: base,
+  [celoSepolia.id]: celoSepolia,
+  [celo.id]: celo,
 };
 
 export function chainById(chainId: number): Chain | undefined {

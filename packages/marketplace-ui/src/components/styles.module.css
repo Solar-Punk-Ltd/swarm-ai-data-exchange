@@ -31,6 +31,41 @@
 .subtitle {
   font-size: 13px;
   color: var(--mp-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+/* The chain dropdown in the header subtitle. Styled as a pill, not a form field. */
+.select {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0.18rem 1.4rem 0.18rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--mp-border-strong);
+  background: var(--mp-surface-raised);
+  color: var(--mp-text);
+  cursor: pointer;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--mp-text-muted) 50%),
+    linear-gradient(135deg, var(--mp-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.85rem) 55%,
+    calc(100% - 0.6rem) 55%;
+  background-size:
+    0.25rem 0.25rem,
+    0.25rem 0.25rem;
+  background-repeat: no-repeat;
+}
+.select:focus-visible {
+  outline: 2px solid var(--mp-accent);
+  outline-offset: 1px;
+}
+.chainLabel {
+  font-weight: 600;
+  color: var(--mp-text);
 }
 
 .headerRight {

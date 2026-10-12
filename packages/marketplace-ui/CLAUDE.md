@@ -615,7 +615,7 @@ wallet — see _Who pays for gas_ above.
 confirmed | failed`. Never leave the button in an indeterminate state — this is a presentation
    surface and a silently hanging button is the worst failure mode.
 4. On confirmation, force an immediate balance refresh instead of waiting for the next tick.
-5. Chain mismatch is a first-class state: if the wallet is not on `VITE_CHAIN_ID`, show a "Switch
+5. Chain mismatch is a first-class state: if the wallet is not on the selected chain, show a "Switch
    network" action (`wallet_switchEthereumChain`) rather than letting the send fail.
 
 ### Distribute All (batch)
@@ -686,23 +686,45 @@ splitter row filters on it (native entries are dropped entirely).
 All are Vite build-time vars and **must** carry the `VITE_` prefix — Vite exposes nothing else to
 the browser. All values here are public; there is no secret in this package.
 
-| Variable                            | Required | Default                    | Purpose                                                         |
-| ----------------------------------- | -------- | -------------------------- | --------------------------------------------------------------- |
-| `VITE_TREASURY_ADDRESS`             | yes      | —                          | Marketplace treasury shown in the Treasury section              |
-| `VITE_SPLITTER_FACTORY_ADDRESS`     | yes      | —                          | `SplitterFactory` to enumerate                                  |
-| `VITE_CHAIN_ID`                     | no       | `84532`                    | Base Sepolia. Selects the viem chain and the currency config    |
-| `VITE_RPC_URL`                      | no       | `https://sepolia.base.org` | **Required in practice** — the public node rate-limits          |
-| `VITE_REFRESH_INTERVAL_MS`          | no       | `5000`                     | Balance poll interval                                           |
-| `VITE_IDENTITY_REGISTRY_ADDRESS`    | no       | known per chain            | ERC-8004 registry, for labelling rows with their agent          |
-| `VITE_IDENTITY_REGISTRY_FROM_BLOCK` | no       | registry deploy block      | Start of the `agent_splitter` log sweep                         |
-| `VITE_LOG_CHUNK_BLOCKS`             | no       | `500000`                   | Blocks per `eth_getLogs` call; lower it if the index is partial |
-| `VITE_SHOW_DEMO_FLOW`               | no       | `false`                    | Enables `/devcon` and `/claim-wallet`. `"true"`/`"false"` only  |
-| `VITE_DEMO_FLOW_BASE_URL`           | no       | `window.location.origin`   | Base URL the demo QR encodes; only read when the flag is on     |
-| `VITE_DEVCON_API_URL`               | no       | —                          | `agent-orchestration-api` base URL for `/claim-wallet`          |
+| Variable                            | Required | Default                  | Purpose                                                         |
+| ----------------------------------- | -------- | ------------------------ | --------------------------------------------------------------- |
+| `VITE_CHAIN_IDS`                    | no       | `VITE_CHAIN_ID`          | Chains offered in the header dropdown, comma-separated          |
+| `VITE_CHAIN_ID`                     | no       | `84532`                  | Default chain on a first visit. Must be in `VITE_CHAIN_IDS`     |
+| `VITE_TREASURY_ADDRESS`             | yes      | —                        | Marketplace treasury shown in the Treasury section              |
+| `VITE_SPLITTER_FACTORY_ADDRESS`     | yes      | —                        | `SplitterFactory` to enumerate                                  |
+| `VITE_RPC_URL`                      | no       | per chain                | **Required in practice** — public nodes rate-limit              |
+| `VITE_REFRESH_INTERVAL_MS`          | no       | `5000`                   | Balance poll interval                                           |
+| `VITE_IDENTITY_REGISTRY_ADDRESS`    | no       | known per chain          | ERC-8004 registry, for labelling rows with their agent          |
+| `VITE_IDENTITY_REGISTRY_FROM_BLOCK` | no       | registry deploy block    | Start of the `agent_splitter` log sweep                         |
+| `VITE_LOG_CHUNK_BLOCKS`             | no       | `500000`                 | Blocks per `eth_getLogs` call; lower it if the index is partial |
+| `VITE_SHOW_DEMO_FLOW`               | no       | `false`                  | Enables `/devcon` and `/claim-wallet`. `"true"`/`"false"` only  |
+| `VITE_DEMO_FLOW_BASE_URL`           | no       | `window.location.origin` | Base URL the demo QR encodes; only read when the flag is on     |
+| `VITE_DEVCON_API_URL`               | no       | —                        | `agent-orchestration-api` base URL for `/claim-wallet`          |
 
 `VITE_RPC_URL` is not in the original spec for this dashboard but is not optional in reality:
 `VITE_CHAIN_ID` selects a chain, it does not provide a transport. Mirror the wording of
 `erc8004-dashboard/.env.example`, which already documents the rate-limit failure mode.
+
+### Several chains, one build
+
+`VITE_CHAIN_IDS` lists every chain the header dropdown (`ChainSelect.tsx`) offers. Each
+chain-specific var — treasury, factory, RPC, registry address and from-block — is read as
+`VITE_<NAME>_<chainId>`; the unsuffixed form stands in **for the default chain only**, so a
+single-chain `.env` keeps working and the default chain's factory can never silently serve a chain
+that has none. All listed chains are validated at boot; `config` then describes the one the viewer
+selected: `?chain=<id>` in the URL, then `localStorage['marketplace.chainId']`, then
+`VITE_CHAIN_ID`. An unknown selection falls back rather than failing — a stale link must not blank
+the dashboard.
+
+**Switching reloads the page.** `config` is a module singleton read at import by every component
+and both contexts, and `MarketplaceProvider` memoises its viem client on it; a live swap would
+mean threading a context through all of them for a sub-second saving. `ChainSelect` writes the
+choice to the URL and localStorage first, then reloads. `href()` carries `?chain=` across in-app
+navigation so a copied link opens the same chain.
+
+`WalletContext.switchChain` adds the chain to the wallet (`wallet_addEthereumChain`, from the viem
+definition and the dashboard's own RPC) when the switch comes back with code 4902 — Celo Sepolia is
+preinstalled nowhere.
 
 Validate all of it once at startup in `src/config/env.ts` and fail loudly with a readable message.
 A dashboard that renders empty because `VITE_TREASURY_ADDRESS` was unset is worse than one that
@@ -816,7 +838,8 @@ src/
   theme.ts                  — colour tokens + applyTheme() (see Theme above)
   index.css                 — reset + body, matching erc8004-dashboard/src/index.css
   config/
-    env.ts                  — parse + validate import.meta.env; exports `config` or `configError`
+    env.ts                  — parse + validate import.meta.env for every VITE_CHAIN_IDS chain;
+                              exports `config` (the selected chain) or `configError`
     currencies.ts           — CURRENCIES by chain id, plus the erc20Currencies() filter
     registry.ts             — ERC-8004 Identity Registry address + deploy block per chain
     chain.ts                — viem chain object + explorer address/tx URL builders
@@ -842,6 +865,7 @@ src/
   components/
     styles.module.css       — shared CSS module for every component
     AppShell.tsx            — header, nav and page container; wraps both views
+    ChainSelect.tsx         — header chain dropdown; writes the choice and reloads
     StatusPills.tsx         — live/stale/loading pill in the header
     StaleBanner.tsx         — last-tick-failed notice; used by both views
     MapPage.tsx             — Map of Agents: period filter, memo gate, live node objects

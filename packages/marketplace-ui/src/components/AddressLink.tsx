@@ -67,11 +67,24 @@ export interface AddressLinkProps {
    * address read as the same kind of thing wherever they sit next to each other.
    */
   kind?: 'address' | 'tx';
+  /**
+   * Explorer URL to open instead of the one derived from the configured chain. Set when the
+   * value lives on a chain other than the one this build is showing — e.g. a claim settled on
+   * the chain the orchestration API reports.
+   */
+  explorerHref?: string;
 }
 
-export default function AddressLink({ address, label, kind = 'address' }: AddressLinkProps) {
+export default function AddressLink({
+  address,
+  label,
+  kind = 'address',
+  explorerHref,
+}: AddressLinkProps) {
   const [copied, setCopied] = useState(false);
-  const href = kind === 'tx' ? txUrl(config.chain, address) : addressUrl(config.chain, address);
+  const href =
+    explorerHref ??
+    (kind === 'tx' ? txUrl(config.chain, address) : addressUrl(config.chain, address));
   const noun = kind === 'tx' ? 'transaction' : 'address';
 
   const copy = useCallback(() => {

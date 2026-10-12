@@ -1,6 +1,6 @@
 import { Bee } from '@ethersphere/bee-js';
 import { ethers } from 'ethers';
-import type { AgentCard, AgentCardParams, SwarmUploadResult } from './types';
+import type { AgentCard, AgentCardParams, AgentRegistration, SwarmUploadResult } from './types';
 import {
   AGENT_CARD_TOPIC,
   AGENT_CARD_TYPE,
@@ -28,6 +28,43 @@ export function generateAgentCard(params: AgentCardParams): AgentCard {
 
 // Alias matching the name used in ERC-8004.md examples
 export const generateRegistrationFile = generateAgentCard;
+
+const registryKey = (r: AgentRegistration): string => (r.agentRegistry ?? '').toLowerCase();
+
+/**
+ * `registrations[]` in a canonical order: by CAIP-10 registry (case-insensitive), then agentId.
+ *
+ * One Agent Card is shared by every registry an agent is minted on (one tokenURI, many chains),
+ * so writers on different chains each touch the same list. A fixed order means two writers that
+ * agree on the content also agree byte-for-byte, and a drift check never flip-flops on order.
+ */
+export function normaliseRegistrations(
+  registrations: AgentRegistration[] | undefined,
+): AgentRegistration[] | undefined {
+  if (!registrations) return registrations;
+  return [...registrations].sort((a, b) => {
+    const ka = registryKey(a);
+    const kb = registryKey(b);
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    const ia = BigInt(a.agentId);
+    const ib = BigInt(b.agentId);
+    return ia === ib ? 0 : ia < ib ? -1 : 1;
+  });
+}
+
+/**
+ * Put `entry` into the card's `registrations[]`, replacing any entry for the same registry and
+ * keeping every other registry's entry. Returns a new card; the input is not mutated.
+ *
+ * Keyed by `agentRegistry` (CAIP-10, `eip155:<chainId>:<registry>`), never by agentId alone:
+ * the same registry contract can be deployed at the same address on several chains, so agentId
+ * numbers collide across chains and only the pair identifies a registration.
+ */
+export function upsertRegistration(card: AgentCard, entry: AgentRegistration): AgentCard {
+  const key = registryKey(entry);
+  const others = (card.registrations ?? []).filter((r) => registryKey(r) !== key);
+  return { ...card, registrations: normaliseRegistrations([...others, entry]) };
+}
 
 export function serializeAgentCard(card: AgentCard): string {
   return JSON.stringify(card, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2);

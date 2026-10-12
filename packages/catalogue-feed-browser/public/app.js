@@ -61,10 +61,50 @@ function shortAsset(caip19) {
   return tail.replace(/(0x[0-9a-fA-F]{4})[0-9a-fA-F]+([0-9a-fA-F]{4})/, '$1…$2');
 }
 
+// CAIP-2 chain id to display name, for labelling payment rails.
+const CHAIN_NAMES = {
+  'eip155:84532': 'Base Sepolia',
+  'eip155:8453': 'Base',
+  'eip155:11142220': 'Celo Sepolia',
+  'eip155:42220': 'Celo',
+};
+
+function chainName(caip2) {
+  return CHAIN_NAMES[caip2] || caip2 || 'unknown chain';
+}
+
+// The rail a payment entry settles on: its chainId, else the CAIP-2 prefix of its CAIP-19 asset.
+function railOf(p) {
+  if (p.chainId) return p.chainId;
+  const asset = p.asset || '';
+  const slash = asset.indexOf('/');
+  return slash === -1 ? '' : asset.slice(0, slash);
+}
+
 function formatPrice(payment) {
   if (!Array.isArray(payment) || payment.length === 0) return 'free';
   const p = payment[0];
-  return `${escHtml(p.amount)} ${escHtml(shortAsset(p.asset))}`;
+  const rails = payment.length > 1 ? ` · ${payment.length} chains` : ` · ${chainName(railOf(p))}`;
+  return `${escHtml(p.amount)} ${escHtml(shortAsset(p.asset))}${escHtml(rails)}`;
+}
+
+// One Buy button per payment rail, labelled by chain, so the buyer chooses where to pay.
+function renderBuyButtons(item, stored) {
+  if (stored) {
+    return '<button class="btn-buy" disabled title="Already purchased">Purchased</button>';
+  }
+  const payment = Array.isArray(item.payment) ? item.payment : [];
+  if (payment.length === 0) {
+    return `<button class="btn-buy" onclick="_buyItem('${escHtml(item.itemId)}', this)">Buy</button>`;
+  }
+  return payment
+    .map((p) => {
+      const rail = railOf(p);
+      const label = payment.length > 1 ? `Buy on ${chainName(rail)}` : 'Buy';
+      return `<button class="btn-buy" data-label="${escHtml(label)}"
+        onclick="_buyItem('${escHtml(item.itemId)}', this, '${escHtml(rail)}')">${escHtml(label)}</button>`;
+    })
+    .join(' ');
 }
 
 function _copyToClipboard(text, btn) {
@@ -189,8 +229,7 @@ function renderCard(item) {
 
   let buyBtn = '';
   if (!isRetired) {
-    buyBtn = `<button class="btn-buy" onclick="_buyItem('${escHtml(item.itemId)}', this)"
-      ${stored ? 'disabled title="Already purchased"' : ''}>${stored ? 'Purchased' : 'Buy'}</button>`;
+    buyBtn = renderBuyButtons(item, stored);
   }
 
   return `
@@ -312,11 +351,15 @@ async function loadTextSample(itemId, url) {
 
 // ── Purchase ────────────────────────────────────────────────────────────────
 
-async function _buyItem(itemId, btn) {
-  btn.disabled = true;
+async function _buyItem(itemId, btn, network) {
+  const label = btn.dataset.label || 'Buy';
+  const card = document.getElementById(`card-${itemId}`);
+  // Every rail's button is disabled while one purchase is in flight: two concurrent payments for
+  // the same item would both settle.
+  const siblings = Array.from(card.querySelectorAll('.btn-buy'));
+  siblings.forEach((b) => (b.disabled = true));
   btn.innerHTML = '<span class="spinner"></span>Buying…';
 
-  const card = document.getElementById(`card-${itemId}`);
   const existing = card.querySelector('.buy-result');
   if (existing) existing.remove();
 
@@ -324,7 +367,7 @@ async function _buyItem(itemId, btn) {
     const res = await fetch('/api/purchase', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ publisherUrl: _publisherUrl, itemId }),
+      body: JSON.stringify({ publisherUrl: _publisherUrl, itemId, network: network || undefined }),
     });
     const data = await res.json();
 
@@ -333,24 +376,26 @@ async function _buyItem(itemId, btn) {
       const wrapper = document.createElement('div');
       wrapper.innerHTML = renderGrantBlock(data);
       card.appendChild(wrapper.firstElementChild);
-      btn.disabled = true;
-      btn.textContent = 'Purchased';
-      btn.title = 'Already purchased';
+      siblings.forEach((b) => {
+        b.disabled = true;
+        b.title = 'Already purchased';
+      });
+      btn.textContent = network ? `Purchased on ${chainName(network)}` : 'Purchased';
     } else {
       const resultEl = document.createElement('div');
       resultEl.className = 'buy-result error';
       resultEl.textContent = data.error ?? 'Purchase failed';
       card.appendChild(resultEl);
-      btn.disabled = false;
-      btn.textContent = 'Buy';
+      siblings.forEach((b) => (b.disabled = false));
+      btn.textContent = label;
     }
   } catch (err) {
     const resultEl = document.createElement('div');
     resultEl.className = 'buy-result error';
     resultEl.textContent = err.message ?? 'Network error';
     card.appendChild(resultEl);
-    btn.disabled = false;
-    btn.textContent = 'Buy';
+    siblings.forEach((b) => (b.disabled = false));
+    btn.textContent = label;
   }
 }
 

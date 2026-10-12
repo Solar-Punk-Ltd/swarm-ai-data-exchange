@@ -8,7 +8,7 @@ description: >
   available", or queries asking to inspect or evaluate on-chain agent registrations. Also
   trigger when the user wants to check which provider agents are active before initiating a
   data exchange. Use this skill proactively — if someone wants to find or audit agents on
-  Base Sepolia, assume they need the full discover flow.
+  Base Sepolia or Celo Sepolia, assume they need the full discover flow.
 ---
 
 # ERC-8004 `discover-agents` CLI Skill
@@ -26,7 +26,7 @@ This is a **read-only** command: no transactions are sent and no Swarm uploads o
 
 | # | Item | Source |
 |---|------|--------|
-| 1 | **`RPC_URL`** — JSON-RPC endpoint for contract queries | `RPC_URL` env var (defaults to the Base Sepolia public RPC) |
+| 1 | **`RPC_URL`** — JSON-RPC endpoint for contract queries | `RPC_URL` env var (defaults to the Base Sepolia public RPC; set `CHAIN` + `RPC_URL` for Celo Sepolia) |
 
 No private key and no testnet ETH are required — discovery is read-only and uses a
 provider-only client. The only input is an RPC endpoint.
@@ -171,11 +171,16 @@ Once you have the agent list, suggest these follow-up actions based on context:
 
 ---
 
-## Deployed contract addresses (Base Sepolia)
+## Deployed contract addresses
 
-| Registry | Address |
-|----------|---------|
-| Identity Registry | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
-| Reputation Registry | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+The adapter selects the chain from the `CHAIN` env var (`base-sepolia` default, `celo-sepolia`,
+`celo`) with `RPC_URL` pointing at that chain. The Base Sepolia and Celo Sepolia registries share an
+address, so an agentId only means something together with its chain.
 
-Chain: Base Sepolia (testnet). Mainnet contracts are not yet configured.
+| Chain | Identity Registry | Reputation Registry |
+|-------|-------------------|---------------------|
+| Base Sepolia (`eip155:84532`) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| Celo Sepolia (`eip155:11142220`) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | `0x8004B663056A597Dffe9eCcC1965A193B7388713` |
+| Celo mainnet (`eip155:42220`) | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` |
+
+Base mainnet contracts are not yet configured.

@@ -15,8 +15,10 @@ export interface RegisterAgentArgs {
   postageBatchId?: string;
   // Re-publish the Agent Card when its content has drifted from these arguments.
   refreshCard?: boolean;
-  // Explicit start block for the fallback MetadataSet scan.
+  // Explicit start block for the fallback MetadataSet scan on the primary chain.
   fromBlock?: number;
+  // Per-chain start blocks for the fallback scan, keyed by CAIP-2. Wins over fromBlock.
+  fromBlocks?: Record<string, number>;
   // Report what would happen without sending a transaction or writing to Swarm.
   dryRun?: boolean;
   // Skip splitter + link entirely (identity-only registration).
@@ -87,6 +89,8 @@ export interface RegisterAgentSplitter {
   address: string | null;
   seller: string | null;
   factory: string | null;
+  /** CAIP-2 rail the clone lives on. */
+  chainId?: string;
   treasury?: string;
   taxBps?: number;
   txHash?: string;
@@ -103,14 +107,32 @@ export interface RegisterAgentLink {
   error?: string;
 }
 
+/** One identity chain's outcome: its own agentId, card status and splitter link. */
+export interface RegisterAgentChainIdentity {
+  /** Adapter chain name, e.g. "celo-sepolia". */
+  chain: string;
+  /** CAIP-2, e.g. "eip155:11142220". */
+  chainId: string;
+  identity: RegisterAgentIdentity;
+  link: RegisterAgentLink;
+}
+
 export interface RegisterAgentResult {
   feedOwner: string;
   signer: string;
+  /** The primary identity chain (ERC8004_CHAIN). */
   chain: string;
   dryRun: boolean;
+  /** The primary chain's identity; identities[] has every chain. */
   identity: RegisterAgentIdentity;
+  /** The clone on the identity chain — the one `link` binds under agent_splitter. */
   splitter: RegisterAgentSplitter;
+  /** One entry per configured payment rail (SPLITTER_FACTORY_ADDRESSES), identity rail first. */
+  splitters: RegisterAgentSplitter[];
+  /** The primary chain's link; identities[] has every chain. */
   link: RegisterAgentLink;
+  /** One entry per ERC8004_CHAINS chain, primary first. */
+  identities: RegisterAgentChainIdentity[];
   warnings: string[];
   message: string;
 }

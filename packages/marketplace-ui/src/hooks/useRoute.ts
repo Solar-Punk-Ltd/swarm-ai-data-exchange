@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { MouseEvent } from 'react';
-import { config } from '../config/env';
+import { CHAIN_QUERY_PARAM, config } from '../config/env';
 
 export type Route = 'dashboard' | 'map' | 'devcon' | 'claim-wallet';
 
@@ -41,9 +41,17 @@ function parseRoute(pathname: string): Route {
   return 'dashboard';
 }
 
-/** The URL for a route. Use this for every in-app link rather than writing paths by hand. */
+/**
+ * The URL for a route. Use this for every in-app link rather than writing paths by hand.
+ *
+ * Carries the current `?chain=` along, so a link copied from a Celo view opens a Celo view. It is
+ * the one query parameter in the app, and it is read at boot (`config/env.ts`) rather than by the
+ * router, which is why the route store does not subscribe to it.
+ */
 export function href(route: Route): string {
-  return route === 'dashboard' ? BASE : `${BASE}${route}`;
+  const path = route === 'dashboard' ? BASE : `${BASE}${route}`;
+  const chain = new URLSearchParams(window.location.search).get(CHAIN_QUERY_PARAM);
+  return chain ? `${path}?${CHAIN_QUERY_PARAM}=${encodeURIComponent(chain)}` : path;
 }
 
 /**
@@ -65,7 +73,7 @@ function subscribe(onChange: () => void): () => void {
 /** Navigate without a page load. No-ops on the current route so Back does not collect duplicates. */
 export function navigate(route: Route): void {
   const next = href(route);
-  if (next === window.location.pathname) return;
+  if (next === `${window.location.pathname}${window.location.search}`) return;
   window.history.pushState(null, '', next);
   subscribers.forEach((notify) => notify());
 }

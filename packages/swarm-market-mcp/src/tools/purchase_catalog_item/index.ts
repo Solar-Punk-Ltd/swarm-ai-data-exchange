@@ -3,16 +3,19 @@
  *
  * Buyer-side x402 purchase flow (TS port of the reference buyer.ts / x402_client.py).
  * Two phases against the seller's x402 server:
- *   1. POST /items/{itemId}/purchase with no X-Payment -> 402 challenge (accepts[0]).
+ *   1. POST /items/{itemId}/purchase with no X-Payment -> 402 challenge. The challenge may
+ *      carry several `accepts` entries, one per payment rail (Base Sepolia, Celo Sepolia, ...);
+ *      `network` picks one by CAIP-2, else the first is taken.
  *   2. Re-POST with an X-Payment envelope carrying a signed EIP-712 PurchaseIntent and
  *      an ERC-3009 TransferWithAuthorization (shared nonce + time window) -> settlement
- *      + ACT grant. Returns { txHash, actHistoryRef, grantorPublicKey }.
+ *      + ACT grant. Returns { txHash, actHistoryRef, grantorPublicKey, network }.
  *
  * The grantee public key defaults to this Bee node's ACT publisher key so the granted
  * content is decryptable by the same node that downloads it (download_files_act).
  */
 import { Bee } from '@ethersphere/bee-js';
 import { ethers } from 'ethers';
+import { explorerTxUrl } from '../../chains';
 import config from '../../config';
 import {
   getErrorMessage,
@@ -94,6 +97,33 @@ async function tokenDomainMeta(
   return { name, version };
 }
 
+/**
+ * The rail to pay on. With `network` set, it must be one the seller advertised; without it the
+ * first entry wins, which keeps single-rail sellers working unchanged. Pure, so it is testable
+ * without a server.
+ */
+export function selectAccept(
+  accepts: PaymentRequirementsAccept[],
+  network?: string,
+): { accept: PaymentRequirementsAccept } | { error: string } {
+  if (accepts.length === 0) return { error: '402 challenge carried no accepts entry.' };
+  if (!network) return { accept: accepts[0] };
+  const accept = accepts.find((a) => a.network === network);
+  if (!accept) {
+    return {
+      error:
+        `Seller does not accept payment on ${network}. Advertised rails: ` +
+        accepts.map((a) => a.network).join(', '),
+    };
+  }
+  return { accept };
+}
+
+/** PAYMENT_RPC_URLS entry for the rail, else the single PAYMENT_RPC_URL. */
+function paymentRpcUrl(network: string): string | undefined {
+  return config.payment.rpcUrls[network] ?? config.payment.rpcUrl;
+}
+
 async function granteeKey(args: PurchaseCatalogItemArgs, bee: Bee): Promise<string> {
   if (args.granteePublicKey) {
     return args.granteePublicKey.startsWith('0x')
@@ -111,12 +141,6 @@ export async function purchaseCatalogItem(
   const walletPk = config.payment.walletPrivateKey;
   if (!walletPk) {
     return getToolErrorResponse('BUYER_WALLET_PK is not set (needed to sign the payment).');
-  }
-  const rpcUrl = config.payment.rpcUrl;
-  if (!rpcUrl) {
-    return getToolErrorResponse(
-      'PAYMENT_RPC_URL is not set (needed to read the token EIP-712 domain).',
-    );
   }
   const endpointBase = args.x402Endpoint || config.payment.x402Endpoint;
   if (!endpointBase) {
@@ -147,11 +171,9 @@ export async function purchaseCatalogItem(
       return getToolErrorResponse(`Expected 402 challenge, got ${res.status}: ${await res.text()}`);
     }
     const challenge = (await res.json()) as PurchaseChallenge;
-    const accepts = challenge.accepts ?? [];
-    if (accepts.length === 0) {
-      return getToolErrorResponse('402 challenge carried no accepts entry.');
-    }
-    accept = accepts[0];
+    const selected = selectAccept(challenge.accepts ?? [], args.network);
+    if ('error' in selected) return getToolErrorResponse(selected.error);
+    accept = selected.accept;
   } catch (err) {
     return getToolErrorResponse(`x402 challenge request failed: ${getErrorMessage(err)}`);
   }
@@ -166,6 +188,16 @@ export async function purchaseCatalogItem(
   const payTo: string = accept.payTo;
   const network: string = accept.network;
   const chainId = Number(domain.chainId);
+
+  // The token's EIP-712 domain must be read on the rail being paid, or the signature covers a
+  // name/version the facilitator will never reconstruct.
+  const rpcUrl = paymentRpcUrl(network);
+  if (!rpcUrl) {
+    return getToolErrorResponse(
+      `No RPC for ${network}: set PAYMENT_RPC_URLS=${network}=<url> or PAYMENT_RPC_URL ` +
+        '(needed to read the token EIP-712 domain).',
+    );
+  }
 
   // Shared nonce + backdated window (clock skew), as in buyer.ts.
   const nonce = ethers.hexlify(ethers.randomBytes(32));
@@ -282,10 +314,12 @@ export async function purchaseCatalogItem(
   return getResponseWithStructuredContent({
     itemId: args.itemId,
     granteePublicKey: grantee,
+    network,
     txHash: result.txHash,
+    explorerTxUrl: result.txHash ? explorerTxUrl(chainId, result.txHash) : undefined,
     actHistoryRef: result.actHistoryRef,
     grantorPublicKey: result.grantorPublicKey,
-    message: `Purchased ${args.itemId}; ACT grant issued to the buyer node.`,
+    message: `Purchased ${args.itemId} on ${network}; ACT grant issued to the buyer node.`,
     data: result.data,
   });
 }

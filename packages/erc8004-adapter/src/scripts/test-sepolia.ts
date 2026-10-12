@@ -332,11 +332,19 @@ async function buildDemoCatalog(publisherAddress: string) {
       description: a.description,
       content: a.content,
       storage: { reference: itemId },
+      // One entry per payment rail: the same item sells on Base Sepolia and Celo Sepolia.
       payment: [
         {
           scheme: 'exact',
           chainId: 'eip155:84532',
           asset: 'eip155:84532/erc20:0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+          amount: '10000',
+          payTo: publisherAddress,
+        },
+        {
+          scheme: 'exact',
+          chainId: 'eip155:11142220',
+          asset: 'eip155:11142220/erc20:0x01C5C0122039549AD1493B8220cABEdD739BC44E',
           amount: '10000',
           payTo: publisherAddress,
         },

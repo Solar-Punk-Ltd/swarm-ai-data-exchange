@@ -12,6 +12,8 @@ export interface FindAgentsByMetadataArgs {
   // Optional starting block for the event scan. Defaults to a recent window (see
   // RECENT_BLOCK_COUNT in the adapter) so casual lookups stay fast.
   fromBlock?: number;
+  // CAIP-2 chain whose registry to scan (e.g. "eip155:11142220"). Defaults to ERC8004_CHAIN.
+  chainId?: string;
 }
 
 export interface FindAgentsByMetadataResultEntry {

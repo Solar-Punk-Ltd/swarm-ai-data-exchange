@@ -4,6 +4,7 @@ interface ImportMetaEnv {
   readonly VITE_TREASURY_ADDRESS?: string;
   readonly VITE_SPLITTER_FACTORY_ADDRESS?: string;
   readonly VITE_CHAIN_ID?: string;
+  readonly VITE_CHAIN_IDS?: string;
   readonly VITE_RPC_URL?: string;
   readonly VITE_REFRESH_INTERVAL_MS?: string;
   readonly VITE_IDENTITY_REGISTRY_ADDRESS?: string;
@@ -12,6 +13,9 @@ interface ImportMetaEnv {
   readonly VITE_SWARM_GATEWAY_URL?: string;
   readonly VITE_SHOW_DEMO_FLOW?: string;
   readonly VITE_DEMO_FLOW_BASE_URL?: string;
+  readonly VITE_DEVCON_API_URL?: string;
+  /** Per-chain overrides: `VITE_RPC_URL_<chainId>` and friends, read dynamically in env.ts. */
+  readonly [key: `VITE_${string}`]: string | undefined;
 }
 
 interface ImportMeta {

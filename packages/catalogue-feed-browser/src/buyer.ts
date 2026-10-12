@@ -1,5 +1,5 @@
 import { createPublicClient, http, type Address, type Hex, type LocalAccount } from 'viem';
-import { base, baseSepolia } from 'viem/chains';
+import { base, baseSepolia, celo, celoSepolia } from 'viem/chains';
 import { randomBytes } from 'node:crypto';
 import {
   PURCHASE_INTENT_TYPES,
@@ -15,6 +15,40 @@ export interface PurchaseParams {
   itemId: string;
   granteePublicKey: string; // consumer's Bee-node public key (0x04...)
   walletSigner: LocalAccount; // viem account for EIP-712 + ERC-3009 signing
+  // CAIP-2 rail to pay on (e.g. "eip155:11142220") when the publisher advertises several.
+  // Omitted: the first accepts entry, which keeps single-rail publishers working unchanged.
+  network?: string;
+}
+
+// "k1=v1,k2=v2" to { k1: v1, k2: v2 }. Keys are CAIP-2 networks, which contain ':', so only the
+// first '=' splits key from value. Malformed entries are skipped rather than fatal: this only
+// picks an RPC, and viem's default public endpoint is a working fallback.
+export function parseChainMap(raw: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw) return out;
+  for (const entry of raw.split(',')) {
+    const trimmed = entry.trim();
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0 || eq === trimmed.length - 1) continue;
+    out[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+  }
+  return out;
+}
+
+// The rail the caller asked for, else the first one. A requested rail the publisher does not
+// advertise is an error naming the ones it does: silently paying on another chain would spend
+// funds the caller meant to keep on a different chain.
+export function selectAccept<T extends { network: string }>(accepts: T[], network?: string): T {
+  if (!accepts || accepts.length === 0) throw new Error('402 challenge carried no accepts entry');
+  if (!network) return accepts[0];
+  const match = accepts.find((a) => a.network === network);
+  if (!match) {
+    throw new Error(
+      `Publisher does not accept payment on ${network}; advertised rails: ` +
+        accepts.map((a) => a.network).join(', '),
+    );
+  }
+  return match;
 }
 
 // Subset of the x402 v1 402 challenge body we read.
@@ -80,6 +114,10 @@ function chainForId(chainId: number) {
       return base;
     case baseSepolia.id:
       return baseSepolia;
+    case celo.id:
+      return celo;
+    case celoSepolia.id:
+      return celoSepolia;
     default:
       throw new Error(`Unsupported chainId ${chainId} for token domain lookup`);
   }
@@ -87,11 +125,14 @@ function chainForId(chainId: number) {
 
 // Read the token's EIP-712 domain fields (name/version) for the ERC-3009 authorization.
 // version() is optional on ERC-20s; default to "2" (USDC) when absent.
+// RPC_URLS ("<caip2>=<url>,...") picks the endpoint; viem's public default otherwise. The read must
+// happen on the rail being paid, or the signature covers a name/version the facilitator rejects.
 async function tokenDomainMeta(
   chainId: number,
   token: Address,
 ): Promise<{ name: string; version: string }> {
-  const client = createPublicClient({ chain: chainForId(chainId), transport: http() });
+  const rpcUrl = parseChainMap(process.env.RPC_URLS)[`eip155:${chainId}`];
+  const client = createPublicClient({ chain: chainForId(chainId), transport: http(rpcUrl) });
   const [name, version] = await Promise.all([
     client.readContract({ address: token, abi: ERC20_NAME_ABI, functionName: 'name' }),
     client
@@ -116,7 +157,7 @@ async function parseApiError(res: Response): Promise<never> {
 // Consumer side of §10.1 / §11.4. The PurchaseIntent and the ERC-3009 authorization share the
 // same nonce and time window — a hard invariant the server checks at steps 3–6 of its verification.
 export async function purchase(params: PurchaseParams): Promise<ActGrantResult> {
-  const { publisherEndpoint, itemId, granteePublicKey, walletSigner } = params;
+  const { publisherEndpoint, itemId, granteePublicKey, walletSigner, network } = params;
 
   // Step 1: POST without X-Payment → receive the 402 challenge.
   const challengeRes = await fetch(publisherEndpoint, {
@@ -129,9 +170,8 @@ export async function purchase(params: PurchaseParams): Promise<ActGrantResult> 
   }
   const challenge = (await challengeRes.json()) as X402Challenge;
 
-  // Step 2: select an accepts entry.
-  const accept = challenge.accepts?.[0];
-  if (!accept) throw new Error('402 challenge carried no accepts entry');
+  // Step 2: select the accepts entry for the requested rail (else the first).
+  const accept = selectAccept(challenge.accepts ?? [], network);
   const domain = accept.extra?.purchaseIntentDomain;
   if (!domain) throw new Error('402 challenge missing extra.purchaseIntentDomain');
 

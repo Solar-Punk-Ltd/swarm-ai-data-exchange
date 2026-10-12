@@ -28,8 +28,14 @@ already cleared, so the visitor keeps the key and the operator tops up the recor
 
 Everything the generic server takes (see `.env.example`), plus the required `GIFT_FUNDER_PK`
 and its `GIFT_*` companions. **`GIFT_FUNDER_PK` moves real xBZZ and xDAI on Gnosis mainnet**
-— it is the only real-value key in the fleet and must never be the Base Sepolia test funder.
+— it is the only real-value key in the fleet and must never be a testnet funder (Base Sepolia, Celo Sepolia or any other).
 The server refuses to start without it.
+
+Payments are multi-rail exactly as in the generic server: `SPLITTER_ADDRESSES`,
+`FACILITATOR_URLS`, `FACILITATOR_API_KEYS` and `RPC_URLS` (all `<caip2>=<value>,...`) let one
+voucher item sell on Base Sepolia and Celo Sepolia, each rail settling through its own
+facilitator into its own split contract. The voucher itself is always paid on the gift chain
+(`GIFT_CHAIN_ID`), whichever rail the sale settled on.
 
 Deployed by `agent-factory` via `docker/x402-devcon8.Dockerfile` for sellers stamped from the
 `devcon` template; generic sellers keep the untouched `x402-swarm-server`.

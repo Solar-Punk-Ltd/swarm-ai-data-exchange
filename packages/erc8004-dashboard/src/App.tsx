@@ -1,5 +1,6 @@
 import { AgentsProvider } from './context/AgentsContext';
 import AgentList from './components/AgentList';
+import ChainSelect from './components/ChainSelect';
 
 export default function App() {
   return (
@@ -9,8 +10,17 @@ export default function App() {
           <span style={{ color: '#f5a524' }}>Swarm AI</span>{' '}
           <span style={{ color: '#f1ede4' }}>Data Exchange</span>
         </h1>
-        <div style={{ fontSize: 13, color: '#a9a397', marginBottom: 24 }}>
-          Agents registered on ERC-8004
+        <div
+          style={{
+            fontSize: 13,
+            color: '#a9a397',
+            marginBottom: 24,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          Agents registered on ERC-8004 · <ChainSelect />
         </div>
         <AgentList />
       </main>

@@ -6,9 +6,11 @@ import {
   SWARM_AI_CAPABLE,
   type AgentCard,
 } from '@solarpunk/erc8004-adapter';
-import { AGENT_DISPLAY_LIMIT, RPC_URL } from '../constants';
+import { AGENT_DISPLAY_LIMIT, CHAIN, RPC_URL } from '../constants';
 
 export interface Agent {
+  /** Numeric chain id the agent is registered on. agentIds are only unique per registry. */
+  chainId: number;
   agentId: string;
   uri: string;
   card: AgentCard | null;
@@ -43,8 +45,9 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
 
     async function fetchAgents() {
       try {
-        const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const erc8004 = createERC8004Client({ provider, chain: 'base-sepolia' });
+        // Pin the network so ethers skips its eth_chainId probe on first call.
+        const provider = new ethers.JsonRpcProvider(RPC_URL, CHAIN.id, { staticNetwork: true });
+        const erc8004 = createERC8004Client({ provider, chain: CHAIN.adapterChain });
 
         const all = await erc8004.identity.findAgentsWithMetadata(SWARM_AI_CAPABLE);
         const capable = all
@@ -53,6 +56,7 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
           .slice(0, AGENT_DISPLAY_LIMIT);
 
         const initial: Agent[] = capable.map((a) => ({
+          chainId: CHAIN.id,
           agentId: a.agentId.toString(),
           uri: a.uri,
           card: null,
@@ -91,7 +95,7 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
 
   function addAgent(card: AgentCard) {
     const tempId = `local-${Date.now()}`;
-    setAgents((prev) => [{ agentId: tempId, uri: '', card }, ...prev]);
+    setAgents((prev) => [{ chainId: CHAIN.id, agentId: tempId, uri: '', card }, ...prev]);
   }
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);

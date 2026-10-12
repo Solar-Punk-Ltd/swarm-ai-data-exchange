@@ -16,10 +16,21 @@ export interface ServerConfig {
   // address this owner (the topic stays bound to catalogFeedOwner).
   itemStateFeedOwner: string;
   dbPath: string;
-  // This seller's RevenueSplitter clone — the only settlement destination that earns valid
-  // Proof-of-Purchase. When set, a purchase whose advertised payTo is anything else is
-  // rejected before /settle. Optional so dev setups without a deployed factory still run.
-  splitterAddress?: string;
+  // This seller's RevenueSplitter clone per payment rail, keyed by CAIP-2 network. A clone is
+  // the only settlement destination that earns valid Proof-of-Purchase, so when the map is
+  // non-empty a purchase on any rail whose advertised payTo is not that rail's clone — or on a
+  // rail with no clone configured at all — is rejected before /settle. Empty disables the
+  // guard, so dev setups without a deployed factory still run.
+  splitterAddresses: Record<string, string>;
+  // Per-rail facilitator overrides keyed by CAIP-2 network. A rail without an entry uses
+  // `facilitatorUrl`; a catalog item's own `payment[].facilitator` wins over both.
+  facilitatorUrls: Record<string, string>;
+  // API keys keyed by facilitator base URL, sent as `X-API-Key`. Keyed by URL rather than by
+  // network so a key is only ever sent to the host it was issued for.
+  facilitatorApiKeys: Record<string, string>;
+  // RPC endpoints keyed by CAIP-2 network, used to read a token's EIP-712 domain. A rail without
+  // an entry falls back to viem's default public RPC for that chain.
+  rpcUrls: Record<string, string>;
   // State-feed write retry (§14.1: the publisher MUST retry until the on-Swarm record converges).
   // Bounded in-memory exponential backoff; durable retry across restarts is out of prototype scope.
   stateFeedRetry: { attempts: number; baseDelayMs: number; maxDelayMs: number };
@@ -60,14 +71,51 @@ export function parseChainId(caip2: string): number {
   return id;
 }
 
+// "k1=v1,k2=v2" → { k1: v1, k2: v2 }. Keys are CAIP-2 networks or URLs, which both contain ':'
+// — only the FIRST '=' separates key from value, so a value may itself contain '='. Blank
+// entries are skipped so a trailing comma is harmless; an entry without '=' is a config error.
+export function parseChainMap(raw: string | undefined, name = 'map'): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw) return out;
+  for (const entry of raw.split(',')) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0 || eq === trimmed.length - 1) {
+      throw new Error(`Invalid ${name} entry "${trimmed}": expected <key>=<value>`);
+    }
+    out[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+  }
+  return out;
+}
+
+// The facilitator for a rail: the per-rail override when present, else the default.
+export function facilitatorUrlFor(
+  config: Pick<ServerConfig, 'facilitatorUrl' | 'facilitatorUrls'>,
+  caip2: string,
+): string {
+  return config.facilitatorUrls[caip2] ?? config.facilitatorUrl;
+}
+
 export function loadConfig(): ServerConfig {
   const network = process.env.NETWORK ?? 'eip155:84532';
   const itemStateFeedPk = required('ITEM_STATE_FEED_PK');
+
+  // SPLITTER_ADDRESSES supersedes the single-rail SPLITTER_ADDRESS; the legacy var still works
+  // as "the clone on NETWORK" so an existing .env keeps its guard.
+  const splitterAddresses = parseChainMap(process.env.SPLITTER_ADDRESSES, 'SPLITTER_ADDRESSES');
+  if (Object.keys(splitterAddresses).length === 0 && process.env.SPLITTER_ADDRESS) {
+    splitterAddresses[network] = process.env.SPLITTER_ADDRESS;
+  }
+
   return {
     port: Number(process.env.PORT ?? 3000),
     network,
     chainId: parseChainId(network),
     facilitatorUrl: process.env.FACILITATOR_URL ?? 'https://x402.org/facilitator',
+    facilitatorUrls: parseChainMap(process.env.FACILITATOR_URLS, 'FACILITATOR_URLS'),
+    facilitatorApiKeys: parseChainMap(process.env.FACILITATOR_API_KEYS, 'FACILITATOR_API_KEYS'),
+    rpcUrls: parseChainMap(process.env.RPC_URLS, 'RPC_URLS'),
     purchaseIntentDomainContract: required('PURCHASE_INTENT_DOMAIN_CONTRACT'),
     beeApiUrl: process.env.BEE_API_URL ?? 'http://localhost:1633',
     postageBatchId: required('POSTAGE_BATCH_ID'),
@@ -75,7 +123,7 @@ export function loadConfig(): ServerConfig {
     itemStateFeedPk,
     itemStateFeedOwner: '0x' + new PrivateKey(itemStateFeedPk).publicKey().address().toHex(),
     dbPath: process.env.DB_PATH ?? './data/store.db',
-    splitterAddress: process.env.SPLITTER_ADDRESS,
+    splitterAddresses,
     stateFeedRetry: {
       attempts: Number(process.env.STATE_FEED_RETRY_ATTEMPTS ?? 8),
       baseDelayMs: Number(process.env.STATE_FEED_RETRY_BASE_MS ?? 500),

@@ -1,4 +1,4 @@
-import { config } from '../config/env';
+import { CHAIN_QUERY_PARAM, config } from '../config/env';
 import { href } from '../hooks/useRoute';
 import QrCode from './QrCode';
 import styles from './styles.module.css';
@@ -14,7 +14,12 @@ import styles from './styles.module.css';
  */
 export default function DevconPage() {
   const base = config.demoFlowBaseUrl ?? window.location.origin;
-  const claimWalletUrl = `${base}${href('claim-wallet')}`;
+  // Always carries the chain selected in the header dropdown, so the phone creates and funds its
+  // buyer on that chain. Set explicitly rather than relying on `href()` copying the current URL:
+  // the selection may have come from localStorage, leaving no `?chain=` in this page's URL.
+  const url = new URL(`${base}${href('claim-wallet')}`);
+  url.searchParams.set(CHAIN_QUERY_PARAM, String(config.chain.id));
+  const claimWalletUrl = url.toString();
 
   return (
     <section className={styles.section}>
@@ -25,7 +30,8 @@ export default function DevconPage() {
         <div className={styles.qrCopy}>
           <p className={styles.qrLead}>Scan the QR code and navigate to the page in order to:</p>
           <p className={styles.qrOutcome}>
-            Create a buyer agent that purchases a funded wallet from a seller agent.
+            Create a buyer agent that pays on {config.chain.name} to purchase a funded wallet from a
+            seller agent.
           </p>
           <a className={styles.qrUrl} href={claimWalletUrl}>
             {claimWalletUrl}
