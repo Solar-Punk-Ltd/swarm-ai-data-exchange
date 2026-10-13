@@ -8,7 +8,7 @@ import styles from './styles.module.css';
 /**
  * The QR code's target — the phone-side surface, reached by scanning `/devcon`.
  *
- * On arrival it asks `agent-orchestration-api` to deploy a buyer agent for this visitor, narrates
+ * When the visitor presses Start it asks `agent-orchestration-api` to deploy a buyer agent, narrates
  * what that agent does, and shows what it bought. The agent is handed back when this page closes,
  * or after the server's TTL, whichever comes first.
  */
@@ -235,14 +235,24 @@ function Steps({ claim }: { claim: Claim }) {
 }
 
 /** Copy-to-clipboard button with the shared copied-flash behaviour. */
-function CopyButton({ value, label }: { value: string; label: string }) {
+function CopyButton({
+  value,
+  label,
+  onCopied,
+}: {
+  value: string;
+  label: string;
+  /** Called only once the clipboard write has succeeded. */
+  onCopied?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(() => {
     void navigator.clipboard.writeText(value).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+      onCopied?.();
     });
-  }, [value]);
+  }, [value, onCopied]);
   return (
     <button type="button" className={`${styles.button} ${styles.buttonPrimary}`} onClick={copy}>
       {copied ? 'Copied' : label}
@@ -253,10 +263,36 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 /**
  * The devcon8 payoff: the purchased voucher IS a wallet. The private key is rendered as text and
  * as a QR (the existing dark-on-light QrCode — inverted codes fail on plenty of scanners), with a
- * save-it-now warning: the key is stored nowhere server-side, so this page is the only copy. An
- * API restart or the claim's retention prune makes it unrecoverable.
+ * save-it-now warning: the key is stored nowhere server-side, so this browser is the only copy. It
+ * is kept in localStorage until the visitor copies it — see `deliveredStore`.
+ *
+ * A copy counts whether it comes from the button or from selecting the key and copying it with
+ * the keyboard or the context menu. The latter is caught at the document, because a `copy` event
+ * is dispatched where the selection starts, not necessarily on the `<pre>`. Only a selection that
+ * contains the whole key counts: a partial copy has not saved anything. Scanning the QR code
+ * cannot be detected, so that path relies on the two-week expiry.
  */
-function VoucherItem({ voucher }: { voucher: NonNullable<ReturnType<typeof parseVoucher>> }) {
+function VoucherItem({
+  voucher,
+  copied,
+  onCopied,
+}: {
+  voucher: NonNullable<ReturnType<typeof parseVoucher>>;
+  copied: boolean;
+  onCopied: () => void;
+}) {
+  const privateKey = voucher.privateKey;
+
+  useEffect(() => {
+    if (!privateKey || copied) return;
+    const onCopy = () => {
+      const selected = document.getSelection()?.toString().replace(/\s+/g, '') ?? '';
+      if (selected.includes(privateKey)) onCopied();
+    };
+    document.addEventListener('copy', onCopy);
+    return () => document.removeEventListener('copy', onCopy);
+  }, [privateKey, copied, onCopied]);
+
   return (
     <div className={styles.claimItem}>
       <div className={styles.claimItemHead}>
@@ -272,10 +308,11 @@ function VoucherItem({ voucher }: { voucher: NonNullable<ReturnType<typeof parse
         <>
           <QrCode value={voucher.privateKey} size={200} />
           <pre className={styles.claimItemBody}>{voucher.privateKey}</pre>
-          <CopyButton value={voucher.privateKey} label="Copy private key" />
+          <CopyButton value={voucher.privateKey} label="Copy private key" onCopied={onCopied} />
           <p className={styles.claimHint}>
-            Save this key now — it is shown only here, is stored nowhere, and cannot be recovered
-            after this page is gone.
+            {copied
+              ? 'Copied, and removed from this browser. Paste it somewhere safe — it disappears when you close this page.'
+              : 'Save this key — nobody else has a copy. It stays in this browser until you copy it, for at most 2 weeks.'}
           </p>
         </>
       ) : (
@@ -294,12 +331,20 @@ function VoucherItem({ voucher }: { voucher: NonNullable<ReturnType<typeof parse
   );
 }
 
-function DeliveredItem({ item }: { item: ClaimItem }) {
+function DeliveredItem({
+  item,
+  keyCopied,
+  onKeyCopied,
+}: {
+  item: ClaimItem;
+  keyCopied: boolean;
+  onKeyCopied: () => void;
+}) {
   const content = item.content;
   const voucher = parseVoucher(content);
 
   if (voucher) {
-    return <VoucherItem voucher={voucher} />;
+    return <VoucherItem voucher={voucher} copied={keyCopied} onCopied={onKeyCopied} />;
   }
 
   return (
@@ -354,7 +399,18 @@ function Head({ busy }: { busy: boolean }) {
 }
 
 export default function ClaimWalletPage() {
-  const { claim, error, errorCode, loading, configured, retry } = useClaim();
+  const {
+    claim,
+    error,
+    errorCode,
+    loading,
+    configured,
+    started,
+    start,
+    keyCopied,
+    markKeyCopied,
+    retry,
+  } = useClaim();
 
   const counting = Boolean(claim && !claim.released && claim.state !== 'delivered');
   const remaining = useCountdown(claim?.expiresAt, counting);
@@ -366,6 +422,30 @@ export default function ClaimWalletPage() {
         <div className={styles.empty}>
           No agent orchestration API configured. Set <code>VITE_DEVCON_API_URL</code> to the address
           of <code>agent-orchestration-api</code> and reload.
+        </div>
+      </section>
+    );
+  }
+
+  // Nothing is deployed until the visitor asks — see `useClaim`.
+  if (!started) {
+    return (
+      <section className={styles.section}>
+        <Head busy={false} />
+        <div className={styles.claimCard}>
+          <p className={styles.claimLead}>Get a buyer agent of your own.</p>
+          <p className={styles.claimHint}>
+            Starting deploys an agent with a funded wallet. It finds a seller, buys one item over
+            x402 and hands it to you here. It is shut down when you close this page.
+          </p>
+          <button
+            type="button"
+            className={`${styles.button} ${styles.buttonPrimary}`}
+            style={{ marginTop: '20px' }}
+            onClick={start}
+          >
+            Start
+          </button>
         </div>
       </section>
     );
@@ -436,7 +516,9 @@ export default function ClaimWalletPage() {
 
             <Steps claim={claim} />
 
-            {claim.item && <DeliveredItem item={claim.item} />}
+            {claim.item && (
+              <DeliveredItem item={claim.item} keyCopied={keyCopied} onKeyCopied={markKeyCopied} />
+            )}
 
             {claim.buyerAddress && (
               <div className={styles.claimFacts}>

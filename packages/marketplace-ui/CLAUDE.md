@@ -391,11 +391,16 @@ either way because `pushState` never touches the server.
 ## Claim wallet
 
 `/claim-wallet` is the only page here that talks to a **service of ours**, and the only one that
-causes anything to be created: on arrival it asks `agent-orchestration-api` (in the sibling
+causes anything to be created: when the visitor presses **Start** it asks `agent-orchestration-api` (in the sibling
 `swarm-agent-demo` repo) to deploy a buyer agent for this visitor, narrates its progress, and hands
 it back when the page closes. `lib/devcon.ts` is the client, `hooks/useClaim.ts` owns the lifecycle.
 
-Six things about it are load-bearing:
+Seven things about it are load-bearing:
+
+- **Nothing is requested until Start is pressed.** A scan alone must not deploy and fund an agent:
+  link previews, a phone that opens the URL twice, or a visitor who scans and walks off would each
+  cost one. A reload returns to the Start button; pressing it reattaches to an unreleased claim,
+  because `createClaim` is idempotent per session token.
 
 - **The single-fetch-owner rule is not relaxed.** That rule governs the registry and balance reads
   in `MarketplaceContext`. `useClaim` polls a different service for state no other view renders,
@@ -451,6 +456,29 @@ a long code must never push the phone layout sideways.
 It keeps rendering after the agent is released. The API captures the content onto the claim record
 before tearing the container down, precisely so the item outlives the agent; the visitor paid for
 it. Withheld, binary and truncated are each stated in words rather than rendered as an empty box.
+
+**A voucher's private key survives a reload — until the visitor copies it.** The voucher
+server stores the key nowhere, and the API drops it ~30s after delivery, so this browser is the
+only copy. `lib/deliveredStore.ts` writes the completed claim to `localStorage` (`devcon.delivered`)
+and `useClaim` restores it on load. Four rules hold it together:
+
+- **Bounded.** Kept until the visitor copies the key, or 2 weeks after delivery (`MAX_AGE_MS`,
+  counted from the first write, not the last poll). Expiry is checked on read. A copy is the Copy
+  button's successful clipboard write, or a keyboard / context-menu copy whose selection contains
+  the whole key — caught by a `document` listener, since `copy` fires where the selection starts.
+  Scanning the QR code cannot be detected; the expiry covers that path.
+- **Copying strips the key but keeps the record.** That tombstone is what tells a reloaded page
+  a purchase already happened. Without it the page offers Start, and `createClaim` for a released
+  claim deploys a second funded agent — `find_by_token` reattaches only unreleased claims. After a
+  copy the held item is final: until release the API still serves the full voucher, and
+  `keepItem` must not let that put the key back on screen after a reload.
+- **Tied to the session token.** A record for another token is ignored. In private mode both the
+  token and the record fail to persist, and the page falls back to memory only, as before.
+- **Per origin.** Each Swarm deploy is its own `bzz.link` subdomain with its own storage, so a key
+  stored under an old deploy is invisible to a new one and expires only when read there.
+
+Never send the key back to the API, and never write it again after it was copied —
+`saveDelivered` is a no-op on a confirmed record so a late poll cannot undo the visitor's choice.
 
 Never reach for `dangerouslySetInnerHTML` here. The content is arbitrary bytes from a third-party
 seller; React's default escaping is what makes displaying it safe.

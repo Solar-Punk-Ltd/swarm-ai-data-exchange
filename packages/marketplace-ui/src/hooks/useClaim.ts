@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { config } from '../config/env';
+import { Claim, ClaimItem, DevconError, createClaim, getClaim, releaseClaim } from '../lib/devcon';
 import {
-  Claim,
-  ClaimItem,
-  DevconError,
-  createClaim,
-  getClaim,
-  parseVoucher,
-  releaseClaim,
-} from '../lib/devcon';
+  confirmDelivered,
+  isCompleteItem,
+  loadDelivered,
+  saveDelivered,
+} from '../lib/deliveredStore';
 
 /**
- * Owns the Claim Wallet page's buyer agent: asks for one on arrival, polls its progress, and hands
- * it back when the page closes.
+ * Owns the Claim Wallet page's buyer agent: asks for one once the visitor presses Start, polls its
+ * progress, and hands it back when the page closes.
+ *
+ * Nothing is requested on arrival. A scan alone must not deploy and fund an agent — a phone that
+ * opens the link in a preview, or a visitor who scans and walks off, would otherwise cost one each.
  *
  * This does not relax the single-fetch-owner rule. That rule governs the registry and balance reads
  * in `MarketplaceContext`; this polls a different service for state no other view renders, and
@@ -52,24 +53,6 @@ function purchased(claim: Claim): boolean {
 }
 
 /**
- * Whether this item is the richest form of itself the page will ever be handed.
- *
- * For a voucher that means the private key is present. The API holds the key in memory only and
- * drops it when the claim is released — roughly 30s after delivery, once the collector's linger
- * expires — after which every poll returns the same claim with a *redacted* voucher. Overwriting
- * a complete item with that redacted one is what made the QR code vanish while the visitor was
- * still looking at it.
- *
- * A non-voucher item is complete as soon as its content is present: there is no second, richer
- * form of it to wait for.
- */
-function isCompleteItem(item: ClaimItem | null | undefined): boolean {
-  if (!item || item.content === null) return false;
-  const voucher = parseVoucher(item.content);
-  return voucher ? Boolean(voucher.privateKey) : true;
-}
-
-/**
  * A stable per-browser token, so a refresh or a re-scan reattaches to the same agent rather than
  * deploying a second funded one. Kept in `localStorage` because `sessionStorage` is per-tab and a
  * QR scan may well open a new tab.
@@ -102,6 +85,14 @@ export interface ClaimResult {
   loading: boolean;
   /** Unset when `VITE_DEVCON_API_URL` is not configured — nothing can be claimed. */
   configured: boolean;
+  /** False until the visitor asks for an agent. No request is made before then. */
+  started: boolean;
+  /** Asks for the agent. Idempotent: the server reattaches an unreleased claim for this token. */
+  start: () => void;
+  /** True once the visitor has copied the key; it is then gone from this browser's storage. */
+  keyCopied: boolean;
+  /** Removes the private key from this browser's storage. The copy on screen stays until close. */
+  markKeyCopied: () => void;
   retry: () => void;
 }
 
@@ -109,10 +100,15 @@ export default function useClaim(): ClaimResult {
   const base = config.devconApiUrl;
   // Resolved once per mount, not per render: sessionToken() writes to localStorage on first use.
   const [token] = useState(sessionToken);
-  const [claim, setClaim] = useState<Claim>();
+  // A claim this browser already holds a purchase for. Restoring it skips the Start screen, and
+  // with it the `createClaim` that would deploy a second agent once the first has been released.
+  const [restored] = useState(() => loadDelivered(token));
+  const [claim, setClaim] = useState<Claim | undefined>(restored?.claim);
+  const [keyCopied, setKeyCopied] = useState(Boolean(restored?.confirmed));
   const [error, setError] = useState<string>();
   const [errorCode, setErrorCode] = useState<string>();
-  const [loading, setLoading] = useState(Boolean(base));
+  const [started, setStarted] = useState(Boolean(restored));
+  const [loading, setLoading] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   // Read by the pagehide listener, which must see the current claim without re-subscribing on
@@ -123,16 +119,33 @@ export default function useClaim(): ClaimResult {
   // Latches once this page's agent has bought something, and is never cleared. Guards every path
   // that would ask for a new agent, so a completed purchase stays on screen for as long as the
   // tab is open.
-  const purchasedRef = useRef(false);
+  const purchasedRef = useRef(Boolean(restored));
 
   // The delivered item in its complete form, held for as long as the tab is open. The server
-  // deliberately forgets the voucher's private key when the claim is released, so this tab is the
-  // only place it still exists — losing it to a later poll would mean losing the wallet.
+  // deliberately forgets the voucher's private key when the claim is released — roughly 30s after
+  // delivery — and serves a *redacted* voucher from then on. Overwriting the complete item with
+  // that one is what made the QR code vanish while the visitor was still looking at it.
   //
-  // Memory only, never localStorage: "shown once, in this browser, stored nowhere" is the
-  // guarantee the page makes, and writing the key to disk would break it. A reload therefore
-  // still shows the redacted voucher, which is the intended trade.
-  const deliveredItemRef = useRef<ClaimItem>();
+  // It is also written to localStorage (`deliveredStore`) until the visitor copies the key, or two
+  // weeks pass. Memory alone meant a reload lost the wallet for good, which was
+  // worse than keeping the key on the visitor's own device for a while.
+  const deliveredItemRef = useRef<ClaimItem | undefined>(restored?.claim.item ?? undefined);
+
+  // Once the key has been copied, the held item is final. After a reload it is the stored copy
+  // with the key stripped, and while the claim is still unreleased the API will happily serve
+  // the full voucher again — accepting that would put the key back on screen after a copy.
+  const keyCopiedRef = useRef(Boolean(restored?.confirmed));
+
+  const start = useCallback(() => {
+    setLoading(true);
+    setStarted(true);
+  }, []);
+
+  const markKeyCopied = useCallback(() => {
+    confirmDelivered(token);
+    keyCopiedRef.current = true;
+    setKeyCopied(true);
+  }, [token]);
 
   const retry = useCallback(() => {
     setError(undefined);
@@ -142,7 +155,7 @@ export default function useClaim(): ClaimResult {
   }, []);
 
   useEffect(() => {
-    if (!base) return;
+    if (!base || !started) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
@@ -159,12 +172,17 @@ export default function useClaim(): ClaimResult {
     // from the response as usual — only the item is held back from regressing, so the page still
     // shows `released` and the closing message while the item above it stays intact.
     const keepItem = (next: Claim): Claim => {
-      if (isCompleteItem(next.item)) {
+      let merged = next;
+      if (keyCopiedRef.current && deliveredItemRef.current) {
+        merged = { ...next, item: deliveredItemRef.current };
+      } else if (isCompleteItem(next.item)) {
         deliveredItemRef.current = next.item ?? undefined;
-        return next;
+      } else if (deliveredItemRef.current) {
+        merged = { ...next, item: deliveredItemRef.current };
       }
-      const held = deliveredItemRef.current;
-      return held ? { ...next, item: held } : next;
+      // A no-op until the item is complete, and after the key has been copied.
+      saveDelivered(token, merged);
+      return merged;
     };
 
     const poll = async (claimId: string) => {
@@ -217,7 +235,14 @@ export default function useClaim(): ClaimResult {
       }
     };
 
-    void start();
+    // A restored purchase is not asked for again. One poll refreshes `released` while the server
+    // still knows the claim; a claim already released has nothing left to report.
+    const held = claimRef.current;
+    if (purchasedRef.current && held) {
+      if (!held.released) void poll(held.claimId);
+    } else {
+      void start();
+    }
 
     // Coming back to a backgrounded tab: mobile browsers suspend timers, so the heartbeat may
     // have lapsed and the agent may already be cleared. Poll at once — that either revives the
@@ -241,7 +266,7 @@ export default function useClaim(): ClaimResult {
       if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [base, attempt, token]);
+  }, [base, started, attempt, token]);
 
   // Give the agent back on close. Registered once, and deliberately NOT in the effect above:
   // unmount also fires on an in-app route change and under StrictMode's double mount, and
@@ -264,6 +289,10 @@ export default function useClaim(): ClaimResult {
     errorCode,
     loading,
     configured: Boolean(base),
+    started,
+    start,
+    keyCopied,
+    markKeyCopied,
     retry,
   };
 }
