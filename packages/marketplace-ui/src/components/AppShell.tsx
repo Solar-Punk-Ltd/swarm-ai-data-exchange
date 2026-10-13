@@ -36,7 +36,7 @@ export default function AppShell({ route, subtitle, showStatus, children }: AppS
       <header className={styles.header}>
         <div>
           <h1 className={styles.title}>
-            <span className={styles.titleAccent}>Swarm AI</span> <span>Data Exchange</span>
+            <span className={styles.titleAccent}>Swarm AI</span> <span>Marketplaces</span>
           </h1>
           <div className={styles.subtitle}>
             {subtitle} · {config.chain.name}

@@ -86,8 +86,8 @@ Anything beyond those four (surface, border, success, danger) is new — derive 
 palette and add it to `theme.ts` with a comment saying it is a marketplace-ui addition, so the two
 dashboards stay visually reconcilable.
 
-Header must match the sibling dashboard: amber `Swarm AI` + cream `Data Exchange`, with the
-subtitle changed to describe the current view (e.g. "Marketplace treasury and seller revenue" on
+Header follows the sibling dashboard's wordmark style: amber `Swarm AI` + cream `Marketplaces`
+(the sibling's second word is `Data Exchange`; this one deliberately differs), with the subtitle changed to describe the current view (e.g. "Marketplace treasury and seller revenue" on
 the Dashboard, "Agents and the payments between them" on the map). The wordmark never changes; the
 nav below it says which view you are on.
 
