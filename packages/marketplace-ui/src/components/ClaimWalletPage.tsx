@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import useClaim from '../hooks/useClaim';
 import { parseVoucher, type Claim, type ClaimItem, type ClaimState } from '../lib/devcon';
 import AddressLink from './AddressLink';
+import BuyerAgentAnim, { type AnimStep } from './BuyerAgentAnim';
 import QrCode from './QrCode';
 import styles from './styles.module.css';
 
@@ -98,6 +99,43 @@ function clock(seconds: number): string {
 }
 
 /**
+ * The purchase step's caption while the buyer is between payment attempts. Say so, with a live
+ * countdown, rather than leaving "Paying over x402" up for a minute — at a stand that reads as
+ * broken, when it is the shared facilitator losing a nonce race and the same payment going through
+ * on the next try. The reason is an error code, so it is shown as a tooltip, not as prose.
+ *
+ * `nextInSeconds` is fixed when the buyer emits it, not recomputed per poll, so the countdown runs
+ * to `at + nextInSeconds` — the same server-clock target `useCountdown` already ticks towards for
+ * the claim's expiry. A retry with no `at` is anchored to when this page first saw it.
+ */
+function RetryCaption({ retry }: { retry: NonNullable<Claim['retry']> }) {
+  const next = retry.nextInSeconds;
+  const target = useMemo(() => {
+    if (typeof next !== 'number' || next <= 0) return undefined;
+    const emitted = retry.at ? new Date(retry.at).getTime() : NaN;
+    const from = Number.isNaN(emitted) ? Date.now() : emitted;
+    return new Date(from + next * 1000).toISOString();
+    // `attempt` is a dependency so a fresh retry without `at` re-anchors to now.
+  }, [next, retry.at, retry.attempt]);
+  const remaining = useCountdown(target, target !== undefined);
+
+  const when =
+    remaining !== undefined && remaining > 0
+      ? ` in ${remaining >= 60 ? clock(remaining) : `${remaining}s`}`
+      : '';
+  const attempt = typeof retry.attempt === 'number' ? ` · attempt ${retry.attempt}` : '';
+  return (
+    <span
+      className={`${styles.claimStepDetail} ${styles.claimStepRetry}`}
+      title={retry.reason ?? undefined}
+    >
+      Payment network busy, retrying{when}
+      {attempt}
+    </span>
+  );
+}
+
+/**
  * Per-step detail, once it is known. Both the funding and the settlement step carry a live
  * explorer link — the funding amount and its transaction are what make "your agent has money"
  * checkable rather than a claim.
@@ -135,23 +173,7 @@ function StepDetail({
     );
   }
   if (step === 'purchase' && active && claim.retry) {
-    // The buyer is between payment attempts. Say so, with the countdown it reported, rather
-    // than leaving "Paying over x402" up for a minute — at a stand that reads as broken, when
-    // it is the shared facilitator losing a nonce race and the same payment going through on
-    // the next try. The reason is an error code, so it is shown as a tooltip, not as prose.
-    const next = claim.retry.nextInSeconds;
-    const when = typeof next === 'number' && next > 0 ? ` in ${next}s` : '';
-    const attempt =
-      typeof claim.retry.attempt === 'number' ? ` · attempt ${claim.retry.attempt}` : '';
-    return (
-      <span
-        className={`${styles.claimStepDetail} ${styles.claimStepRetry}`}
-        title={claim.retry.reason ?? undefined}
-      >
-        Payment network busy, retrying{when}
-        {attempt}
-      </span>
-    );
+    return <RetryCaption retry={claim.retry} />;
   }
   if (step === 'purchase' && claim.itemId) {
     return (
@@ -176,11 +198,11 @@ function StepDetail({
 }
 
 /**
- * The cumulative checklist. Reached steps stay visible with a tick; the current one is
- * highlighted. `reached` comes from the claim's history rather than from its state alone, because
- * a step whose whole duration fell between two polls still happened.
+ * Where the claim is in `STEPS`. `reached` comes from the claim's history rather than from its
+ * state alone, because a step whose whole duration fell between two polls still happened. Both the
+ * checklist and the animation read this, so the two can never disagree about the current step.
  */
-function Steps({ claim }: { claim: Claim }) {
+function progress(claim: Claim): { furthest: number; current: number; terminal: boolean } {
   const mapped = STEP_OF[claim.state];
   const terminal =
     claim.state === 'delivered' || claim.state === 'expired' || claim.state === 'failed';
@@ -205,6 +227,42 @@ function Steps({ claim }: { claim: Claim }) {
   const furthest =
     claim.state === 'delivered' ? STEPS.length - 1 : reached.size > 0 ? Math.max(...reached) : 0;
   const current = mapped ?? furthest;
+
+  return { furthest, current, terminal };
+}
+
+const ANIM_STEP: Record<StepKey, AnimStep> = {
+  created: 'created',
+  funded: 'funded',
+  started: 'started',
+  seller: 'discover',
+  purchase: 'purchase',
+  settled: 'finalize',
+  download: 'download',
+};
+
+/**
+ * The animation's step for this claim. The animation never walks backwards and plays any scene it
+ * is asked to skip, so this only has to say where the claim is now. A purchase retry needs no case
+ * of its own: the payment scene already loops for as long as the step lasts.
+ */
+function animStep(claim: Claim): AnimStep {
+  if (claim.state === 'delivered') return 'done';
+  if (claim.state === 'failed' || claim.state === 'expired' || claim.released) return 'error';
+
+  const key = STEPS[progress(claim).current].key;
+  // "Seller agent discovered" spans two states; the seller only appears once it is actually found.
+  if (key === 'seller') {
+    const found =
+      claim.state === 'seller_found' || claim.history.some(([state]) => state === 'seller_found');
+    return found ? 'discovered' : 'discover';
+  }
+  return ANIM_STEP[key];
+}
+
+/** The cumulative checklist. Reached steps stay visible with a tick; the current one is highlighted. */
+function Steps({ claim }: { claim: Claim }) {
+  const { furthest, current, terminal } = progress(claim);
 
   return (
     <ol className={styles.claimSteps}>
@@ -375,25 +433,11 @@ function DeliveredItem({
   );
 }
 
-/**
- * The title row. The bar is indeterminate because nothing here knows a fraction — the claim
- * advances by state, and the two long steps (booting the agent, settling the payment) report no
- * progress of their own. It renders only while something is actually running: a bar still sweeping
- * after the item is delivered, or under a failure with a Retry button, reads as a hang.
- */
-function Head({ busy }: { busy: boolean }) {
+/** The title row. */
+function Head() {
   return (
     <div className={styles.sectionHead}>
       <h2 className={styles.sectionTitle}>Claim wallet</h2>
-      {busy && (
-        <div
-          className={styles.claimProgress}
-          role="progressbar"
-          aria-label="Your buyer agent is working"
-        >
-          <span className={styles.claimProgressBar} />
-        </div>
-      )}
     </div>
   );
 }
@@ -415,10 +459,19 @@ export default function ClaimWalletPage() {
   const counting = Boolean(claim && !claim.released && claim.state !== 'delivered');
   const remaining = useCountdown(claim?.expiresAt, counting);
 
+  // The animation narrates a run the visitor is watching. A claim that was already delivered when
+  // this page first saw it — restored from `deliveredStore`, or reattached after a reload — would
+  // otherwise replay the whole story from boot above a key that is already on screen. Decided once,
+  // so a live run that reaches `delivered` keeps its ending.
+  const [animate, setAnimate] = useState<boolean>();
+  if (claim && animate === undefined) {
+    setAnimate(claim.state !== 'delivered');
+  }
+
   if (!configured) {
     return (
       <section className={styles.section}>
-        <Head busy={false} />
+        <Head />
         <div className={styles.empty}>
           No agent orchestration API configured. Set <code>VITE_DEVCON_API_URL</code> to the address
           of <code>agent-orchestration-api</code> and reload.
@@ -431,7 +484,7 @@ export default function ClaimWalletPage() {
   if (!started) {
     return (
       <section className={styles.section}>
-        <Head busy={false} />
+        <Head />
         <div className={styles.claimCard}>
           <p className={styles.claimLead}>Get a buyer agent of your own.</p>
           <p className={styles.claimHint}>
@@ -456,7 +509,7 @@ export default function ClaimWalletPage() {
     const capacity = errorCode === 'at_capacity';
     return (
       <section className={styles.section}>
-        <Head busy={false} />
+        <Head />
         <div className={`${styles.banner} ${capacity ? styles.bannerWarn : styles.bannerDanger}`}>
           {error}
         </div>
@@ -476,7 +529,7 @@ export default function ClaimWalletPage() {
   if (loading || !claim) {
     return (
       <section className={styles.section}>
-        <Head busy />
+        <Head />
         <div className={styles.claimCard}>
           <p className={styles.claimLead}>Creating a buyer agent for you…</p>
         </div>
@@ -490,7 +543,7 @@ export default function ClaimWalletPage() {
 
   return (
     <section className={styles.section}>
-      <Head busy={!broke && !gone && !delivered} />
+      <Head />
 
       {/* A failed poll while the agent is still running: worth showing, not worth erasing the page. */}
       {error && !broke && <div className={`${styles.banner} ${styles.bannerWarn}`}>{error}</div>}
@@ -510,11 +563,19 @@ export default function ClaimWalletPage() {
           </>
         ) : (
           <>
-            <p className={styles.claimLead}>
-              {delivered ? 'Your agent bought this for you.' : 'Your buyer agent is working.'}
-            </p>
+            {/* Steps on the left, the animation in the free space beside them; on a phone the
+                animation moves above (see .claimTop). */}
+            <div className={animate ? styles.claimTop : undefined}>
+              <div className={styles.claimTopMain}>
+                <p className={styles.claimLead}>
+                  {delivered ? 'Your agent bought this for you.' : 'Your buyer agent is working.'}
+                </p>
 
-            <Steps claim={claim} />
+                <Steps claim={claim} />
+              </div>
+
+              {animate && <BuyerAgentAnim step={animStep(claim)} className={styles.claimAnim} />}
+            </div>
 
             {claim.item && (
               <DeliveredItem item={claim.item} keyCopied={keyCopied} onKeyCopied={markKeyCopied} />

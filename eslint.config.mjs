@@ -62,4 +62,15 @@ export default [
       sourceType: 'script',
     },
   },
+  {
+    // Vendored browser-only JS bundled by the UI (e.g. buyer-agent-anim.js).
+    files: ['**/src/vendor/**/*.js'],
+    languageOptions: {
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        performance: 'readonly',
+      },
+    },
+  },
 ];

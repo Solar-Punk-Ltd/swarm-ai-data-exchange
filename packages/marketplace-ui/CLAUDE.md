@@ -67,6 +67,14 @@ because `createSvgTag()` / `createImgTag()` return HTML strings (which would nee
 `dangerouslySetInnerHTML`) with their colours baked in. Treat this the way you treat the graph —
 a named exception, not a precedent.
 
+A third, not a dependency at all: **`src/vendor/buyer-agent-anim.js`**, the Claim wallet page's
+buyer-agent animation. It is a self-contained script (about 20 kB, no imports) that draws an SVG and
+sets `window.BuyerAgentAnim`. `components/BuyerAgentAnim.tsx` imports it for that side effect and
+wraps it. It carries its own hex palette, the house colours of the Solar Punk film _Swarm Verified
+Reviews 01_ its two robots come from. That is an exception to "never inline a hex", taken because
+the characters are artwork rather than UI. Treat the file as vendored: replace it wholesale with a
+new version from its author rather than editing it in place.
+
 Do not add wagmi, RainbowKit, ethers, Tailwind, or a component library. If a table needs more than
 plain CSS Grid, the design is too complicated.
 
@@ -443,6 +451,17 @@ Three things about it are easy to break:
 - **A step's "in progress" wording is a fallback, not an addition.** Once real detail is known —
   the funded amount, the seller's name, a tx hash — it replaces the placeholder, or the funding step
   would read "0.001 USDC · tx…" and "Sending it USDC to spend" simultaneously.
+
+**The animation reads the same progress as the checklist.** Beside the steps (above them on a
+phone, below 720px) the buyer-agent animation acts out the run. `animStep` derives its step from
+the same `progress()` that drives the checklist, never from its own reading of `claim.state`, so the
+two cannot disagree. The script never walks backwards and plays every scene in order for a minimum
+time, so a poll that jumps several steps at once still reads as a story; do not sequence or debounce
+steps on the React side. It is mounted once per page and only on the working/delivered card. The
+failed card has no checklist, and remounting there would replay the story from the start.
+It is also skipped entirely when the first claim the page sees is already `delivered` (restored
+from `deliveredStore`, or reattached after a reload): replaying the whole run above a key that is
+already on screen reads as a second purchase. That is decided once, so a live run keeps its ending.
 
 Polling is 2s while the claim is pre-terminal and 5s after. The server only folds in the buyer's
 emitted steps when it is polled, so that cadence _is_ the resolution of this display.
@@ -860,6 +879,8 @@ src/
     graph.ts                — the network derivation: deriveGraph, graphSignature, reconcile
     format.ts               — formatTaxBps (via the SDK BPS_DENOMINATOR), formatAge
     rpcError.ts             — wallet/RPC errors to one readable line; user-rejection detection
+  vendor/
+    buyer-agent-anim.js     — the Claim wallet animation; vendored, sets window.BuyerAgentAnim
   hooks/
     useRoute.ts             — the path router: useRoute, navigate, href, linkTo
     useClaim.ts             — the claim lifecycle: claim, poll/heartbeat, release on close
@@ -875,6 +896,7 @@ src/
     MapPage.tsx             — Map of Agents: period filter, memo gate, live node objects
     DevconPage.tsx          — demo hand-off: the QR code and its resolved URL
     ClaimWalletPage.tsx     — the QR code's target; the claim state machine, phone-first
+    BuyerAgentAnim.tsx      — React wrapper around vendor/buyer-agent-anim.js; forwards the step
     QrCode.tsx              — QR matrix as inline SVG; dark-on-light, 4-module quiet zone
     AgentGraph.tsx          — the force-graph canvas; memoised, explicitly sized
     AgentTable.tsx          — sortable per-agent numbers under the map
